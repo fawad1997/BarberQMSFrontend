@@ -112,7 +112,6 @@ const icons = {
   add: AiOutlinePlus,
   history: BiHistory,
   signout: MdOutlineLogout,
-  calendar: BiCalendar,
   sort: FaSort,
   fire: BsFire,
   statsBar: ImStatsBars,

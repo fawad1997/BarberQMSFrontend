@@ -1,3 +1,5 @@
+"use client";
+
 import "./globals.css"
 import { siteConfig } from "@/config/site"
 import { Inter } from "next/font/google"
@@ -5,8 +7,11 @@ import Navbar from "@/components/layout/navbar"
 import Footer from "@/components/layout/footer"
 import { ThemeProvider } from "@/components/theme-provider"
 import { settings } from "@/config/settings"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const inter = Inter({ subsets: ["latin"] })
+
+const queryClient = new QueryClient();
 
 export const metadata = {
   metadataBase: new URL(siteConfig.url.base),
@@ -64,24 +69,26 @@ interface RootLayoutProps {
 
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body
-        className={`${inter.className} flex min-h-screen flex-col bg-background text-primary`}
-      >
-        {settings.themeToggleEnabled ? (
-          <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-            <Navbar />
-            {children}
-            <Footer />
-          </ThemeProvider>
-        ) : (
-          <ThemeProvider attribute="class" forcedTheme="light" enableSystem>
-            <Navbar />
-            {children}
-            <Footer />
-          </ThemeProvider>
-        )}
-      </body>
-    </html>
+    <QueryClientProvider client={queryClient}>
+      <html lang="en" suppressHydrationWarning>
+        <body
+          className={`${inter.className} flex min-h-screen flex-col bg-background text-primary`}
+        >
+          {settings.themeToggleEnabled ? (
+            <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+              <Navbar />
+              {children}
+              <Footer />
+            </ThemeProvider>
+          ) : (
+            <ThemeProvider attribute="class" forcedTheme="light" enableSystem>
+              <Navbar />
+              {children}
+              <Footer />
+            </ThemeProvider>
+          )}
+        </body>
+      </html>
+    </QueryClientProvider>
   )
 }
