@@ -1,7 +1,8 @@
 "use client";
 
 import { Icons } from "@/components/icons";
-import { motion } from "framer-motion";
+import { motion, useInView } from "framer-motion";
+import { useRef } from "react";
 
 const steps = [
   {
@@ -31,12 +32,15 @@ const steps = [
 ];
 
 export default function HowItWorks() {
+  const ref = useRef(null);
+  const isInView = useInView(ref, { once: true, amount: 0.3 });
+
   return (
-    <section className="container py-12 lg:py-20">
+    <section className="container py-12 lg:py-20" ref={ref}>
       <motion.h2
         className="text-3xl font-bold text-center mb-12"
         initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
+        animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: -20 }}
         transition={{ duration: 0.5 }}
       >
         How It Works
@@ -49,7 +53,7 @@ export default function HowItWorks() {
               key={step.number}
               className="flex flex-col items-center text-center space-y-4"
               initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
+              animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
               transition={{ duration: 0.5, delay: index * 0.2 }}
             >
               <div className="relative">
