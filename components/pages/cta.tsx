@@ -1,21 +1,39 @@
-import Link from "next/link"
-import HeadingText from "@/components/heading-text"
-import { buttonVariants } from "@/components/ui/button"
-import { cn } from "@/lib/utils"
+"use client";
+
+import Link from "next/link";
+import HeadingText from "@/components/heading-text";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
 
 export default function CallToAction() {
   return (
     <section className="bg-slate-50 dark:bg-slate-900">
       <div className="container space-y-8 py-12 text-center lg:py-20">
-        <HeadingText 
-          subtext="Join thousands of successful barbershops using WalkInOnline"
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
         >
-          Ready to Transform Your Barbershop?
-        </HeadingText>
-        <p className="mx-auto max-w-2xl text-lg text-muted-foreground">
-          Start managing your queues efficiently and provide a better experience for your customers.
-        </p>
-        <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-center sm:gap-6">
+          <HeadingText subtext="Join thousands of successful barbershops using WalkInOnline">
+            Ready to Transform Your Barbershop?
+          </HeadingText>
+        </motion.div>
+        <motion.p
+          className="mx-auto max-w-2xl text-lg text-muted-foreground"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+        >
+          Start managing your queues efficiently and provide a better
+          experience for your customers.
+        </motion.p>
+        <motion.div
+          className="flex flex-col items-center gap-4 sm:flex-row sm:justify-center sm:gap-6"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.5, delay: 0.4 }}
+        >
           <Link
             href="/register"
             className={cn(
@@ -34,8 +52,8 @@ export default function CallToAction() {
           >
             Contact Sales
           </Link>
-        </div>
+        </motion.div>
       </div>
     </section>
-  )
-} 
+  );
+}

@@ -1,43 +1,56 @@
-import { Icons } from "@/components/icons"
+"use client";
+
+import { Icons } from "@/components/icons";
+import { motion } from "framer-motion";
 
 const steps = [
   {
     number: "1",
     title: "Find a Shop",
     description: "Browse nearby barbershops and check wait times",
-    icon: "search"
+    icon: "search",
   },
   {
     number: "2",
     title: "Check In",
     description: "Join the queue or book an appointment",
-    icon: "checkCircle"
+    icon: "checkCircle",
   },
   {
     number: "3",
     title: "Get Updates",
     description: "Receive real-time notifications about your status",
-    icon: "bell"
+    icon: "bell",
   },
   {
     number: "4",
     title: "Get Your Cut",
     description: "Show up when it's your turn and skip the wait",
-    icon: "scissors"
-  }
-]
+    icon: "scissors",
+  },
+];
 
 export default function HowItWorks() {
   return (
     <section className="container py-12 lg:py-20">
-      <h2 className="text-3xl font-bold text-center mb-12">How It Works</h2>
+      <motion.h2
+        className="text-3xl font-bold text-center mb-12"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+      >
+        How It Works
+      </motion.h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-        {steps.map((step) => {
-          const Icon = Icons[step.icon as keyof typeof Icons]
+        {steps.map((step, index) => {
+          const Icon = Icons[step.icon as keyof typeof Icons];
           return (
-            <div 
+            <motion.div
               key={step.number}
               className="flex flex-col items-center text-center space-y-4"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: index * 0.2 }}
             >
               <div className="relative">
                 <div className="absolute -top-3 -right-3 bg-primary text-primary-foreground w-8 h-8 rounded-full flex items-center justify-center font-bold">
@@ -47,10 +60,10 @@ export default function HowItWorks() {
               </div>
               <h3 className="text-xl font-semibold">{step.title}</h3>
               <p className="text-muted-foreground">{step.description}</p>
-            </div>
-          )
+            </motion.div>
+          );
         })}
       </div>
     </section>
-  )
-} 
+  );
+}
