@@ -1,17 +1,12 @@
-"use client";
-
-import "./globals.css"
-import { siteConfig } from "@/config/site"
 import { Inter } from "next/font/google"
+import QueryProvider from "@/components/providers/query-provider"
+import { siteConfig } from "@/config/site"
+import { ThemeProvider } from "@/components/providers/theme-provider"
 import Navbar from "@/components/layout/navbar"
 import Footer from "@/components/layout/footer"
-import { ThemeProvider } from "@/components/theme-provider"
-import { settings } from "@/config/settings"
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import "./globals.css"
 
 const inter = Inter({ subsets: ["latin"] })
-
-const queryClient = new QueryClient();
 
 export const metadata = {
   metadataBase: new URL(siteConfig.url.base),
@@ -35,60 +30,46 @@ export const metadata = {
     title: siteConfig.name,
     description: siteConfig.description,
     siteName: siteConfig.name,
-    images: [
-      {
-        url: siteConfig.ogImage,
-        width: 1200,
-        height: 630,
-        alt: siteConfig.name,
-      },
-    ],
   },
   twitter: {
     card: "summary_large_image",
     title: siteConfig.name,
     description: siteConfig.description,
-    images: [siteConfig.ogImage],
-    creator: "@_rdev7",
+    images: [`${siteConfig.url.base}/og.jpg`],
+    creator: "@yourtwitterhandle",
   },
   icons: {
     icon: "/favicon.ico",
+    shortcut: "/favicon-16x16.png",
+    apple: "/apple-touch-icon.png",
   },
 }
 
-export const viewport = {
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "white" },
-    { media: "(prefers-color-scheme: dark)", color: "black" },
-  ],
-}
-
-interface RootLayoutProps {
+export default function RootLayout({
+  children,
+}: {
   children: React.ReactNode
-}
-
-export default function RootLayout({ children }: RootLayoutProps) {
+}) {
   return (
-    <QueryClientProvider client={queryClient}>
-      <html lang="en" suppressHydrationWarning>
-        <body
-          className={`${inter.className} flex min-h-screen flex-col bg-background text-primary`}
+    <html lang="en" suppressHydrationWarning>
+      <body className={inter.className}>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
         >
-          {settings.themeToggleEnabled ? (
-            <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <QueryProvider>
+            <div className="flex min-h-screen flex-col">
               <Navbar />
-              {children}
+              <main className="flex-1">
+                {children}
+              </main>
               <Footer />
-            </ThemeProvider>
-          ) : (
-            <ThemeProvider attribute="class" forcedTheme="light" enableSystem>
-              <Navbar />
-              {children}
-              <Footer />
-            </ThemeProvider>
-          )}
-        </body>
-      </html>
-    </QueryClientProvider>
+            </div>
+          </QueryProvider>
+        </ThemeProvider>
+      </body>
+    </html>
   )
 }
