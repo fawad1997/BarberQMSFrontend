@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { getSalons } from "@/lib/services/salonService";
-import SalonSearch from "./salon-search";
-import SalonList from "./salon-list";
+import SalonSearch from "@/components/pages/salons/salon-search";
+import SalonList from "@/components/pages/salons/salon-list";
 import { motion } from "framer-motion";
 import { Salon } from "@/types/salon";
 
