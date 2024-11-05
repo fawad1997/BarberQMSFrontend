@@ -21,21 +21,15 @@ import {
 import { Input } from "@/components/ui/input";
 
 const formSchema = z.object({
-  full_name: z.string().min(2, {
-    message: "Full name must be at least 2 characters.",
-  }),
   email: z.string().email({
     message: "Please enter a valid email address.",
   }),
-  phone_number: z.string().min(10, {
-    message: "Please enter a valid phone number.",
-  }),
-  password: z.string().min(8, {
-    message: "Password must be at least 8 characters.",
+  password: z.string().min(1, {
+    message: "Password is required.",
   }),
 });
 
-export default function RegisterForm() {
+export default function LoginForm() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,9 +37,7 @@ export default function RegisterForm() {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      full_name: "",
       email: "",
-      phone_number: "",
       password: "",
     },
   });
@@ -55,7 +47,7 @@ export default function RegisterForm() {
     setError(null);
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/register/shop-owner`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -63,17 +55,12 @@ export default function RegisterForm() {
         body: JSON.stringify(values),
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        if (response.status === 422) {
-          throw new Error(data.detail[0]?.msg || "Validation error occurred");
-        }
-        throw new Error("Registration failed. Please try again.");
+        throw new Error("Invalid credentials");
       }
 
-      toast.success("Registration successful! Please login to continue.");
-      router.push("/login");
+      toast.success("Login successful!");
+      router.push("/dashboard"); // Or wherever you want to redirect after login
     } catch (error) {
       setError(error instanceof Error ? error.message : "Something went wrong");
     } finally {
@@ -92,38 +79,12 @@ export default function RegisterForm() {
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <FormField
             control={form.control}
-            name="full_name"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Full Name</FormLabel>
-                <FormControl>
-                  <Input placeholder="John Doe" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
             name="email"
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Email</FormLabel>
                 <FormControl>
                   <Input placeholder="john@example.com" type="email" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="phone_number"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Phone Number</FormLabel>
-                <FormControl>
-                  <Input placeholder="+1234567890" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -152,15 +113,15 @@ export default function RegisterForm() {
             className="w-full"
             disabled={isLoading}
           >
-            {isLoading ? "Registering..." : "Register"}
+            {isLoading ? "Logging in..." : "Login"}
           </Button>
         </form>
       </Form>
 
       <p className="text-center text-sm text-muted-foreground">
-        Already have an account?{" "}
-        <Link href="/login" className="text-primary hover:underline">
-          Login
+        Don't have an account?{" "}
+        <Link href="/register" className="text-primary hover:underline">
+          Register
         </Link>
       </p>
     </motion.div>
