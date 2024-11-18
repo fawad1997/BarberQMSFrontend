@@ -7,9 +7,11 @@ import { siteConfig } from "@/config/site"
 import { navLinks } from "@/lib/links"
 import { settings } from "@/config/settings"
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faUser, faSignInAlt } from '@fortawesome/free-solid-svg-icons'
+import { faUser, faSignInAlt, faSignOutAlt } from '@fortawesome/free-solid-svg-icons'
+import { useSession, signOut } from "next-auth/react"
 
 export default function Navbar() {
+  const { data: session, status } = useSession()
   const [navbar, setNavbar] = useState(false)
 
   const handleClick = async () => {
@@ -23,6 +25,10 @@ export default function Navbar() {
       document.body.style.overflow = "auto"
     }
   }, [navbar])
+
+  const handleSignOut = async () => {
+    await signOut({ redirect: true, callbackUrl: "/" })
+  }
 
   return (
     <header className="select-none">
@@ -98,20 +104,37 @@ export default function Navbar() {
           </div>
         </div>
         <div className="hidden md:flex items-center gap-4">
-          <Link 
-            href="/register" 
-            className="flex items-center gap-2 hover:underline"
-          >
-            <FontAwesomeIcon icon={faUser} />
-            Register
-          </Link>
-          <Link 
-            href="/login" 
-            className="flex items-center gap-2 hover:underline"
-          >
-            <FontAwesomeIcon icon={faSignInAlt} />
-            Login
-          </Link>
+          {status === "authenticated" ? (
+            <>
+              <span className="text-sm text-muted-foreground">
+                {session.user?.name}
+              </span>
+              <button
+                onClick={handleSignOut}
+                className="flex items-center gap-2 hover:underline"
+              >
+                <FontAwesomeIcon icon={faSignOutAlt} />
+                Logout
+              </button>
+            </>
+          ) : (
+            <>
+              <Link 
+                href="/register" 
+                className="flex items-center gap-2 hover:underline"
+              >
+                <FontAwesomeIcon icon={faUser} />
+                Register
+              </Link>
+              <Link 
+                href="/login" 
+                className="flex items-center gap-2 hover:underline"
+              >
+                <FontAwesomeIcon icon={faSignInAlt} />
+                Login
+              </Link>
+            </>
+          )}
           {settings.themeToggleEnabled && <ModeToggle />}
         </div>
       </nav>

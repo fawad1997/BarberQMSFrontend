@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
+import { signIn } from "next-auth/react"
 
 import { Button } from "@/components/ui/button";
 import {
@@ -47,20 +48,20 @@ export default function LoginForm() {
     setError(null);
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(values),
+      const result = await signIn("credentials", {
+        username: values.username,
+        password: values.password,
+        redirect: false,
       });
 
-      if (!response.ok) {
+      if (result?.error) {
         throw new Error("Invalid credentials");
       }
 
-      toast.success("Login successful!");
-      router.push("/dashboard"); // Or wherever you want to redirect after login
+      if (result?.ok) {
+        toast.success("Login successful!");
+        router.push("/shop/dashboard");
+      }
     } catch (error) {
       setError(error instanceof Error ? error.message : "Something went wrong");
     } finally {

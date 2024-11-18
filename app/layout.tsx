@@ -1,14 +1,22 @@
 import { Suspense } from 'react'
 import { Inter } from "next/font/google"
-import QueryProvider from "@/components/providers/query-provider"
 import { siteConfig } from "@/config/site"
-import { ThemeProvider } from "@/components/providers/theme-provider"
 import dynamic from 'next/dynamic'
 import "./globals.css"
 import { Toaster } from 'sonner';
-
+import AuthProvider from "@/components/providers/auth-provider"
 
 const inter = Inter({ subsets: ["latin"] })
+
+// Dynamic imports for heavy components
+const Navbar = dynamic(() => import("@/components/layout/navbar"), {
+  ssr: true,
+  loading: () => <div className="h-16" />
+})
+
+const Footer = dynamic(() => import("@/components/layout/footer"), {
+  ssr: true,
+})
 
 export const metadata = {
   metadataBase: new URL(siteConfig.url.base),
@@ -47,16 +55,6 @@ export const metadata = {
   },
 }
 
-// Dynamic imports for heavy components
-const Navbar = dynamic(() => import("@/components/layout/navbar"), {
-  ssr: true,
-  loading: () => <div className="h-16" /> // Add appropriate height placeholder
-})
-
-const Footer = dynamic(() => import("@/components/layout/footer"), {
-  ssr: true,
-})
-
 export default function RootLayout({
   children,
 }: {
@@ -65,26 +63,18 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          {/* Wrap QueryProvider with Suspense */}
+        <AuthProvider>
           <Suspense fallback={<div>Loading...</div>}>
-            <QueryProvider>
-              <div className="flex min-h-screen flex-col">
-                <Navbar />
-                <main className="flex-1">
-                  {children}
-                </main>
-                <Footer />
-              </div>
-            </QueryProvider>
+            <div className="flex min-h-screen flex-col">
+              <Navbar />
+              <main className="flex-1">
+                {children}
+              </main>
+              <Footer />
+            </div>
           </Suspense>
-        </ThemeProvider>
-        <Toaster />
+          <Toaster />
+        </AuthProvider>
       </body>
     </html>
   )
