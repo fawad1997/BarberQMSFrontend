@@ -9,10 +9,12 @@ import { settings } from "@/config/settings"
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faUser, faSignInAlt, faSignOutAlt } from '@fortawesome/free-solid-svg-icons'
 import { useSession, signOut } from "next-auth/react"
+import { getNavLinks } from "@/lib/getNavLinks"
 
 export default function Navbar() {
   const { data: session, status } = useSession()
   const [navbar, setNavbar] = useState(false)
+  const navigationLinks = getNavLinks(session?.user?.role)
 
   const handleClick = async () => {
     setNavbar(false)
@@ -88,7 +90,7 @@ export default function Navbar() {
             style={{ width: "100%", maxWidth: "20rem" }}
           >
             <ul className="flex flex-col items-center space-y-4 text-primary opacity-60 md:flex-row md:space-x-6 md:space-y-0">
-              {navLinks.map((link) => (
+              {navigationLinks.map((link) => (
                 <li key={link.route}>
                   <Link
                     className="hover:underline flex items-center gap-2"

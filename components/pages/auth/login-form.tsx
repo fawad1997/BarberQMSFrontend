@@ -48,9 +48,25 @@ export default function LoginForm() {
     setError(null);
 
     try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(values),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Invalid username or password");
+      }
+
       const result = await signIn("credentials", {
         username: values.username,
         password: values.password,
+        accessToken: data.access_token,
+        callbackUrl: "/shop/dashboard",
         redirect: false,
       });
 
