@@ -13,6 +13,11 @@ export const getNavLinks = (role?: string) => {
         path: "/shop/shops",
         icon: "bi bi-shop",
       },
+      {
+        route: "Barbers",
+        path: "/shop/barbers",
+        icon: "fas fa-cut", 
+      },
     ];
   }
   return navLinks;
