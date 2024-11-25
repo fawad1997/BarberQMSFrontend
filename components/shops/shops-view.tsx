@@ -6,8 +6,11 @@ import { Shop } from "@/types/shop";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MapPin, Phone, Mail, Clock } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
 
 export default function ShopsView() {
+  const router = useRouter();
   const [shops, setShops] = useState<Shop[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -39,14 +42,18 @@ export default function ShopsView() {
   }
 
   return (
-    <section className="container py-8">
+    <div className="container mx-auto py-6">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">My Shops</h1>
+        <Button onClick={() => router.push("/shop/shops/create")}>
+          Create New Shop
+        </Button>
+      </div>
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
       >
-        <h1 className="text-4xl font-bold mb-8">My Shops</h1>
-        
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {shops.map((shop) => (
             <Card key={shop.id}>
@@ -79,6 +86,6 @@ export default function ShopsView() {
           ))}
         </div>
       </motion.div>
-    </section>
+    </div>
   );
 }
