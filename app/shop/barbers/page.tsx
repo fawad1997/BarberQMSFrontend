@@ -33,6 +33,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { BarberServicesModal } from "@/components/shops/barbers/BarberServicesModal"
 
 interface AddBarberFormData {
   full_name: string
@@ -290,6 +291,8 @@ export default function BarbersPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [barberToDelete, setBarberToDelete] = useState<{ id: number; name: string; shopId: number } | null>(null)
+  const [isServicesModalOpen, setIsServicesModalOpen] = useState(false)
+  const [selectedBarberForServices, setSelectedBarberForServices] = useState<Barber | null>(null)
 
   useEffect(() => {
     const fetchShopsAndBarbers = async () => {
@@ -473,6 +476,17 @@ export default function BarbersPage() {
                                 variant="outline"
                                 size="sm"
                                 onClick={() => {
+                                  setSelectedBarberForServices(barber)
+                                  setSelectedShopId(shop.id)
+                                  setIsServicesModalOpen(true)
+                                }}
+                              >
+                                Services
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
                                   setSelectedBarber(barber)
                                   setSelectedShopId(shop.id)
                                   setIsEditModalOpen(true)
@@ -544,6 +558,21 @@ export default function BarbersPage() {
           }}
           onConfirm={handleDeleteBarber}
           barberName={barberToDelete.name}
+        />
+      )}
+
+      {selectedShopId && selectedBarberForServices && (
+        <BarberServicesModal
+          shopId={selectedShopId}
+          barberId={selectedBarberForServices.id}
+          barberName={selectedBarberForServices.full_name}
+          isOpen={isServicesModalOpen}
+          onClose={() => {
+            setIsServicesModalOpen(false)
+            setSelectedBarberForServices(null)
+            setSelectedShopId(null)
+          }}
+          accessToken={accessToken}
         />
       )}
     </div>
