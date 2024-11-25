@@ -504,7 +504,7 @@ export default function ServicesPage() {
                             <h3 className="font-semibold">{service.name}</h3>
                             <div className="flex space-x-2">
                               <Button
-                                variant="ghost"
+                                variant="outline"
                                 size="sm"
                                 onClick={() => {
                                   setSelectedService(service)
@@ -515,9 +515,8 @@ export default function ServicesPage() {
                                 Edit
                               </Button>
                               <Button
-                                variant="ghost"
+                                variant="destructive"
                                 size="sm"
-                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
                                 onClick={() => {
                                   setServiceToDelete(service)
                                   setSelectedShopId(shop.id)
