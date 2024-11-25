@@ -34,6 +34,15 @@ interface ServiceFormData {
   price: string
 }
 
+interface EditServiceModalProps {
+  service: Service
+  shopId: string
+  isOpen: boolean
+  onClose: () => void
+  onSuccess: () => void
+  accessToken: string
+}
+
 function ServiceModal({ 
   shopId, 
   isOpen, 
@@ -172,6 +181,132 @@ function ServiceModal({
   )
 }
 
+function EditServiceModal({ 
+  service, 
+  shopId, 
+  isOpen, 
+  onClose, 
+  onSuccess, 
+  accessToken 
+}: EditServiceModalProps) {
+  const [formData, setFormData] = useState<ServiceFormData>({
+    name: service.name,
+    duration: service.duration.toString(),
+    price: service.price.toString(),
+  })
+
+  const handleUpdateService = async () => {
+    try {
+      const payload = {
+        name: formData.name,
+        duration: Number(formData.duration),
+        price: Number(formData.price)
+      }
+
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/services/${service.id}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify(payload),
+        }
+      )
+
+      if (!response.ok) throw new Error("Failed to update service")
+
+      onClose()
+      onSuccess()
+      toast.success("Service updated successfully")
+    } catch (error) {
+      console.error("Error updating service:", error)
+      toast.error("Failed to update service")
+    }
+  }
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle className="text-xl font-semibold">Edit Service</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={(e) => {
+          e.preventDefault()
+          handleUpdateService()
+        }} className="space-y-6 py-4">
+          <div className="space-y-2">
+            <label htmlFor="name" className="text-sm font-medium leading-none">
+              Service Name
+            </label>
+            <Input
+              id="name"
+              placeholder="e.g., Haircut, Manicure"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              required
+              className="w-full"
+            />
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="duration" className="text-sm font-medium leading-none">
+              Duration (minutes)
+            </label>
+            <Input
+              id="duration"
+              type="number"
+              placeholder="e.g., 30"
+              value={formData.duration}
+              onChange={(e) => setFormData({ 
+                ...formData, 
+                duration: e.target.value.replace(/^0+/, '')
+              })}
+              required
+              min="1"
+              className="w-full"
+            />
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="price" className="text-sm font-medium leading-none">
+              Price ($)
+            </label>
+            <Input
+              id="price"
+              type="number"
+              placeholder="e.g., 29.99"
+              value={formData.price}
+              onChange={(e) => setFormData({ 
+                ...formData, 
+                price: e.target.value.replace(/^0+/, '')
+              })}
+              required
+              min="0"
+              step="0.01"
+              className="w-full"
+            />
+          </div>
+          <div className="flex justify-end space-x-3 pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="default"
+            >
+              Update Service
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function LoadingState() {
   return (
     <div className="container mx-auto py-10">
@@ -210,6 +345,8 @@ export default function ServicesPage() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedShopId, setSelectedShopId] = useState<string | null>(null)
   const [accessToken, setAccessToken] = useState<string>("")
+  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [selectedService, setSelectedService] = useState<Service | null>(null)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -289,7 +426,20 @@ export default function ServicesPage() {
                     <Card key={service.id}>
                       <CardContent className="pt-6">
                         <div className="space-y-2">
-                          <h3 className="font-semibold">{service.name}</h3>
+                          <div className="flex justify-between items-start">
+                            <h3 className="font-semibold">{service.name}</h3>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedService(service)
+                                setSelectedShopId(shop.id)
+                                setEditModalOpen(true)
+                              }}
+                            >
+                              Edit
+                            </Button>
+                          </div>
                           <p className="text-sm text-muted-foreground">
                             Duration: {service.duration} minutes
                           </p>
@@ -314,6 +464,46 @@ export default function ServicesPage() {
           onClose={() => {
             setIsModalOpen(false)
             setSelectedShopId(null)
+          }}
+          onSuccess={() => {
+            const refreshServices = async () => {
+              const session = await getSession()
+              if (!session) return
+
+              try {
+                const servicesResponse = await fetch(
+                  `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${selectedShopId}/services/`,
+                  {
+                    headers: {
+                      Authorization: `Bearer ${session.user.accessToken}`,
+                    },
+                  }
+                )
+                const services = await servicesResponse.json()
+                
+                setShops(shops.map(shop => 
+                  shop.id === selectedShopId 
+                    ? { ...shop, services }
+                    : shop
+                ))
+              } catch (error) {
+                toast.error("Failed to refresh services")
+              }
+            }
+            refreshServices()
+          }}
+          accessToken={accessToken}
+        />
+      )}
+
+      {selectedService && selectedShopId && (
+        <EditServiceModal
+          service={selectedService}
+          shopId={selectedShopId}
+          isOpen={editModalOpen}
+          onClose={() => {
+            setEditModalOpen(false)
+            setSelectedService(null)
           }}
           onSuccess={() => {
             const refreshServices = async () => {
