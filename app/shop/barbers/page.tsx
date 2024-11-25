@@ -31,6 +31,13 @@ interface AddBarberFormData {
   status: string
 }
 
+interface EditBarberFormData {
+  full_name: string
+  email: string
+  phone_number: string
+  status: string
+}
+
 function AddBarberModal({ 
   shopId, 
   isOpen, 
@@ -109,12 +116,124 @@ function AddBarberModal({
                 <SelectValue placeholder="Select Status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
+                <SelectItem value="available">Available</SelectItem>
+                <SelectItem value="in_service">In Service</SelectItem>
+                <SelectItem value="on_break">On Break</SelectItem>
+                <SelectItem value="off">Off</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <Button type="submit" className="w-full">Add Barber</Button>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function EditBarberModal({ 
+  shopId,
+  barber,
+  isOpen, 
+  onClose, 
+  onSuccess,
+  accessToken 
+}: { 
+  shopId: number
+  barber: Barber
+  isOpen: boolean
+  onClose: () => void
+  onSuccess: () => void
+  accessToken: string 
+}) {
+  const { register, handleSubmit, reset, setValue } = useForm<EditBarberFormData>({
+    defaultValues: {
+      full_name: barber.full_name,
+      email: barber.email,
+      phone_number: barber.phone_number,
+      status: barber.status
+    }
+  })
+
+  const onSubmit = async (data: EditBarberFormData) => {
+    try {
+      console.log('Sending data:', data)
+
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/barbers/${barber.id}/`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            full_name: data.full_name,
+            email: data.email,
+            phone_number: data.phone_number,
+            status: data.status,
+            shop: shopId
+          }),
+        }
+      )
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        console.error('API Error Response:', errorData)
+        throw new Error('Failed to update barber')
+      }
+
+      toast.success('Barber has been updated successfully')
+      onSuccess()
+      onClose()
+    } catch (error) {
+      console.error('Error updating barber:', error)
+      toast.error('Failed to update barber. Please try again.')
+    }
+  }
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit Barber</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <div>
+            <Input
+              placeholder="Full Name"
+              {...register('full_name', { required: true })}
+            />
+          </div>
+          <div>
+            <Input
+              placeholder="Email"
+              type="email"
+              {...register('email', { required: true })}
+            />
+          </div>
+          <div>
+            <Input
+              placeholder="Phone Number"
+              {...register('phone_number', { required: true })}
+            />
+          </div>
+          <div>
+            <Select 
+              defaultValue={barber.status}
+              onValueChange={(value) => setValue('status', value)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="available">Available</SelectItem>
+                <SelectItem value="in_service">In Service</SelectItem>
+                <SelectItem value="on_break">On Break</SelectItem>
+                <SelectItem value="off">Off</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Button type="submit" className="w-full">Update Barber</Button>
         </form>
       </DialogContent>
     </Dialog>
@@ -128,6 +247,8 @@ export default function BarbersPage() {
   const [selectedShopId, setSelectedShopId] = useState<number | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [accessToken, setAccessToken] = useState<string>('')
+  const [selectedBarber, setSelectedBarber] = useState<Barber | null>(null)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
 
   useEffect(() => {
     const fetchShopsAndBarbers = async () => {
@@ -266,14 +387,29 @@ export default function BarbersPage() {
                           <p className="text-sm text-muted-foreground">
                             Phone: {barber.phone_number}
                           </p>
-                          <div className="flex items-center">
+                          <div className="flex items-center justify-between">
                             <span className={`px-2 py-1 rounded-full text-xs ${
-                              barber.status === 'active' 
+                              barber.status === 'available' 
                                 ? 'bg-green-100 text-green-800'
+                                : barber.status === 'in_service'
+                                ? 'bg-blue-100 text-blue-800'
+                                : barber.status === 'on_break'
+                                ? 'bg-yellow-100 text-yellow-800'
                                 : 'bg-red-100 text-red-800'
                             }`}>
-                              {barber.status}
+                              {barber.status.replace('_', ' ')}
                             </span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedBarber(barber)
+                                setSelectedShopId(shop.id)
+                                setIsEditModalOpen(true)
+                              }}
+                            >
+                              Edit
+                            </Button>
                           </div>
                         </div>
                       </CardContent>
@@ -292,6 +428,21 @@ export default function BarbersPage() {
           isOpen={isModalOpen}
           onClose={() => {
             setIsModalOpen(false)
+            setSelectedShopId(null)
+          }}
+          onSuccess={() => refreshBarbers(selectedShopId)}
+          accessToken={accessToken}
+        />
+      )}
+
+      {selectedShopId && selectedBarber && (
+        <EditBarberModal
+          shopId={selectedShopId}
+          barber={selectedBarber}
+          isOpen={isEditModalOpen}
+          onClose={() => {
+            setIsEditModalOpen(false)
+            setSelectedBarber(null)
             setSelectedShopId(null)
           }}
           onSuccess={() => refreshBarbers(selectedShopId)}
