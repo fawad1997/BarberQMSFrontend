@@ -23,6 +23,16 @@ import {
 } from "@/components/ui/select"
 import { useForm } from "react-hook-form"
 import { toast } from "sonner"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 interface AddBarberFormData {
   full_name: string
@@ -240,6 +250,35 @@ function EditBarberModal({
   )
 }
 
+function DeleteBarberDialog({ 
+  isOpen, 
+  onClose, 
+  onConfirm, 
+  barberName 
+}: { 
+  isOpen: boolean
+  onClose: () => void
+  onConfirm: () => void
+  barberName: string
+}) {
+  return (
+    <AlertDialog open={isOpen} onOpenChange={onClose}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This will permanently delete {barberName} from the system. This action cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={onConfirm}>Delete</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+}
+
 export default function BarbersPage() {
   const [shops, setShops] = useState<Array<{ id: number; name: string; barbers: Barber[] }>>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -249,6 +288,8 @@ export default function BarbersPage() {
   const [accessToken, setAccessToken] = useState<string>('')
   const [selectedBarber, setSelectedBarber] = useState<Barber | null>(null)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [barberToDelete, setBarberToDelete] = useState<{ id: number; name: string; shopId: number } | null>(null)
 
   useEffect(() => {
     const fetchShopsAndBarbers = async () => {
@@ -340,6 +381,34 @@ export default function BarbersPage() {
     }
   }
 
+  const handleDeleteBarber = async () => {
+    if (!barberToDelete) return
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/barbers/${barberToDelete.id}/`,
+        {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      )
+
+      if (!response.ok) {
+        throw new Error('Failed to delete barber')
+      }
+
+      toast.success('Barber has been removed successfully')
+      await refreshBarbers(barberToDelete.shopId)
+    } catch (error) {
+      console.error('Error deleting barber:', error)
+      toast.error('Failed to delete barber. Please try again.')
+    } finally {
+      setIsDeleteDialogOpen(false)
+      setBarberToDelete(null)
+    }
+  }
+
   if (isLoading) {
     return <LoadingState />
   }
@@ -399,17 +468,33 @@ export default function BarbersPage() {
                             }`}>
                               {barber.status.replace('_', ' ')}
                             </span>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                setSelectedBarber(barber)
-                                setSelectedShopId(shop.id)
-                                setIsEditModalOpen(true)
-                              }}
-                            >
-                              Edit
-                            </Button>
+                            <div className="space-x-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedBarber(barber)
+                                  setSelectedShopId(shop.id)
+                                  setIsEditModalOpen(true)
+                                }}
+                              >
+                                Edit
+                              </Button>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => {
+                                  setBarberToDelete({
+                                    id: barber.id,
+                                    name: barber.full_name,
+                                    shopId: shop.id
+                                  })
+                                  setIsDeleteDialogOpen(true)
+                                }}
+                              >
+                                Remove
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       </CardContent>
@@ -447,6 +532,18 @@ export default function BarbersPage() {
           }}
           onSuccess={() => refreshBarbers(selectedShopId)}
           accessToken={accessToken}
+        />
+      )}
+
+      {barberToDelete && (
+        <DeleteBarberDialog
+          isOpen={isDeleteDialogOpen}
+          onClose={() => {
+            setIsDeleteDialogOpen(false)
+            setBarberToDelete(null)
+          }}
+          onConfirm={handleDeleteBarber}
+          barberName={barberToDelete.name}
         />
       )}
     </div>
