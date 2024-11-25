@@ -43,6 +43,15 @@ interface EditServiceModalProps {
   accessToken: string
 }
 
+interface DeleteServiceDialogProps {
+  service: Service
+  shopId: string
+  isOpen: boolean
+  onClose: () => void
+  onSuccess: () => void
+  accessToken: string
+}
+
 function ServiceModal({ 
   shopId, 
   isOpen, 
@@ -307,6 +316,69 @@ function EditServiceModal({
   )
 }
 
+function DeleteServiceDialog({
+  service,
+  shopId,
+  isOpen,
+  onClose,
+  onSuccess,
+  accessToken
+}: DeleteServiceDialogProps) {
+  const handleDelete = async () => {
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/services/${service.id}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      )
+
+      if (!response.ok) throw new Error("Failed to delete service")
+
+      onClose()
+      onSuccess()
+      toast.success("Service deleted successfully")
+    } catch (error) {
+      console.error("Error deleting service:", error)
+      toast.error("Failed to delete service")
+    }
+  }
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle className="text-xl font-semibold">Delete Service</DialogTitle>
+        </DialogHeader>
+        <div className="py-4">
+          <p className="text-muted-foreground">
+            Are you sure you want to delete "{service.name}"? This action cannot be undone.
+          </p>
+          <div className="flex justify-end space-x-3 pt-6">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleDelete}
+            >
+              Delete
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function LoadingState() {
   return (
     <div className="container mx-auto py-10">
@@ -347,6 +419,8 @@ export default function ServicesPage() {
   const [accessToken, setAccessToken] = useState<string>("")
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [selectedService, setSelectedService] = useState<Service | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [serviceToDelete, setServiceToDelete] = useState<Service | null>(null)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -428,17 +502,31 @@ export default function ServicesPage() {
                         <div className="space-y-2">
                           <div className="flex justify-between items-start">
                             <h3 className="font-semibold">{service.name}</h3>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setSelectedService(service)
-                                setSelectedShopId(shop.id)
-                                setEditModalOpen(true)
-                              }}
-                            >
-                              Edit
-                            </Button>
+                            <div className="flex space-x-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedService(service)
+                                  setSelectedShopId(shop.id)
+                                  setEditModalOpen(true)
+                                }}
+                              >
+                                Edit
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                onClick={() => {
+                                  setServiceToDelete(service)
+                                  setSelectedShopId(shop.id)
+                                  setDeleteDialogOpen(true)
+                                }}
+                              >
+                                Delete
+                              </Button>
+                            </div>
                           </div>
                           <p className="text-sm text-muted-foreground">
                             Duration: {service.duration} minutes
@@ -504,6 +592,46 @@ export default function ServicesPage() {
           onClose={() => {
             setEditModalOpen(false)
             setSelectedService(null)
+          }}
+          onSuccess={() => {
+            const refreshServices = async () => {
+              const session = await getSession()
+              if (!session) return
+
+              try {
+                const servicesResponse = await fetch(
+                  `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${selectedShopId}/services/`,
+                  {
+                    headers: {
+                      Authorization: `Bearer ${session.user.accessToken}`,
+                    },
+                  }
+                )
+                const services = await servicesResponse.json()
+                
+                setShops(shops.map(shop => 
+                  shop.id === selectedShopId 
+                    ? { ...shop, services }
+                    : shop
+                ))
+              } catch (error) {
+                toast.error("Failed to refresh services")
+              }
+            }
+            refreshServices()
+          }}
+          accessToken={accessToken}
+        />
+      )}
+
+      {serviceToDelete && selectedShopId && (
+        <DeleteServiceDialog
+          service={serviceToDelete}
+          shopId={selectedShopId}
+          isOpen={deleteDialogOpen}
+          onClose={() => {
+            setDeleteDialogOpen(false)
+            setServiceToDelete(null)
           }}
           onSuccess={() => {
             const refreshServices = async () => {
