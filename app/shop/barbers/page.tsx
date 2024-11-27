@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { getSession } from "next-auth/react"
 import { Shop } from "@/types/shop"
 import { Barber } from "@/types/barber"
+import { BarberSchedule } from "@/types/schedule"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
@@ -34,6 +35,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { BarberServicesModal } from "@/components/shops/barbers/BarberServicesModal"
+import { AddScheduleModal } from "@/components/shops/barbers/AddScheduleModal"
+import { EditScheduleModal } from "@/components/shops/barbers/EditScheduleModal"
+import { ScheduleList } from "@/components/shops/barbers/ScheduleList"
 
 interface AddBarberFormData {
   full_name: string
@@ -49,49 +53,54 @@ interface EditBarberFormData {
   status: string
 }
 
-function AddBarberModal({ 
-  shopId, 
-  isOpen, 
-  onClose, 
+function AddBarberModal({
+  shopId,
+  isOpen,
+  onClose,
   onSuccess,
-  accessToken 
-}: { 
+  accessToken,
+}: {
   shopId: number
   isOpen: boolean
   onClose: () => void
   onSuccess: () => void
-  accessToken: string 
+  accessToken: string
 }) {
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<AddBarberFormData>()
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<AddBarberFormData>()
 
   const onSubmit = async (data: AddBarberFormData) => {
     try {
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/barbers/`,
         {
-          method: 'POST',
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
             Authorization: `Bearer ${accessToken}`,
           },
           body: JSON.stringify({
             ...data,
-            password: 'Temp1234',
+            password: "Temp1234",
           }),
         }
       )
 
       if (!response.ok) {
-        throw new Error('Failed to add barber')
+        throw new Error("Failed to add barber")
       }
 
-      toast.success('Barber has been added successfully')
+      toast.success("Barber has been added successfully")
       reset()
       onSuccess()
       onClose()
     } catch (error) {
-      console.error('Error adding barber:', error)
-      toast.error('Failed to add barber. Please try again.')
+      console.error("Error adding barber:", error)
+      toast.error("Failed to add barber. Please try again.")
     }
   }
 
@@ -105,24 +114,42 @@ function AddBarberModal({
           <div>
             <Input
               placeholder="Full Name"
-              {...register('full_name', { required: true })}
+              {...register("full_name", { required: true })}
             />
+            {errors.full_name && (
+              <p className="text-sm text-red-500">Full name is required.</p>
+            )}
           </div>
           <div>
             <Input
               placeholder="Email"
               type="email"
-              {...register('email', { required: true })}
+              {...register("email", { required: true })}
             />
+            {errors.email && (
+              <p className="text-sm text-red-500">Email is required.</p>
+            )}
           </div>
           <div>
             <Input
               placeholder="Phone Number"
-              {...register('phone_number', { required: true })}
+              {...register("phone_number", { required: true })}
             />
+            {errors.phone_number && (
+              <p className="text-sm text-red-500">Phone number is required.</p>
+            )}
           </div>
           <div>
-            <Select onValueChange={(value) => register('status').onChange({ target: { value } })}>
+            <Select
+              onValueChange={(value) => {
+                // Update form value manually
+                // This is a workaround; ideally, use a controlled component
+                // Alternatively, use Controller from react-hook-form
+                // For simplicity, updating manually here
+                // @ts-ignore
+                register("status").onChange({ target: { value } })
+              }}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select Status" />
               </SelectTrigger>
@@ -133,48 +160,59 @@ function AddBarberModal({
                 <SelectItem value="off">Off</SelectItem>
               </SelectContent>
             </Select>
+            {errors.status && (
+              <p className="text-sm text-red-500">Status is required.</p>
+            )}
           </div>
-          <Button type="submit" className="w-full">Add Barber</Button>
+          <Button type="submit" className="w-full">
+            Add Barber
+          </Button>
         </form>
       </DialogContent>
     </Dialog>
   )
 }
 
-function EditBarberModal({ 
+function EditBarberModal({
   shopId,
   barber,
-  isOpen, 
-  onClose, 
+  isOpen,
+  onClose,
   onSuccess,
-  accessToken 
-}: { 
+  accessToken,
+}: {
   shopId: number
   barber: Barber
   isOpen: boolean
   onClose: () => void
   onSuccess: () => void
-  accessToken: string 
+  accessToken: string
 }) {
-  const { register, handleSubmit, reset, setValue } = useForm<EditBarberFormData>({
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setValue,
+    formState: { errors },
+  } = useForm<EditBarberFormData>({
     defaultValues: {
       full_name: barber.full_name,
       email: barber.email,
       phone_number: barber.phone_number,
-      status: barber.status
-    }
+      status: barber.status,
+    },
   })
 
   const onSubmit = async (data: EditBarberFormData) => {
     try {
-      console.log('Sending data:', data)
+      console.log("Sending data:", data)
 
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/barbers/${barber.id}/`,
         {
-          method: 'PUT',
+          method: "PUT",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
             Authorization: `Bearer ${accessToken}`,
           },
           body: JSON.stringify({
@@ -182,23 +220,23 @@ function EditBarberModal({
             email: data.email,
             phone_number: data.phone_number,
             status: data.status,
-            shop: shopId
+            shop: shopId,
           }),
         }
       )
 
       if (!response.ok) {
         const errorData = await response.json()
-        console.error('API Error Response:', errorData)
-        throw new Error('Failed to update barber')
+        console.error("API Error Response:", errorData)
+        throw new Error("Failed to update barber")
       }
 
-      toast.success('Barber has been updated successfully')
+      toast.success("Barber has been updated successfully")
       onSuccess()
       onClose()
     } catch (error) {
-      console.error('Error updating barber:', error)
-      toast.error('Failed to update barber. Please try again.')
+      console.error("Error updating barber:", error)
+      toast.error("Failed to update barber. Please try again.")
     }
   }
 
@@ -212,26 +250,35 @@ function EditBarberModal({
           <div>
             <Input
               placeholder="Full Name"
-              {...register('full_name', { required: true })}
+              {...register("full_name", { required: true })}
             />
+            {errors.full_name && (
+              <p className="text-sm text-red-500">Full name is required.</p>
+            )}
           </div>
           <div>
             <Input
               placeholder="Email"
               type="email"
-              {...register('email', { required: true })}
+              {...register("email", { required: true })}
             />
+            {errors.email && (
+              <p className="text-sm text-red-500">Email is required.</p>
+            )}
           </div>
           <div>
             <Input
               placeholder="Phone Number"
-              {...register('phone_number', { required: true })}
+              {...register("phone_number", { required: true })}
             />
+            {errors.phone_number && (
+              <p className="text-sm text-red-500">Phone number is required.</p>
+            )}
           </div>
           <div>
-            <Select 
+            <Select
               defaultValue={barber.status}
-              onValueChange={(value) => setValue('status', value)}
+              onValueChange={(value) => setValue("status", value)}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select Status" />
@@ -243,20 +290,25 @@ function EditBarberModal({
                 <SelectItem value="off">Off</SelectItem>
               </SelectContent>
             </Select>
+            {errors.status && (
+              <p className="text-sm text-red-500">Status is required.</p>
+            )}
           </div>
-          <Button type="submit" className="w-full">Update Barber</Button>
+          <Button type="submit" className="w-full">
+            Update Barber
+          </Button>
         </form>
       </DialogContent>
     </Dialog>
   )
 }
 
-function DeleteBarberDialog({ 
-  isOpen, 
-  onClose, 
-  onConfirm, 
-  barberName 
-}: { 
+function DeleteBarberDialog({
+  isOpen,
+  onClose,
+  onConfirm,
+  barberName,
+}: {
   isOpen: boolean
   onClose: () => void
   onConfirm: () => void
@@ -268,7 +320,8 @@ function DeleteBarberDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Are you sure?</AlertDialogTitle>
           <AlertDialogDescription>
-            This will permanently delete {barberName} from the system. This action cannot be undone.
+            This will permanently delete {barberName} from the system. This
+            action cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -281,18 +334,27 @@ function DeleteBarberDialog({
 }
 
 export default function BarbersPage() {
-  const [shops, setShops] = useState<Array<{ id: number; name: string; barbers: Barber[] }>>([])
+  const [shops, setShops] = useState<
+    Array<{ id: number; name: string; barbers: Barber[] }>
+  >([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedShopId, setSelectedShopId] = useState<number | null>(null)
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [accessToken, setAccessToken] = useState<string>('')
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false)
+  const [accessToken, setAccessToken] = useState<string>("")
   const [selectedBarber, setSelectedBarber] = useState<Barber | null>(null)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-  const [barberToDelete, setBarberToDelete] = useState<{ id: number; name: string; shopId: number } | null>(null)
+  const [barberToDelete, setBarberToDelete] = useState<{
+    id: number
+    name: string
+    shopId: number
+  } | null>(null)
   const [isServicesModalOpen, setIsServicesModalOpen] = useState(false)
-  const [selectedBarberForServices, setSelectedBarberForServices] = useState<Barber | null>(null)
+  const [selectedBarberForServices, setSelectedBarberForServices] =
+    useState<Barber | null>(null)
+  const [isAddScheduleModalOpen, setIsAddScheduleModalOpen] = useState(false)
+  const [editSchedule, setEditSchedule] = useState<BarberSchedule | null>(null)
 
   useEffect(() => {
     const fetchShopsAndBarbers = async () => {
@@ -318,15 +380,37 @@ export default function BarbersPage() {
         }
 
         const shopsData: Shop[] = await shopsResponse.json()
-        const simplifiedShops = shopsData.map(shop => ({
+        const simplifiedShops = shopsData.map((shop) => ({
           id: shop.id,
           name: shop.name,
-          barbers: [] as Barber[]
+          barbers: [] as Barber[],
         }))
 
         setShops(simplifiedShops)
 
         // Fetch barbers for each shop
+        // Inside useEffect in BarbersPage
+
+        const fetchBarberSchedules = async (shopId: number, barberId: number) => {
+          try {
+            const response = await fetch(
+              `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/barbers/${barberId}/schedules/`,
+              {
+                headers: {
+                  Authorization: `Bearer ${session.user.accessToken}`,
+                },
+              }
+            )
+            if (!response.ok) {
+              throw new Error('Failed to fetch schedules')
+            }
+            return await response.json()
+          } catch (error) {
+            console.error('Error fetching schedules:', error)
+            return []
+          }
+        }
+
         for (const shop of simplifiedShops) {
           const barbersResponse = await fetch(
             `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shop.id}/barbers/`,
@@ -339,10 +423,17 @@ export default function BarbersPage() {
 
           if (barbersResponse.ok) {
             const barbersData: Barber[] = await barbersResponse.json()
-            setShops(prevShops =>
-              prevShops.map(prevShop =>
+            const barbersWithSchedules = await Promise.all(
+              barbersData.map(async (barber) => {
+                const schedules = await fetchBarberSchedules(shop.id, barber.id)
+                return { ...barber, schedules }
+              })
+            )
+
+            setShops((prevShops) =>
+              prevShops.map((prevShop) =>
                 prevShop.id === shop.id
-                  ? { ...prevShop, barbers: barbersData }
+                  ? { ...prevShop, barbers: barbersWithSchedules }
                   : prevShop
               )
             )
@@ -358,6 +449,26 @@ export default function BarbersPage() {
     fetchShopsAndBarbers()
   }, [])
 
+  const fetchBarberSchedules = async (shopId: number, barberId: number) => {
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/barbers/${barberId}/schedules/`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      )
+      if (!response.ok) {
+        throw new Error('Failed to fetch schedules')
+      }
+      return await response.json()
+    } catch (error) {
+      console.error('Error fetching schedules:', error)
+      return []
+    }
+  }
+
   const refreshBarbers = async (shopId: number) => {
     try {
       const barbersResponse = await fetch(
@@ -371,16 +482,25 @@ export default function BarbersPage() {
 
       if (barbersResponse.ok) {
         const barbersData: Barber[] = await barbersResponse.json()
-        setShops(prevShops =>
-          prevShops.map(prevShop =>
+        
+        // Fetch schedules for each barber
+        const barbersWithSchedules = await Promise.all(
+          barbersData.map(async (barber) => {
+            const schedules = await fetchBarberSchedules(shopId, barber.id)
+            return { ...barber, schedules }
+          })
+        )
+
+        setShops((prevShops) =>
+          prevShops.map((prevShop) =>
             prevShop.id === shopId
-              ? { ...prevShop, barbers: barbersData }
+              ? { ...prevShop, barbers: barbersWithSchedules }
               : prevShop
           )
         )
       }
     } catch (error) {
-      console.error('Error refreshing barbers:', error)
+      console.error("Error refreshing barbers:", error)
     }
   }
 
@@ -390,7 +510,7 @@ export default function BarbersPage() {
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/barbers/${barberToDelete.id}/`,
         {
-          method: 'DELETE',
+          method: "DELETE",
           headers: {
             Authorization: `Bearer ${accessToken}`,
           },
@@ -398,18 +518,28 @@ export default function BarbersPage() {
       )
 
       if (!response.ok) {
-        throw new Error('Failed to delete barber')
+        throw new Error("Failed to delete barber")
       }
 
-      toast.success('Barber has been removed successfully')
+      toast.success("Barber has been removed successfully")
       await refreshBarbers(barberToDelete.shopId)
     } catch (error) {
-      console.error('Error deleting barber:', error)
-      toast.error('Failed to delete barber. Please try again.')
+      console.error("Error deleting barber:", error)
+      toast.error("Failed to delete barber. Please try again.")
     } finally {
       setIsDeleteDialogOpen(false)
       setBarberToDelete(null)
     }
+  }
+
+  const handleAddScheduleSuccess = () => {
+    // Refresh or refetch schedules if necessary
+    toast.success("Schedule added successfully")
+  }
+
+  const handleEditScheduleSuccess = () => {
+    // Refresh or refetch schedules if necessary
+    toast.success("Schedule updated successfully")
   }
 
   if (isLoading) {
@@ -426,17 +556,17 @@ export default function BarbersPage() {
 
   return (
     <div className="container mx-auto py-10">
-      <h1 className="text-2xl font-bold mb-6">Barbers Management</h1>
+      <h1 className="mb-6 text-2xl font-bold">Barbers Management</h1>
       <div className="space-y-6">
         {shops.map((shop) => (
           <Card key={shop.id}>
             <CardHeader>
-              <div className="flex justify-between items-center">
+              <div className="flex items-center justify-between">
                 <CardTitle>{shop.name}</CardTitle>
                 <Button
                   onClick={() => {
                     setSelectedShopId(shop.id)
-                    setIsModalOpen(true)
+                    setIsAddModalOpen(true)
                   }}
                 >
                   Add Barber
@@ -445,7 +575,9 @@ export default function BarbersPage() {
             </CardHeader>
             <CardContent>
               {shop.barbers.length === 0 ? (
-                <p className="text-muted-foreground">No barbers found for this shop.</p>
+                <p className="text-muted-foreground">
+                  No barbers found for this shop.
+                </p>
               ) : (
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                   {shop.barbers.map((barber) => (
@@ -459,18 +591,34 @@ export default function BarbersPage() {
                           <p className="text-sm text-muted-foreground">
                             Phone: {barber.phone_number}
                           </p>
-                          <div className="flex items-center justify-between">
-                            <span className={`px-2 py-1 rounded-full text-xs ${
-                              barber.status === 'available' 
-                                ? 'bg-green-100 text-green-800'
-                                : barber.status === 'in_service'
-                                ? 'bg-blue-100 text-blue-800'
-                                : barber.status === 'on_break'
-                                ? 'bg-yellow-100 text-yellow-800'
-                                : 'bg-red-100 text-red-800'
-                            }`}>
-                              {barber.status.replace('_', ' ')}
-                            </span>
+                          <span
+                            className={`rounded-full px-2 py-1 text-xs ${
+                              barber.status === "available"
+                                ? "bg-green-100 text-green-800"
+                                : barber.status === "in_service"
+                                ? "bg-blue-100 text-blue-800"
+                                : barber.status === "on_break"
+                                ? "bg-yellow-100 text-yellow-800"
+                                : "bg-red-100 text-red-800"
+                            }`}
+                          >
+                            {barber.status.replace("_", " ")}
+                          </span>
+                          {/* Schedule Management */}
+                          <ScheduleList
+                            schedules={barber.schedules || []}
+                            onEdit={(schedule) => {
+                              setEditSchedule(schedule)
+                              setIsAddScheduleModalOpen(true)
+                            }}
+                            onDelete={async (schedule) => {
+                              await refreshBarbers(shop.id)
+                            }}
+                            accessToken={accessToken}
+                            shopId={shop.id}
+                            barberId={barber.id}
+                          />
+                          <div className="mt-2 flex items-center justify-between">
                             <div className="space-x-2">
                               <Button
                                 variant="outline"
@@ -501,7 +649,7 @@ export default function BarbersPage() {
                                   setBarberToDelete({
                                     id: barber.id,
                                     name: barber.full_name,
-                                    shopId: shop.id
+                                    shopId: shop.id,
                                   })
                                   setIsDeleteDialogOpen(true)
                                 }}
@@ -509,6 +657,17 @@ export default function BarbersPage() {
                                 Remove
                               </Button>
                             </div>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedBarber(barber)
+                                setSelectedShopId(shop.id)
+                                setIsAddScheduleModalOpen(true)
+                              }}
+                            >
+                              Add Schedule
+                            </Button>
                           </div>
                         </div>
                       </CardContent>
@@ -521,12 +680,13 @@ export default function BarbersPage() {
         ))}
       </div>
 
+      {/* Add Barber Modal */}
       {selectedShopId && (
         <AddBarberModal
           shopId={selectedShopId}
-          isOpen={isModalOpen}
+          isOpen={isAddModalOpen}
           onClose={() => {
-            setIsModalOpen(false)
+            setIsAddModalOpen(false)
             setSelectedShopId(null)
           }}
           onSuccess={() => refreshBarbers(selectedShopId)}
@@ -534,6 +694,7 @@ export default function BarbersPage() {
         />
       )}
 
+      {/* Edit Barber Modal */}
       {selectedShopId && selectedBarber && (
         <EditBarberModal
           shopId={selectedShopId}
@@ -549,6 +710,7 @@ export default function BarbersPage() {
         />
       )}
 
+      {/* Delete Barber Dialog */}
       {barberToDelete && (
         <DeleteBarberDialog
           isOpen={isDeleteDialogOpen}
@@ -561,6 +723,7 @@ export default function BarbersPage() {
         />
       )}
 
+      {/* Manage Services Modal */}
       {selectedShopId && selectedBarberForServices && (
         <BarberServicesModal
           shopId={selectedShopId}
@@ -575,6 +738,35 @@ export default function BarbersPage() {
           accessToken={accessToken}
         />
       )}
+
+      {/* Add/Edit Schedule Modal */}
+      {selectedBarber && selectedShopId && (
+        <AddScheduleModal
+          isOpen={isAddScheduleModalOpen}
+          onClose={() => {
+            setIsAddScheduleModalOpen(false)
+            setEditSchedule(null)
+          }}
+          barberId={selectedBarber.id}
+          shopId={selectedShopId}
+          accessToken={accessToken}
+          onSuccess={() => refreshBarbers(selectedShopId)}
+        />
+      )}
+
+      {/* Edit Schedule Modal */}
+      {editSchedule && (
+        <EditScheduleModal
+          isOpen={isAddScheduleModalOpen}
+          onClose={() => {
+            setIsAddScheduleModalOpen(false)
+            setEditSchedule(null)
+          }}
+          schedule={editSchedule}
+          accessToken={accessToken}
+          onSuccess={() => refreshBarbers(selectedShopId!)}
+        />
+      )}
     </div>
   )
 }
@@ -582,7 +774,7 @@ export default function BarbersPage() {
 function LoadingState() {
   return (
     <div className="container mx-auto py-10">
-      <Skeleton className="h-8 w-48 mb-6" />
+      <Skeleton className="mb-6 h-8 w-48" />
       <div className="space-y-6">
         {[1, 2].map((i) => (
           <Card key={i}>
@@ -610,4 +802,4 @@ function LoadingState() {
       </div>
     </div>
   )
-} 
+}
