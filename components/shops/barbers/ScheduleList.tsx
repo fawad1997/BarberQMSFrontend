@@ -72,8 +72,8 @@ export function ScheduleList({ schedules, onEdit, onDelete, onAdd, accessToken, 
                   <span className="text-xs font-medium mb-1">{day}</span>
                   {schedule ? (
                     <div className="text-center">
-                      <p className="text-xs">{schedule.start_time}</p>
-                      <p className="text-xs mb-1">{schedule.end_time}</p>
+                      <p className="text-xs">{schedule.start_time.slice(0, 5)}</p>
+                      <p className="text-xs mb-1">{schedule.end_time.slice(0, 5)}</p>
                       <div className="flex space-x-1">
                         <Button 
                           variant="ghost" 
