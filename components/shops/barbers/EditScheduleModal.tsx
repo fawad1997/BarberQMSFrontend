@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { BarberSchedule } from "@/types/schedule"
+import { Label } from "@/components/ui/label"
 
 interface EditScheduleFormData {
   start_time: string
@@ -23,7 +24,12 @@ interface EditScheduleModalProps {
 }
 
 export function EditScheduleModal({ isOpen, onClose, schedule, accessToken, onSuccess }: EditScheduleModalProps) {
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<EditScheduleFormData>({
+  const { 
+    register, 
+    handleSubmit, 
+    reset,
+    formState: { errors }
+  } = useForm<EditScheduleFormData>({
     defaultValues: {
       start_time: schedule.start_time,
       end_time: schedule.end_time,
@@ -40,10 +46,7 @@ export function EditScheduleModal({ isOpen, onClose, schedule, accessToken, onSu
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${accessToken}`,
           },
-          body: JSON.stringify({
-            start_time: data.start_time,
-            end_time: data.end_time,
-          }),
+          body: JSON.stringify(data),
         }
       )
 
@@ -52,9 +55,8 @@ export function EditScheduleModal({ isOpen, onClose, schedule, accessToken, onSu
         throw new Error(errorData.detail || 'Failed to update schedule')
       }
 
+      await onSuccess()
       toast.success('Schedule updated successfully')
-      reset()
-      onSuccess()
       onClose()
     } catch (error) {
       console.error('Error updating schedule:', error)
@@ -72,21 +74,27 @@ export function EditScheduleModal({ isOpen, onClose, schedule, accessToken, onSu
           <div>
             <p className="font-medium">Day: {["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][schedule.day_of_week]}</p>
           </div>
-          <div>
+          <div className="space-y-2">
+            <Label htmlFor="start_time">Start Time</Label>
             <Input
+              id="start_time"
               type="time"
-              placeholder="Start Time"
-              {...register('start_time', { required: true })}
+              {...register('start_time', { required: "Start time is required" })}
             />
-            {errors.start_time && <p className="text-red-500 text-sm">Start time is required.</p>}
+            {errors.start_time && (
+              <p className="text-red-500 text-sm">{errors.start_time.message}</p>
+            )}
           </div>
-          <div>
+          <div className="space-y-2">
+            <Label htmlFor="end_time">End Time</Label>
             <Input
+              id="end_time"
               type="time"
-              placeholder="End Time"
-              {...register('end_time', { required: true })}
+              {...register('end_time', { required: "End time is required" })}
             />
-            {errors.end_time && <p className="text-red-500 text-sm">End time is required.</p>}
+            {errors.end_time && (
+              <p className="text-red-500 text-sm">{errors.end_time.message}</p>
+            )}
           </div>
           <Button type="submit" className="w-full">Update Schedule</Button>
         </form>

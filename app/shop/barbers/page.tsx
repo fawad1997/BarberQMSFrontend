@@ -355,6 +355,7 @@ export default function BarbersPage() {
     useState<Barber | null>(null)
   const [isAddScheduleModalOpen, setIsAddScheduleModalOpen] = useState(false)
   const [editSchedule, setEditSchedule] = useState<BarberSchedule | null>(null)
+  const [isEditScheduleModalOpen, setIsEditScheduleModalOpen] = useState(false)
 
   useEffect(() => {
     const fetchShopsAndBarbers = async () => {
@@ -542,6 +543,19 @@ export default function BarbersPage() {
     toast.success("Schedule updated successfully")
   }
 
+  const handleScheduleEdit = async (schedule: BarberSchedule) => {
+    // Find the shop and barber for this schedule
+    const shop = shops.find(s => s.id === schedule.shop_id)
+    const barber = shop?.barbers.find(b => b.id === schedule.barber_id)
+    
+    if (shop && barber) {
+      setSelectedShopId(shop.id)
+      setSelectedBarber(barber)
+      setEditSchedule(schedule)
+      setIsEditScheduleModalOpen(true)
+    }
+  }
+
   if (isLoading) {
     return <LoadingState />
   }
@@ -607,10 +621,7 @@ export default function BarbersPage() {
                           {/* Schedule Management */}
                           <ScheduleList
                             schedules={barber.schedules || []}
-                            onEdit={(schedule) => {
-                              setEditSchedule(schedule)
-                              setIsAddScheduleModalOpen(true)
-                            }}
+                            onEdit={handleScheduleEdit}
                             onDelete={async (schedule) => {
                               await refreshBarbers(shop.id)
                             }}
@@ -757,14 +768,24 @@ export default function BarbersPage() {
       {/* Edit Schedule Modal */}
       {editSchedule && (
         <EditScheduleModal
-          isOpen={isAddScheduleModalOpen}
+          isOpen={isEditScheduleModalOpen}
           onClose={() => {
-            setIsAddScheduleModalOpen(false)
+            setIsEditScheduleModalOpen(false)
             setEditSchedule(null)
+            setSelectedShopId(null)
+            setSelectedBarber(null)
           }}
           schedule={editSchedule}
           accessToken={accessToken}
-          onSuccess={() => refreshBarbers(selectedShopId!)}
+          onSuccess={async () => {
+            if (selectedShopId) {
+              await refreshBarbers(selectedShopId)
+              setEditSchedule(null)
+              setIsEditScheduleModalOpen(false)
+              setSelectedShopId(null)
+              setSelectedBarber(null)
+            }
+          }}
         />
       )}
     </div>
