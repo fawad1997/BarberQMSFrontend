@@ -762,6 +762,7 @@ export default function BarbersPage() {
           shopId={selectedShopId}
           accessToken={accessToken}
           onSuccess={() => refreshBarbers(selectedShopId)}
+          existingSchedules={selectedBarber.schedules || []}
         />
       )}
 

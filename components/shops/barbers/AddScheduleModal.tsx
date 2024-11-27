@@ -1,5 +1,3 @@
-// components/shops/barbers/AddScheduleModal.tsx
-
 "use client"
 
 import { useForm, Controller } from "react-hook-form"
@@ -23,6 +21,7 @@ interface AddScheduleModalProps {
   shopId: number
   accessToken: string
   onSuccess: () => void
+  existingSchedules: BarberSchedule[]
 }
 
 const dayOptions = [
@@ -41,7 +40,7 @@ const getDayName = (dayNumber: number | string): string => {
   return dayNames[Number(dayNumber)] || dayNumber.toString()
 }
 
-export function AddScheduleModal({ isOpen, onClose, barberId, shopId, accessToken, onSuccess }: AddScheduleModalProps) {
+export function AddScheduleModal({ isOpen, onClose, barberId, shopId, accessToken, onSuccess, existingSchedules }: AddScheduleModalProps) {
   const { control, handleSubmit, reset } = useForm<AddScheduleFormData>({
     defaultValues: {
       day_of_week: '',
@@ -49,6 +48,12 @@ export function AddScheduleModal({ isOpen, onClose, barberId, shopId, accessToke
       end_time: ''
     }
   })
+
+  const availableDays = dayOptions.filter(day => 
+    !existingSchedules.some(schedule => 
+      schedule.day_of_week === parseInt(day.value)
+    )
+  )
 
   const onSubmit = async (data: AddScheduleFormData) => {
     try {
@@ -116,7 +121,7 @@ export function AddScheduleModal({ isOpen, onClose, barberId, shopId, accessToke
                     <SelectValue placeholder="Select Day" />
                   </SelectTrigger>
                   <SelectContent>
-                    {dayOptions.map((day) => (
+                    {availableDays.map((day) => (
                       <SelectItem key={day.value} value={day.value}>
                         {day.label}
                       </SelectItem>
