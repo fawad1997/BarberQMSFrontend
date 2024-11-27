@@ -12,17 +12,22 @@ interface SalonSearchProps {
 export default function SalonSearch({ onSearch }: SalonSearchProps) {
   const [query, setQuery] = useState("");
 
+  const handleSearch = () => {
+    onSearch({ query, location: "" });
+  };
+
   return (
     <div className="flex gap-2 max-w-3xl mx-auto">
       <Input
         type="text"
-        placeholder="Search by shop name or address"
+        placeholder="Search by name, address, city, or state"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
+        onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
         className="flex-1"
       />
       <Button 
-        onClick={() => onSearch({ query, location: "" })}
+        onClick={handleSearch}
         className="bg-primary"
       >
         <Search className="mr-2 h-4 w-4" />

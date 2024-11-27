@@ -27,28 +27,13 @@ const MOCK_SALONS: Salon[] = [
   },
 ];
 
-export const getSalons = async (params: SalonSearchParams): Promise<Salon[]> => {
-  // For development, return mock data
-  return MOCK_SALONS;
-  
-  // Comment out or remove the mock return when you have a real API
-  try {
-    const queryString = new URLSearchParams({
-      query: params.query || '',
-      location: params.location || '',
-      page: String(params.page || 1),
-      limit: String(params.limit || 10),
-    }).toString();
-
-    const response = await fetch(`${API_URL}/salons?${queryString}`);
-    
-    if (!response.ok) {
-      throw new Error('Failed to fetch salons');
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error('Error fetching salons:', error);
-    return [];
+export async function getSalons({ query }: { query: string; location: string }) {
+  const searchParams = new URLSearchParams();
+  if (query) {
+    searchParams.append('search', query);
   }
-}; 
+  
+  const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/appointments/shops?${searchParams.toString()}`);
+  const data = await response.json();
+  return data.items;
+}

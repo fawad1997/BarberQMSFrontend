@@ -15,8 +15,8 @@ export default function SalonList({ salons, isLoading }: SalonListProps) {
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-      {salons.map((salon) => (
-        <Card key={salon.id} className="p-4">
+      {salons.map((salon, index) => (
+        <Card key={index} className="p-4">
           <div className="flex justify-between items-start">
             <div>
               <h3 className="text-lg font-semibold">{salon.name}</h3>
@@ -26,21 +26,18 @@ export default function SalonList({ salons, isLoading }: SalonListProps) {
               </p>
             </div>
             <div className="text-right">
-              <p className={`text-sm ${salon.isOpen ? 'text-green-500' : 'text-red-500'}`}>
-                {salon.isOpen ? 'Open' : 'Closed'}
-              </p>
               <p className="text-xs text-muted-foreground flex items-center gap-1">
                 <Clock className="h-3 w-3" />
-                {salon.openingTime} - {salon.closingTime}
+                {salon.opening_time.slice(0, 5)} - {salon.closing_time.slice(0, 5)}
               </p>
             </div>
           </div>
           
           <div className="mt-4">
             <p className="text-sm text-muted-foreground">
-              Wait time: {salon.waitTime} min
+              Wait time: {salon.average_wait_time} min
             </p>
-            <Button className="w-full mt-2" variant={salon.isOpen ? "default" : "secondary"}>
+            <Button className="w-full mt-2">
               Check In
             </Button>
           </div>
