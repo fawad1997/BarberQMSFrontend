@@ -593,7 +593,7 @@ export default function BarbersPage() {
                   No barbers found for this shop.
                 </p>
               ) : (
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2">
                   {shop.barbers.map((barber) => (
                     <Card key={barber.id}>
                       <CardContent className="pt-6">
@@ -803,7 +803,7 @@ function LoadingState() {
               <Skeleton className="h-6 w-32" />
             </CardHeader>
             <CardContent>
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2">
                 {[1, 2, 3].map((j) => (
                   <Card key={j}>
                     <CardContent className="pt-6">
