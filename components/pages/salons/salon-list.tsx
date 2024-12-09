@@ -2,6 +2,7 @@ import { Salon } from "@/types/salon";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Clock, MapPin } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 interface SalonListProps {
   salons: Salon[];
@@ -9,6 +10,8 @@ interface SalonListProps {
 }
 
 export default function SalonList({ salons, isLoading }: SalonListProps) {
+  const router = useRouter();
+
   if (isLoading) {
     return <div className="text-center">Loading salons...</div>;
   }
@@ -37,9 +40,20 @@ export default function SalonList({ salons, isLoading }: SalonListProps) {
             <p className="text-sm text-muted-foreground">
               Wait time: {salon.average_wait_time} min
             </p>
-            <Button className="w-full mt-2">
-              Check In
-            </Button>
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              <Button 
+                onClick={() => router.push(`/salons/${salon.id}/check-in`)}
+                variant="default"
+              >
+                Check In
+              </Button>
+              <Button 
+                onClick={() => router.push(`/salons/${salon.id}/appointment`)}
+                variant="outline"
+              >
+                Book Appointment
+              </Button>
+            </div>
           </div>
         </Card>
       ))}
