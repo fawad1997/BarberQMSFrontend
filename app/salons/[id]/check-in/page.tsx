@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Clock, MapPin, Phone, Mail, User } from "lucide-react";
 import { motion } from "framer-motion";
+import Link from "next/link";
 
 interface Barber {
   id: number;
@@ -143,6 +144,16 @@ export default function CheckInPage({ params }: { params: { id: string } }) {
                 </Card>
               ))}
             </div>
+          </div>
+
+          {/* Navigation Link */}
+          <div className="text-center text-sm">
+            <Link 
+              href={`/salons/${params.id}/appointment`}
+              className="text-primary hover:underline"
+            >
+              Want to book an appointment instead? Click here
+            </Link>
           </div>
 
           {/* Check-in Button */}

@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Clock, MapPin, Phone, Mail, User, Calendar } from "lucide-react";
 import { motion } from "framer-motion";
+import Link from "next/link";
 
 interface Service {
   id: number;
@@ -167,6 +168,16 @@ export default function AppointmentPage({ params }: { params: { id: string } }) 
                 </Card>
               ))}
             </div>
+          </div>
+
+          {/* Navigation Link */}
+          <div className="text-center text-sm">
+            <Link 
+              href={`/salons/${params.id}/check-in`}
+              className="text-primary hover:underline"
+            >
+              Prefer to check in now? Click here
+            </Link>
           </div>
 
           {/* Book Appointment Button */}
