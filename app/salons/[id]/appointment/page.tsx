@@ -30,8 +30,12 @@ interface Schedule {
 interface Barber {
   id: number;
   full_name: string;
-  services: Service[];
-  schedules: Schedule[];
+  services: { id: number }[];
+  schedules: {
+    id: number;
+    day_name: string;
+    formatted_time: string;
+  }[];
 }
 
 interface SalonDetails {
@@ -191,6 +195,21 @@ export default function AppointmentPage({ params }: { params: { id: string } }) 
     } finally {
       setIsBooking(false);
     }
+  };
+
+  // Add this helper function to filter barbers based on selected service
+  const getBarbersByService = (serviceId: number | null) => {
+    if (!serviceId) return salon.barbers;
+    
+    return salon.barbers.filter(barber => 
+      barber.services.some(service => service.id === serviceId)
+    );
+  };
+
+  // Update the service selection handler to reset barber selection
+  const handleServiceSelection = (serviceId: number) => {
+    setSelectedService(serviceId);
+    setSelectedBarber(null); // Reset barber selection when service changes
   };
 
   if (loading) {
@@ -356,7 +375,7 @@ export default function AppointmentPage({ params }: { params: { id: string } }) 
                         className={`p-4 cursor-pointer transition-all hover:shadow-md ${
                           selectedService === service.id ? 'ring-2 ring-primary' : ''
                         }`}
-                        onClick={() => setSelectedService(service.id)}
+                        onClick={() => handleServiceSelection(service.id)}
                       >
                         <div className="flex justify-between items-center">
                           <div>
@@ -372,36 +391,58 @@ export default function AppointmentPage({ params }: { params: { id: string } }) 
                   </div>
                 </div>
 
-                {/* Barbers Section */}
+                {/* Updated Barbers Section */}
                 <div className="space-y-4">
                   <h2 className="text-xl font-semibold">Select a Barber</h2>
-                  <div className="grid md:grid-cols-2 gap-4">
-                    {salon.barbers.map((barber) => (
-                      <Card
-                        key={barber.id}
-                        className={`p-4 cursor-pointer transition-all hover:shadow-md ${
-                          selectedBarber === barber.id ? 'ring-2 ring-primary' : ''
-                        }`}
-                        onClick={() => setSelectedBarber(barber.id)}
-                      >
-                        <div className="flex items-center gap-4">
-                          <div className="bg-primary/10 p-3 rounded-full">
-                            <User className="h-6 w-6 text-primary" />
-                          </div>
-                          <div>
-                            <p className="font-medium">{barber.full_name}</p>
-                            <div className="text-sm text-muted-foreground mt-1">
-                              {barber.schedules.map((schedule) => (
-                                <p key={schedule.id}>
-                                  {schedule.day_name}: {schedule.formatted_time}
-                                </p>
-                              ))}
-                            </div>
-                          </div>
+                  {selectedService ? (
+                    <>
+                      {getBarbersByService(selectedService).length > 0 ? (
+                        <div className="grid md:grid-cols-2 gap-4">
+                          {getBarbersByService(selectedService).map((barber) => (
+                            <Card
+                              key={barber.id}
+                              className={`p-4 cursor-pointer transition-all hover:shadow-md ${
+                                selectedBarber === barber.id ? 'ring-2 ring-primary' : ''
+                              }`}
+                              onClick={() => setSelectedBarber(barber.id)}
+                            >
+                              <div className="flex items-center gap-4">
+                                <div className="bg-primary/10 p-3 rounded-full">
+                                  <User className="h-6 w-6 text-primary" />
+                                </div>
+                                <div>
+                                  <p className="font-medium">{barber.full_name}</p>
+                                  <div className="text-sm text-muted-foreground mt-1">
+                                    {barber.schedules.map((schedule) => (
+                                      <p key={schedule.id}>
+                                        {schedule.day_name}: {schedule.formatted_time}
+                                      </p>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            </Card>
+                          ))}
                         </div>
-                      </Card>
-                    ))}
-                  </div>
+                      ) : (
+                        <Alert variant="destructive">
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertTitle>No Barbers Available</AlertTitle>
+                          <AlertDescription>
+                            Unfortunately, no barber is currently available for this service. Please select a different service or try again later.
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                    </>
+                  ) : (
+                    <Alert>
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertTitle>Select a Service</AlertTitle>
+                      <AlertDescription>
+                        Please select a service first to see available barbers.
+                      </AlertDescription>
+                    </Alert>
+                  )}
                 </div>
               </>
             )}
