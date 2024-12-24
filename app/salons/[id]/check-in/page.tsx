@@ -101,8 +101,8 @@ export default function CheckInPage({ params }: { params: { id: string } }) {
       
       const checkInData = {
         shop_id: Number(params.id),
-        service_id: selectedService,
-        barber_id: selectedBarber,
+        service_id: isAdvancedCheckIn ? selectedService : null,
+        barber_id: isAdvancedCheckIn ? selectedBarber : null,
         full_name: fullName,
         phone_number: phoneNumber,
         number_of_people: Number(numberOfPeople),
@@ -410,10 +410,10 @@ export default function CheckInPage({ params }: { params: { id: string } }) {
                   isCheckingIn ||
                   !fullName || 
                   !phoneNumber || 
-                  !selectedBarber || 
-                  !salon.is_open ||
+                  (!salon.is_open) ||
                   errors.fullName || 
-                  errors.phoneNumber
+                  errors.phoneNumber ||
+                  (isAdvancedCheckIn && !selectedBarber)
                 }
                 onClick={handleCheckIn}
               >
