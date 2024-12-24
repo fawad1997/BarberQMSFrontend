@@ -385,14 +385,34 @@ export default function CheckInPage({ params }: { params: { id: string } }) {
 
           {/* Navigation and Check-in Button */}
           <div className="border-t pt-6 space-y-4">
-            <Link 
-              href={`/salons/${params.id}/appointment`}
-              className="block text-center text-primary hover:underline"
-            >
-              Want to book an appointment instead? Click here
-            </Link>
-            
             <div className="flex flex-col items-center gap-3">
+              <div className="flex gap-4 w-full">
+                <Link 
+                  href={`/salons/${params.id}/queue`}
+                  className="flex-1"
+                >
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    size="lg"
+                  >
+                    View Current Queue
+                  </Button>
+                </Link>
+                <Link 
+                  href={`/salons/${params.id}/appointment`}
+                  className="flex-1"
+                >
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    size="lg"
+                  >
+                    Book Appointment
+                  </Button>
+                </Link>
+              </div>
+
               {!salon.is_open && (
                 <Alert variant="destructive" className="mb-2">
                   <AlertCircle className="h-4 w-4" />
