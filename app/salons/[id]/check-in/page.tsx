@@ -122,9 +122,12 @@ export default function CheckInPage({ params }: { params: { id: string } }) {
         throw new Error(data.message || 'Failed to check in');
       }
 
-      toast.success("Check-in Successful!", {
-        description: "You have been added to the queue.",
-      });
+      // Store check-in data in localStorage
+      localStorage.setItem('checkInPhone', phoneNumber);
+      localStorage.setItem('checkInShopId', params.id);
+      
+      // Redirect to status page
+      window.location.href = `/salons/${params.id}/my-status`;
       
     } catch (error) {
       toast.error("Check-in Failed", {
@@ -266,10 +269,14 @@ export default function CheckInPage({ params }: { params: { id: string } }) {
                   placeholder="Enter your phone number"
                   value={phoneNumber}
                   onChange={(e) => {
-                    setPhoneNumber(e.target.value);
-                    validatePhoneNumber(e.target.value);
+                    const numericValue = e.target.value.replace(/\D/g, '');
+                    setPhoneNumber(numericValue);
+                    validatePhoneNumber(numericValue);
                   }}
                   className={errors.phoneNumber ? 'border-red-500' : ''}
+                  type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                 />
                 {errors.phoneNumber && <p className="text-red-500 text-sm mt-1">{errors.phoneNumber}</p>}
               </div>
