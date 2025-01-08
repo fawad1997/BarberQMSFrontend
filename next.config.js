@@ -1,7 +1,16 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
-    domains: ['picsum.photos'],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'picsum.photos',
+      },
+      {
+        protocol: 'http',
+        hostname: 'picsum.photos',
+      },
+    ],
   },
   typescript: {
     // !! WARN !!
@@ -10,6 +19,7 @@ const nextConfig = {
     // !! WARN !!
     ignoreBuildErrors: true,
   },
-}
+  
+};
 
-module.exports = nextConfig
+module.exports = nextConfig;

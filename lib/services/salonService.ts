@@ -1,6 +1,6 @@
 import { Salon, SalonSearchParams } from "@/types/salon";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://backend:8000/api';
 
 export async function getSalons({ query }: { query: string; location: string }) {
   try {
@@ -8,7 +8,7 @@ export async function getSalons({ query }: { query: string; location: string }) 
     if (query) {
       searchParams.append('search', query);
     }
-    
+
     const response = await fetch(`${API_URL}/appointments/shops?${searchParams.toString()}`);
     if (!response.ok) throw new Error('Failed to fetch salons');
     const data = await response.json();
