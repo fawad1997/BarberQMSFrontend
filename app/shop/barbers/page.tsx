@@ -38,7 +38,7 @@ import { BarberServicesModal } from "@/app/components/shops/barbers/BarberServic
 import { AddScheduleModal } from "@/app/components/shops/barbers/AddScheduleModal"
 import { EditScheduleModal } from "@/app/components/shops/barbers/EditScheduleModal"
 import { ScheduleList } from "@/app/components/shops/barbers/ScheduleList"
-import { API_URL } from "@/lib/services/salonService"
+
 
 interface AddBarberFormData {
   full_name: string
@@ -53,6 +53,9 @@ interface EditBarberFormData {
   phone_number: string
   status: string
 }
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"; // Ensure this is correct
+
 
 function AddBarberModal({
   shopId,

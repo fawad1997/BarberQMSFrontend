@@ -14,7 +14,7 @@ import {
 import { Input } from "@/app/components/ui/input"
 import { Skeleton } from "@/app/components/ui/skeleton"
 import { toast } from "sonner"
-import { API_URL } from "@/lib/services/salonService"
+
 
 interface Shop {
   id: string
@@ -52,6 +52,8 @@ interface DeleteServiceDialogProps {
   onSuccess: () => void
   accessToken: string
 }
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"; // Ensure this is correct
 
 function ServiceModal({
   shopId,

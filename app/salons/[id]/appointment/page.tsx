@@ -169,7 +169,7 @@ export default function AppointmentPage({ params }: { params: { id: string } }) 
         body: JSON.stringify(appointmentData),
       });
 
-      console.log(process.env.NEXT_PUBLIC_API_URL)
+
 
       if (!response.ok) {
         const data = await response.json();
