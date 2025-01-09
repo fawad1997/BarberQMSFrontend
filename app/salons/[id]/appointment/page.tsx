@@ -60,6 +60,9 @@ interface AppointmentRequest {
   phone_number: string;
 }
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+
 export default function AppointmentPage({ params }: { params: { id: string } }) {
   const [salon, setSalon] = useState<SalonDetails | null>(null);
   const [loading, setLoading] = useState(true);
@@ -161,7 +164,7 @@ export default function AppointmentPage({ params }: { params: { id: string } }) 
 
 
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/appointments`, {
+      const response = await fetch(`${API_URL}/appointments`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

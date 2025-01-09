@@ -6,7 +6,6 @@ import { Button } from "@/app/components/ui/button";
 import { motion } from "framer-motion";
 import { Clock, User } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { API_URL } from "@/lib/services/salonService";
 
 interface QueueStatus {
   position: number;
@@ -17,6 +16,8 @@ interface QueueStatus {
   barber_name?: string;
   service_name?: string;
 }
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export default function MyStatusPage({ params }: { params: { id: string } }) {
   const router = useRouter();

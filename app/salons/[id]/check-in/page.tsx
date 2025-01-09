@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { getSalonDetails } from "@/lib/services/salonService";
-import { API_URL } from "@/lib/services/salonService";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Clock, MapPin, Phone, Mail, User } from "lucide-react";
@@ -49,6 +48,9 @@ interface Service {
   duration: number;
   price: number;
 }
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
 
 export default function CheckInPage({ params }: { params: { id: string } }) {
   const [salon, setSalon] = useState<SalonDetails | null>(null);

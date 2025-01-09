@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { getSalonDetails } from "@/lib/services/salonService";
-import { API_URL } from "@/lib/services/salonService";
 import { Card } from "@/app/components/ui/card";
 import { Clock, User } from "lucide-react";
 import { motion } from "framer-motion";
@@ -28,6 +27,8 @@ interface SalonDetails {
   is_open: boolean;
   estimated_wait_time: number;
 }
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export default function QueuePage({ params }: { params: { id: string } }) {
   const [salon, setSalon] = useState<SalonDetails | null>(null);
