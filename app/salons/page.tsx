@@ -1,4 +1,4 @@
-import SalonsView from "@/components/pages/salons/salons-view";
+import SalonsView from "@/app/components/pages/salons/salons-view";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {

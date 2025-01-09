@@ -1,8 +1,11 @@
 import NextAuth, { NextAuthOptions } from "next-auth"
 import CredentialsProvider from "next-auth/providers/credentials"
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+
 export const authOptions: NextAuthOptions = {
-  secret: process.env.NEXTAUTH_SECRET,
+  secret: process.env.NEXTAUTH_SECRET || 123456,
   session: {
     strategy: 'jwt',
     maxAge: 30 * 24 * 60 * 60, // 30 days
@@ -17,27 +20,33 @@ export const authOptions: NextAuthOptions = {
       },
       async authorize(credentials) {
         try {
-          const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
+          const response = await fetch(`${API_URL}/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(credentials)
-          })
+          });
 
-          const data = await response.json()
+          if (!response.ok) {
+            console.error(`Failed to login: ${response.statusText}`);
+            throw new Error("Invalid credentials");
+          }
 
-          if (response.ok && data) {
+          const data = await response.json();
+
+          if (data && data.access_token) {
             return {
               id: data.user_id.toString(),
               name: data.full_name,
               email: data.email,
               role: data.role,
               accessToken: data.access_token
-            }
+            };
           }
-          return null
+
+          throw new Error("Invalid credentials");
         } catch (error) {
-          console.error("Auth error:", error)
-          return null
+          console.error("Error in authorize:", error);
+          return null;
         }
       }
     })
@@ -49,17 +58,20 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.role = user.role
-        token.accessToken = user.accessToken
+        console.log("User authenticated:", user);
+        token.role = user.role;
+        token.accessToken = user.accessToken;
       }
-      return token
+      console.log("JWT Token:", token);
+      return token;
     },
     async session({ session, token }) {
       if (session?.user) {
-        session.user.role = token.role as string
-        session.user.accessToken = token.accessToken as string
+        session.user.role = token.role as string;
+        session.user.accessToken = token.accessToken as string;
       }
-      return session
+      console.log("Session Data:", session);
+      return session;
     }
   }
 }

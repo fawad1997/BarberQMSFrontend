@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { getSalonDetails } from "@/lib/services/salonService";
-import { Card } from "@/components/ui/card";
+import { API_URL } from "@/lib/services/salonService";
+import { Card } from "@/app/components/ui/card";
 import { Clock, User } from "lucide-react";
 import { motion } from "framer-motion";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/app/components/ui/alert";
 import { AlertCircle } from 'lucide-react';
 
 interface QueueItem {
@@ -41,7 +42,7 @@ export default function QueuePage({ params }: { params: { id: string } }) {
         setSalon(salonData);
 
         // Fetch queue data
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/queue/${params.id}`);
+        const response = await fetch(`${API_URL}/queue/${params.id}`);
         if (!response.ok) throw new Error('Failed to fetch queue data');
         const queueData = await response.json();
         setQueueItems(queueData);
@@ -53,7 +54,7 @@ export default function QueuePage({ params }: { params: { id: string } }) {
     };
 
     fetchData();
-    
+
     // Set up polling every 30 seconds
     const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
@@ -143,11 +144,10 @@ export default function QueuePage({ params }: { params: { id: string } }) {
                         <div className="text-lg font-bold text-primary">
                           #{item.position_in_queue}
                         </div>
-                        <div className={`text-sm ${
-                          item.status === 'IN_PROGRESS' ? 'text-green-500' : 
-                          item.status === 'CHECKED_IN' ? 'text-blue-500' : 
-                          'text-gray-500'
-                        }`}>
+                        <div className={`text-sm ${item.status === 'IN_PROGRESS' ? 'text-green-500' :
+                          item.status === 'CHECKED_IN' ? 'text-blue-500' :
+                            'text-gray-500'
+                          }`}>
                           {item.status.replace('_', ' ')}
                         </div>
                       </div>

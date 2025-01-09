@@ -4,17 +4,17 @@ import { siteConfig } from "@/config/site"
 import dynamic from 'next/dynamic'
 import "./globals.css"
 import { Toaster } from 'sonner';
-import AuthProvider from "@/components/providers/auth-provider"
+import AuthProvider from "@/app/components/providers/auth-provider"
 
 const inter = Inter({ subsets: ["latin"] })
 
 // Dynamic imports for heavy components
-const Navbar = dynamic(() => import("@/components/layout/navbar"), {
+const Navbar = dynamic(() => import("@/app/components/layout/navbar"), {
   ssr: true,
   loading: () => <div className="h-16" />
 })
 
-const Footer = dynamic(() => import("@/components/layout/footer"), {
+const Footer = dynamic(() => import("@/app/components/layout/footer"), {
   ssr: true,
 })
 

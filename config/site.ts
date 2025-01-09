@@ -5,14 +5,14 @@ import { SiteConfig, ContactConfig } from "@/types"
 -- Fill the details about your website
  ==================== */
 
-const baseUrl = "https://walkinonline.com"
+const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"; // Ensure this is correct
 
 export const siteConfig: SiteConfig = {
   name: "WalkInOnline",
   author: "Fawad",
   description:
     "WalkInOnline: A streamlined, AI-powered queue and appointment management platform for barbershops, enabling real-time wait time estimates, service selection, and appointment booking, built with Next.js and shadcn/ui.",
-keywords: [
+  keywords: [
     "Barbershop Queue Management",
     "Appointment Scheduling",
     "Real-Time Wait Times",
@@ -35,11 +35,11 @@ keywords: [
   ],
   url: {
     base: baseUrl,
-    author: "https://walkinonline.com",
+    author: "fawad",
   },
   ogImage: `${baseUrl}/og.jpg`,
-}
+};
 
 export const contactConfig: ContactConfig = {
   email: "fawad_12@outlook.com",
-}
+};

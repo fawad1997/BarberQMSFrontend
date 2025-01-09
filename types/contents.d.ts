@@ -1,4 +1,4 @@
-import { IconKeys } from "@/components/icons"
+import { IconKeys } from "@/app/components/icons"
 
 export type HeroHeader = {
   header: string

@@ -1,11 +1,11 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import CreateShopForm from "@/components/shops/create-shop-form";
+import CreateShopForm from "@/app/components/shops/create-shop-form";
 
 export default async function CreateShopPage() {
   const session = await getServerSession(authOptions);
-  
+
   if (!session || session.user.role !== "SHOP_OWNER") {
     redirect("/");
   }

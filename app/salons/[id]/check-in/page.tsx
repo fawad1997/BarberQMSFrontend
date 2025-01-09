@@ -2,18 +2,19 @@
 
 import { useEffect, useState } from "react";
 import { getSalonDetails } from "@/lib/services/salonService";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { API_URL } from "@/lib/services/salonService";
+import { Card } from "@/app/components/ui/card";
+import { Button } from "@/app/components/ui/button";
 import { Clock, MapPin, Phone, Mail, User } from "lucide-react";
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Input } from "@/app/components/ui/input";
+import { Label } from "@/app/components/ui/label";
+import { Alert, AlertDescription, AlertTitle } from "@/app/components/ui/alert";
 import { AlertCircle } from 'lucide-react';
 import { toast } from "sonner";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
+import { Switch } from "@/app/components/ui/switch";
 
 interface Barber {
   id: number;
@@ -67,12 +68,15 @@ export default function CheckInPage({ params }: { params: { id: string } }) {
   useEffect(() => {
     const fetchSalonDetails = async () => {
       try {
-        const data = await getSalonDetails(params.id);
-        setSalon(data);
+        const response = await fetch(`${API_URL}/salons/${params.id}`);
+        if (!response.ok) {
+          throw new Error("Failed to fetch salon details");
+        }
+        const salonData = await response.json();
+        setSalon(salonData);
       } catch (error) {
-        console.error('Error fetching salon details:', error);
-      } finally {
-        setLoading(false);
+        console.error("Error fetching salon details:", error);
+        toast.error("Failed to load salon details");
       }
     };
 
@@ -98,7 +102,7 @@ export default function CheckInPage({ params }: { params: { id: string } }) {
   const handleCheckIn = async () => {
     try {
       setIsCheckingIn(true);
-      
+
       const checkInData = {
         shop_id: Number(params.id),
         service_id: isAdvancedCheckIn ? selectedService : null,
@@ -108,7 +112,7 @@ export default function CheckInPage({ params }: { params: { id: string } }) {
         number_of_people: Number(numberOfPeople),
       };
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/queue`, {
+      const response = await fetch(`${API_URL}/queue`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -125,10 +129,10 @@ export default function CheckInPage({ params }: { params: { id: string } }) {
       // Store check-in data in localStorage
       localStorage.setItem('checkInPhone', phoneNumber);
       localStorage.setItem('checkInShopId', params.id);
-      
+
       // Redirect to status page
       window.location.href = `/salons/${params.id}/my-status`;
-      
+
     } catch (error) {
       toast.error("Check-in Failed", {
         description: error instanceof Error ? error.message : "Failed to check in",
@@ -140,8 +144,8 @@ export default function CheckInPage({ params }: { params: { id: string } }) {
 
   const getBarbersByService = (serviceId: number | null) => {
     if (!serviceId) return salon.barbers;
-    
-    return salon.barbers.filter(barber => 
+
+    return salon.barbers.filter(barber =>
       barber.services.some(service => service.id === serviceId)
     );
   };
@@ -179,7 +183,7 @@ export default function CheckInPage({ params }: { params: { id: string } }) {
           {/* Salon Header */}
           <div className="text-center mb-6">
             <h1 className="text-4xl font-bold mb-6 text-primary">{salon.name}</h1>
-            
+
             {/* Improved Shop Details Layout */}
             <div className="grid md:grid-cols-2 gap-4 text-left max-w-2xl mx-auto">
               <div className="space-y-3">
@@ -318,9 +322,8 @@ export default function CheckInPage({ params }: { params: { id: string } }) {
                     {salon.services.map((service) => (
                       <Card
                         key={service.id}
-                        className={`p-4 cursor-pointer transition-all hover:shadow-md ${
-                          selectedService === service.id ? 'ring-2 ring-primary' : ''
-                        }`}
+                        className={`p-4 cursor-pointer transition-all hover:shadow-md ${selectedService === service.id ? 'ring-2 ring-primary' : ''
+                          }`}
                         onClick={() => handleServiceSelection(service.id)}
                       >
                         <div className="flex justify-between items-center">
@@ -347,9 +350,8 @@ export default function CheckInPage({ params }: { params: { id: string } }) {
                           {getBarbersByService(selectedService).map((barber) => (
                             <Card
                               key={barber.id}
-                              className={`p-4 cursor-pointer transition-all hover:shadow-md ${
-                                selectedBarber === barber.id ? 'ring-2 ring-primary' : ''
-                              }`}
+                              className={`p-4 cursor-pointer transition-all hover:shadow-md ${selectedBarber === barber.id ? 'ring-2 ring-primary' : ''
+                                }`}
                               onClick={() => setSelectedBarber(barber.id)}
                             >
                               <div className="flex items-center gap-4">
@@ -394,7 +396,7 @@ export default function CheckInPage({ params }: { params: { id: string } }) {
           <div className="border-t pt-6 space-y-4">
             <div className="flex flex-col items-center gap-3">
               <div className="flex gap-4 w-full">
-                <Link 
+                <Link
                   href={`/salons/${params.id}/queue`}
                   className="flex-1"
                 >
@@ -406,7 +408,7 @@ export default function CheckInPage({ params }: { params: { id: string } }) {
                     View Current Queue
                   </Button>
                 </Link>
-                <Link 
+                <Link
                   href={`/salons/${params.id}/appointment`}
                   className="flex-1"
                 >
@@ -429,16 +431,16 @@ export default function CheckInPage({ params }: { params: { id: string } }) {
                   </AlertDescription>
                 </Alert>
               )}
-              
+
               <Button
                 className="w-full"
                 size="lg"
                 disabled={
                   isCheckingIn ||
-                  !fullName || 
-                  !phoneNumber || 
+                  !fullName ||
+                  !phoneNumber ||
                   (!salon.is_open) ||
-                  errors.fullName || 
+                  errors.fullName ||
                   errors.phoneNumber ||
                   (isAdvancedCheckIn && !selectedBarber)
                 }

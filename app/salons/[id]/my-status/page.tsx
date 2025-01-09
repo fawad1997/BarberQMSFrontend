@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Card } from "@/app/components/ui/card";
+import { Button } from "@/app/components/ui/button";
 import { motion } from "framer-motion";
 import { Clock, User } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { API_URL } from "@/lib/services/salonService";
 
 interface QueueStatus {
   position: number;
@@ -36,7 +37,7 @@ export default function MyStatusPage({ params }: { params: { id: string } }) {
     const fetchStatus = async () => {
       try {
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/queue/check-status?phone=${checkInPhone}&shop_id=${params.id}`
+          `${API_URL}/queue/check-status?phone=${checkInPhone}&shop_id=${params.id}`
         );
         const data = await response.json();
 

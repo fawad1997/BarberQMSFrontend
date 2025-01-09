@@ -2,16 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { getSalonDetails } from "@/lib/services/salonService";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Card } from "@/app/components/ui/card";
+import { Button } from "@/app/components/ui/button";
 import { Clock, MapPin, Phone, Mail, User, Calendar, AlertCircle } from 'lucide-react';
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
+import { Input } from "@/app/components/ui/input";
+import { Label } from "@/app/components/ui/label";
+import { Alert, AlertDescription, AlertTitle } from "@/app/components/ui/alert";
+import { Switch } from "@/app/components/ui/switch";
 import { toast } from "sonner";
 
 interface Service {
@@ -31,11 +31,7 @@ interface Barber {
   id: number;
   full_name: string;
   services: { id: number }[];
-  schedules: {
-    id: number;
-    day_name: string;
-    formatted_time: string;
-  }[];
+  schedules: Schedule[];
 }
 
 interface SalonDetails {
@@ -72,10 +68,7 @@ export default function AppointmentPage({ params }: { params: { id: string } }) 
   const [fullName, setFullName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [numberOfPeople, setNumberOfPeople] = useState("1");
-  const [errors, setErrors] = useState({
-    fullName: "",
-    phoneNumber: "",
-  });
+  const [errors, setErrors] = useState({ fullName: "", phoneNumber: "" });
   const [isAdvanceBooking, setIsAdvanceBooking] = useState(false);
   const [appointmentDate, setAppointmentDate] = useState("");
   const [appointmentTime, setAppointmentTime] = useState("");
@@ -89,6 +82,7 @@ export default function AppointmentPage({ params }: { params: { id: string } }) 
         setSalon(data);
       } catch (error) {
         console.error('Error fetching salon details:', error);
+        toast.error("Failed to load salon details.");
       } finally {
         setLoading(false);
       }
@@ -134,7 +128,7 @@ export default function AppointmentPage({ params }: { params: { id: string } }) 
 
   const isWithinBusinessHours = (time: string) => {
     if (!salon?.formatted_hours || !time) return false;
-    
+
     const { start, end } = parseBusinessHours(salon.formatted_hours);
     return time >= start && time <= end;
   };
@@ -142,7 +136,7 @@ export default function AppointmentPage({ params }: { params: { id: string } }) 
   const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedTime = e.target.value;
     setAppointmentTime(selectedTime);
-    
+
     if (!isWithinBusinessHours(selectedTime)) {
       setTimeError(`Please select a time between ${salon?.formatted_hours}`);
     } else {
@@ -153,7 +147,7 @@ export default function AppointmentPage({ params }: { params: { id: string } }) 
   const handleBookAppointment = async () => {
     try {
       setIsBooking(true);
-      
+
       const appointmentData: AppointmentRequest = {
         shop_id: Number(params.id),
         barber_id: isAdvanceBooking ? selectedBarber : null,
@@ -165,6 +159,8 @@ export default function AppointmentPage({ params }: { params: { id: string } }) 
         phone_number: phoneNumber,
       };
 
+
+
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/appointments`, {
         method: 'POST',
         headers: {
@@ -173,9 +169,10 @@ export default function AppointmentPage({ params }: { params: { id: string } }) 
         body: JSON.stringify(appointmentData),
       });
 
-      const data = await response.json();
+      console.log(process.env.NEXT_PUBLIC_API_URL)
 
       if (!response.ok) {
+        const data = await response.json();
         throw new Error(data.message || 'Failed to book appointment');
       }
 
@@ -186,7 +183,7 @@ export default function AppointmentPage({ params }: { params: { id: string } }) 
 
       // Optional: Reset form or redirect
       // router.push(`/appointments/${data.id}`);
-      
+
     } catch (error) {
       // Show error message using sonner toast
       toast.error("Booking Failed", {
@@ -197,16 +194,14 @@ export default function AppointmentPage({ params }: { params: { id: string } }) 
     }
   };
 
-  // Add this helper function to filter barbers based on selected service
   const getBarbersByService = (serviceId: number | null) => {
-    if (!serviceId) return salon.barbers;
-    
-    return salon.barbers.filter(barber => 
+    if (!serviceId || !salon) return salon?.barbers || [];
+
+    return salon.barbers.filter(barber =>
       barber.services.some(service => service.id === serviceId)
     );
   };
 
-  // Update the service selection handler to reset barber selection
   const handleServiceSelection = (serviceId: number) => {
     setSelectedService(serviceId);
     setSelectedBarber(null); // Reset barber selection when service changes
@@ -240,7 +235,7 @@ export default function AppointmentPage({ params }: { params: { id: string } }) 
           {/* Salon Header */}
           <div className="text-center mb-6">
             <h1 className="text-4xl font-bold mb-6 text-primary">{salon.name}</h1>
-            
+
             {/* Improved Shop Details Layout */}
             <div className="grid md:grid-cols-2 gap-4 text-left max-w-2xl mx-auto">
               <div className="space-y-3">
@@ -279,7 +274,7 @@ export default function AppointmentPage({ params }: { params: { id: string } }) 
             </div>
           </div>
 
-          {/* Customer Information Section - Moved Up */}
+          {/* Customer Information Section */}
           <div className="border-t pt-6">
             <h2 className="text-2xl font-semibold mb-4">Your Information</h2>
             <div className="grid md:grid-cols-2 gap-4">
@@ -372,17 +367,13 @@ export default function AppointmentPage({ params }: { params: { id: string } }) 
                     {salon.services.map((service) => (
                       <Card
                         key={service.id}
-                        className={`p-4 cursor-pointer transition-all hover:shadow-md ${
-                          selectedService === service.id ? 'ring-2 ring-primary' : ''
-                        }`}
+                        className={`p-4 cursor-pointer transition-all hover:shadow-md ${selectedService === service.id ? 'ring-2 ring-primary' : ''}`}
                         onClick={() => handleServiceSelection(service.id)}
                       >
                         <div className="flex justify-between items-center">
                           <div>
                             <p className="font-medium">{service.name}</p>
-                            <p className="text-sm text-muted-foreground">
-                              Duration: {service.duration} min
-                            </p>
+                            <p className="text-sm text-muted-foreground">Duration: {service.duration} min</p>
                           </div>
                           <p className="font-medium text-primary">${service.price}</p>
                         </div>
@@ -401,9 +392,7 @@ export default function AppointmentPage({ params }: { params: { id: string } }) 
                           {getBarbersByService(selectedService).map((barber) => (
                             <Card
                               key={barber.id}
-                              className={`p-4 cursor-pointer transition-all hover:shadow-md ${
-                                selectedBarber === barber.id ? 'ring-2 ring-primary' : ''
-                              }`}
+                              className={`p-4 cursor-pointer transition-all hover:shadow-md ${selectedBarber === barber.id ? 'ring-2 ring-primary' : ''}`}
                               onClick={() => setSelectedBarber(barber.id)}
                             >
                               <div className="flex items-center gap-4">
@@ -414,9 +403,7 @@ export default function AppointmentPage({ params }: { params: { id: string } }) 
                                   <p className="font-medium">{barber.full_name}</p>
                                   <div className="text-sm text-muted-foreground mt-1">
                                     {barber.schedules.map((schedule) => (
-                                      <p key={schedule.id}>
-                                        {schedule.day_name}: {schedule.formatted_time}
-                                      </p>
+                                      <p key={schedule.id}>{schedule.day_name}: {schedule.formatted_time}</p>
                                     ))}
                                   </div>
                                 </div>
@@ -450,25 +437,25 @@ export default function AppointmentPage({ params }: { params: { id: string } }) 
 
           {/* Navigation Link and Book Button Container */}
           <div className="border-t pt-6 space-y-4">
-            <Link 
+            <Link
               href={`/salons/${params.id}/check-in`}
               className="block text-center text-primary hover:underline"
             >
               Prefer to check in now? Click here
             </Link>
-            
+
             <div className="flex justify-center">
               <Button
                 size="lg"
                 className="min-w-[200px]"
                 disabled={
                   isBooking ||
-                  !fullName || 
-                  !phoneNumber || 
+                  !fullName ||
+                  !phoneNumber ||
                   !appointmentDate ||
                   !appointmentTime ||
-                  timeError || 
-                  errors.fullName || 
+                  timeError ||
+                  errors.fullName ||
                   errors.phoneNumber ||
                   (isAdvanceBooking && (!selectedService || !selectedBarber))
                 }

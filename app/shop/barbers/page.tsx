@@ -5,23 +5,23 @@ import { getSession } from "next-auth/react"
 import { Shop } from "@/types/shop"
 import { Barber } from "@/types/barber"
 import { BarberSchedule } from "@/types/schedule"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/app/components/ui/card"
+import { Skeleton } from "@/app/components/ui/skeleton"
+import { Button } from "@/app/components/ui/button"
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
+} from "@/app/components/ui/dialog"
+import { Input } from "@/app/components/ui/input"
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
+} from "@/app/components/ui/select"
 import { useForm } from "react-hook-form"
 import { toast } from "sonner"
 import {
@@ -33,11 +33,12 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import { BarberServicesModal } from "@/components/shops/barbers/BarberServicesModal"
-import { AddScheduleModal } from "@/components/shops/barbers/AddScheduleModal"
-import { EditScheduleModal } from "@/components/shops/barbers/EditScheduleModal"
-import { ScheduleList } from "@/components/shops/barbers/ScheduleList"
+} from "@/app/components/ui/alert-dialog"
+import { BarberServicesModal } from "@/app/components/shops/barbers/BarberServicesModal"
+import { AddScheduleModal } from "@/app/components/shops/barbers/AddScheduleModal"
+import { EditScheduleModal } from "@/app/components/shops/barbers/EditScheduleModal"
+import { ScheduleList } from "@/app/components/shops/barbers/ScheduleList"
+import { API_URL } from "@/lib/services/salonService"
 
 interface AddBarberFormData {
   full_name: string
@@ -76,7 +77,7 @@ function AddBarberModal({
   const onSubmit = async (data: AddBarberFormData) => {
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/barbers/`,
+        `${API_URL}/shop-owners/shops/${shopId}/barbers/`,
         {
           method: "POST",
           headers: {
@@ -206,9 +207,10 @@ function EditBarberModal({
   const onSubmit = async (data: EditBarberFormData) => {
     try {
       console.log("Sending data:", data)
+      console.log(API_URL)
 
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/barbers/${barber.id}/`,
+        `${API_URL}/shop-owners/shops/${shopId}/barbers/${barber.id}/`,
         {
           method: "PUT",
           headers: {
@@ -358,102 +360,59 @@ export default function BarbersPage() {
   const [isEditScheduleModalOpen, setIsEditScheduleModalOpen] = useState(false)
 
   useEffect(() => {
-    const fetchShopsAndBarbers = async () => {
-      try {
-        const session = await getSession()
-        if (!session?.user?.accessToken) {
-          throw new Error("No access token found")
-        }
-        setAccessToken(session.user.accessToken)
+    const fetchData = async () => {
+      const session = await getSession()
 
+      if (!session || session.user.role !== "SHOP_OWNER") {
+        redirect("/")
+      }
+
+      setAccessToken(session.user.accessToken)
+
+      try {
         // Fetch shops
         const shopsResponse = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/`,
+          `${API_URL}/shop-owners/shops/`,
           {
             headers: {
               Authorization: `Bearer ${session.user.accessToken}`,
             },
           }
         )
-
-        if (!shopsResponse.ok) {
-          throw new Error("Failed to fetch shops")
-        }
-
-        const shopsData: Shop[] = await shopsResponse.json()
-        const simplifiedShops = shopsData.map((shop) => ({
-          id: shop.id,
-          name: shop.name,
-          barbers: [] as Barber[],
-        }))
-
-        setShops(simplifiedShops)
+        const shopsData = await shopsResponse.json()
 
         // Fetch barbers for each shop
-        // Inside useEffect in BarbersPage
-
-        const fetchBarberSchedules = async (shopId: number, barberId: number) => {
-          try {
-            const response = await fetch(
-              `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/barbers/${barberId}/schedules/`,
+        const shopsWithBarbers = await Promise.all(
+          shopsData.map(async (shop: Shop) => {
+            const barbersResponse = await fetch(
+              `${API_URL}/shop-owners/shops/${shop.id}/barbers/`,
               {
                 headers: {
                   Authorization: `Bearer ${session.user.accessToken}`,
                 },
               }
             )
-            if (!response.ok) {
-              throw new Error('Failed to fetch schedules')
-            }
-            return await response.json()
-          } catch (error) {
-            console.error('Error fetching schedules:', error)
-            return []
-          }
-        }
+            const barbers = await barbersResponse.json()
+            return { ...shop, barbers }
+          })
+        )
 
-        for (const shop of simplifiedShops) {
-          const barbersResponse = await fetch(
-            `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shop.id}/barbers/`,
-            {
-              headers: {
-                Authorization: `Bearer ${session.user.accessToken}`,
-              },
-            }
-          )
-
-          if (barbersResponse.ok) {
-            const barbersData: Barber[] = await barbersResponse.json()
-            const barbersWithSchedules = await Promise.all(
-              barbersData.map(async (barber) => {
-                const schedules = await fetchBarberSchedules(shop.id, barber.id)
-                return { ...barber, schedules }
-              })
-            )
-
-            setShops((prevShops) =>
-              prevShops.map((prevShop) =>
-                prevShop.id === shop.id
-                  ? { ...prevShop, barbers: barbersWithSchedules }
-                  : prevShop
-              )
-            )
-          }
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "An error occurred")
+        setShops(shopsWithBarbers)
+      } catch (error) {
+        console.error("Error fetching data:", error)
+        setError("Failed to load data")
       } finally {
         setIsLoading(false)
       }
     }
 
-    fetchShopsAndBarbers()
+    fetchData()
   }, [])
 
   const fetchBarberSchedules = async (shopId: number, barberId: number) => {
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/barbers/${barberId}/schedules/`,
+        `${API_URL}/shop-owners/shops/${shopId}/barbers/${barberId}/schedules/`,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -473,7 +432,7 @@ export default function BarbersPage() {
   const refreshBarbers = async (shopId: number) => {
     try {
       const barbersResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/barbers/`,
+        `${API_URL}/shop-owners/shops/${shopId}/barbers/`,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -483,7 +442,7 @@ export default function BarbersPage() {
 
       if (barbersResponse.ok) {
         const barbersData: Barber[] = await barbersResponse.json()
-        
+
         // Fetch schedules for each barber
         const barbersWithSchedules = await Promise.all(
           barbersData.map(async (barber) => {
@@ -509,7 +468,7 @@ export default function BarbersPage() {
     if (!barberToDelete) return
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/barbers/${barberToDelete.id}/`,
+        `${API_URL}/shop-owners/shops/barbers/${barberToDelete.id}/`,
         {
           method: "DELETE",
           headers: {
@@ -547,7 +506,7 @@ export default function BarbersPage() {
     // Find the shop and barber for this schedule
     const shop = shops.find(s => s.id === schedule.shop_id)
     const barber = shop?.barbers.find(b => b.id === schedule.barber_id)
-    
+
     if (shop && barber) {
       setSelectedShopId(shop.id)
       setSelectedBarber(barber)
@@ -606,15 +565,14 @@ export default function BarbersPage() {
                             Phone: {barber.phone_number}
                           </p>
                           <span
-                            className={`rounded-full px-2 py-1 text-xs ${
-                              barber.status === "available"
-                                ? "bg-green-100 text-green-800"
-                                : barber.status === "in_service"
+                            className={`rounded-full px-2 py-1 text-xs ${barber.status === "available"
+                              ? "bg-green-100 text-green-800"
+                              : barber.status === "in_service"
                                 ? "bg-blue-100 text-blue-800"
                                 : barber.status === "on_break"
-                                ? "bg-yellow-100 text-yellow-800"
-                                : "bg-red-100 text-red-800"
-                            }`}
+                                  ? "bg-yellow-100 text-yellow-800"
+                                  : "bg-red-100 text-red-800"
+                              }`}
                           >
                             {barber.status.replace("_", " ")}
                           </span>
