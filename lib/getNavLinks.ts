@@ -19,6 +19,11 @@ export const getNavLinks = (role?: string) => {
         icon: "fas fa-cut", 
       },
       {
+        route: "Queue",
+        path: "/shop/queue",
+        icon: "bi bi-shop",
+      },
+      {
         route: "Services",
         path: "/shop/services",
         icon: "fas fa-scissors", 
