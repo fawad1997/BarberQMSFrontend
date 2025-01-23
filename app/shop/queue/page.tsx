@@ -15,9 +15,22 @@ interface QueueItem {
   full_name: string;
   phone_number: string;
   status: string;
+  position_in_queue: number;
   check_in_time: string;
   service_start_time: string | null;
   service_end_time: string | null;
+  number_of_people: number;
+  barber?: {
+    id: number;
+    full_name: string;
+    status: string;
+  } | null;
+  service?: {
+    id: number;
+    name: string;
+    duration: number;
+    price: number;
+  } | null;
 }
 
 function QueueSection({ items }: { items: QueueItem[] }) {
@@ -32,14 +45,57 @@ function QueueSection({ items }: { items: QueueItem[] }) {
   return (
     <div className="space-y-4">
       {items.map((item) => (
-        <Card key={item.id} className="p-4">
-          <div className="flex justify-between items-center">
-            <div>
-              <p className="font-medium">{item.full_name}</p>
-              <p className="text-sm text-muted-foreground">{item.phone_number}</p>
+        <Card key={item.id} className="p-4 hover:shadow-lg transition-shadow">
+          <div className="space-y-3">
+            {/* Header Section */}
+            <div className="flex justify-between items-start border-b pb-2">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-medium text-lg">{item.full_name}</h3>
+                  <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+                    Position: {item.position_in_queue}
+                  </span>
+                </div>
+                <p className="text-sm text-muted-foreground">{item.phone_number}</p>
+              </div>
+              <div className="text-right">
+                <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">
+                  {item.status}
+                </span>
+              </div>
             </div>
-            <div className="text-sm text-right">
-              <p>Check-in: {formatTime(item.check_in_time)}</p>
+
+            {/* Details Grid */}
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="text-muted-foreground">Check-in Time</p>
+                <p className="font-medium">{formatTime(item.check_in_time)}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Party Size</p>
+                <p className="font-medium">{item.number_of_people} {item.number_of_people === 1 ? 'person' : 'people'}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Barber</p>
+                <p className="font-medium">
+                  {item.barber ? (
+                    <span className="flex items-center gap-1">
+                      {item.barber.full_name}
+                      <span className={`w-2 h-2 rounded-full ${
+                        item.barber.status === 'available' ? 'bg-green-500' : 'bg-yellow-500'
+                      }`} />
+                    </span>
+                  ) : 'Not assigned'}
+                </p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Service</p>
+                <p className="font-medium">
+                  {item.service ? (
+                    <span>{item.service.name} ({item.service.duration} min - ${item.service.price})</span>
+                  ) : 'Not selected'}
+                </p>
+              </div>
             </div>
           </div>
         </Card>
