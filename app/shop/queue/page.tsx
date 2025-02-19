@@ -126,7 +126,7 @@ function SortableCard({ item }: { item: QueueItem }) {
   );
 }
 
-function QueueSection({ items }: { items: QueueItem[] }) {
+function QueueSection({ items, shopId }: { items: QueueItem[], shopId: string }) {
   const [sortedItems, setSortedItems] = useState(items);
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -139,21 +139,58 @@ function QueueSection({ items }: { items: QueueItem[] }) {
     setSortedItems(items);
   }, [items]);
 
-  const handleDragEnd = (event: DragEndEvent) => {
+  const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
 
     if (over && active.id !== over.id) {
-      setSortedItems((items) => {
-        const oldIndex = items.findIndex((item) => item.id === active.id);
-        const newIndex = items.findIndex((item) => item.id === over.id);
+      try {
+        const oldIndex = sortedItems.findIndex((item) => item.id === active.id);
+        const newIndex = sortedItems.findIndex((item) => item.id === over.id);
 
-        const newItems = arrayMove(items, oldIndex, newIndex);
-        
-        // Alert for position change (temporary)
-        alert(`Item ${active.id} moved from position ${oldIndex + 1} to ${newIndex + 1}`);
-        
-        return newItems;
-      });
+        // Update the UI optimistically
+        setSortedItems((items) => arrayMove(items, oldIndex, newIndex));
+
+        // Get session for authentication
+        const session = await getSession();
+        if (!session?.user?.accessToken) {
+          await handleUnauthorizedResponse();
+          throw new Error("No access token found");
+        }
+
+        // Make API call to update positions
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/queue/reorder`,
+          {
+            method: 'PUT',
+            headers: {
+              'Authorization': `Bearer ${session.user.accessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              reordered_entries: [{
+                queue_id: active.id,
+                new_position: newIndex + 1 // Adding 1 since API might expect 1-based indexing
+              }]
+            })
+          }
+        );
+
+        if (response.status === 401) {
+          await handleUnauthorizedResponse();
+          throw new Error("Session expired");
+        }
+
+        if (!response.ok) {
+          throw new Error("Failed to update queue positions");
+        }
+
+      } catch (error) {
+        console.error('Error updating queue positions:', error);
+        // Revert the optimistic update on error
+        setSortedItems(items);
+        // Show error message to user
+        alert('Failed to update queue positions. Please try again.');
+      }
     }
   };
 
@@ -312,21 +349,24 @@ export default function QueuePage() {
                     <QueueSection 
                       items={queueData.filter(item => 
                         !item.service_start_time && !item.service_end_time
-                      )} 
+                      )}
+                      shopId={selectedShopId}
                     />
                   </TabsContent>
                   <TabsContent value="appointments">
                     <QueueSection 
                       items={queueData.filter(item => 
                         item.service_start_time && !item.service_end_time
-                      )} 
+                      )}
+                      shopId={selectedShopId}
                     />
                   </TabsContent>
                   <TabsContent value="completed">
                     <QueueSection 
                       items={queueData.filter(item => 
                         item.service_end_time
-                      )} 
+                      )}
+                      shopId={selectedShopId}
                     />
                   </TabsContent>
                 </Tabs>
