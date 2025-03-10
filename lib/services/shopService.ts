@@ -42,7 +42,7 @@ export const getShops = async (unused: boolean = false): Promise<Shop[]> => {
 
   try {
     console.log("Fetching shops from API...");
-    const apiUrl = getApiEndpoint("shop-owners/shops");
+    const apiUrl = getApiEndpoint("/shop-owners/shops");
     console.log("Using API URL:", apiUrl);
     
     const response = await fetch(apiUrl, {
