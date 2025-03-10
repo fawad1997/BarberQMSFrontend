@@ -21,7 +21,6 @@ export default function ShopsView() {
   const [networkStatus, setNetworkStatus] = useState<string | null>(null);
   const [selectedShop, setSelectedShop] = useState<Shop | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [usingFallbackApi, setUsingFallbackApi] = useState(false);
 
   // Check API connectivity
   useEffect(() => {
@@ -46,21 +45,13 @@ export default function ShopsView() {
         setError(null);
         setErrorCode(null);
         console.log("Fetching shops...");
-        const data = await getShops(usingFallbackApi);
+        const data = await getShops(false);
         console.log("Shops fetched successfully:", data);
         setShops(data);
       } catch (error) {
         console.error("Error fetching shops:", error);
         
         if (error instanceof Error) {
-          // Check if it's a network error and we haven't tried the fallback yet
-          if (error.name === 'NetworkError' && !usingFallbackApi) {
-            console.log("Network error detected, trying fallback API...");
-            setUsingFallbackApi(true);
-            // Don't set error yet, we'll try the fallback API in the next render
-            return;
-          }
-          
           setError(error);
           // Check if it's an API error with status code
           if ('status' in error && typeof error.status === 'number') {
@@ -75,7 +66,7 @@ export default function ShopsView() {
     };
 
     fetchShops();
-  }, [usingFallbackApi]);
+  }, []);
 
   const handleDeleteClick = (shop: Shop) => {
     setSelectedShop(shop);
@@ -91,8 +82,33 @@ export default function ShopsView() {
   };
 
   const handleRetry = () => {
-    // Reset fallback flag to try the primary API first
-    setUsingFallbackApi(false);
+    // Simply force a refresh
+    setIsLoading(true);
+    setError(null);
+    setErrorCode(null);
+    
+    const fetchShopsAgain = async () => {
+      try {
+        const data = await getShops(false);
+        setShops(data);
+      } catch (error) {
+        console.error("Error retrying fetch shops:", error);
+        
+        if (error instanceof Error) {
+          setError(error);
+          // Check if it's an API error with status code
+          if ('status' in error && typeof error.status === 'number') {
+            setErrorCode(error.status);
+          }
+        } else {
+          setError(new Error('An unknown error occurred'));
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchShopsAgain();
   };
 
   if (isLoading) {
@@ -120,18 +136,13 @@ export default function ShopsView() {
             <p className="text-xs opacity-80 mb-2">
               API URL: {process.env.NEXT_PUBLIC_API_URL || 'Not set in environment'}
             </p>
-            {usingFallbackApi && (
-              <p className="text-xs opacity-80">Using fallback API endpoint.</p>
-            )}
             <div className="mt-3">
               <Button 
                 variant="outline" 
                 size="sm" 
-                onClick={() => setUsingFallbackApi(!usingFallbackApi)}
+                onClick={handleRetry}
               >
-                {usingFallbackApi 
-                  ? "Try Primary API Again" 
-                  : "Try Alternative API Endpoint"}
+                Retry Connection
               </Button>
             </div>
           </div>
@@ -148,15 +159,6 @@ export default function ShopsView() {
           Create New Shop
         </Button>
       </div>
-      
-      {usingFallbackApi && (
-        <div className="mb-6 p-3 text-sm bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-md">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-amber-500" />
-            <p>Using alternative API endpoint. Network connectivity issues detected with primary API.</p>
-          </div>
-        </div>
-      )}
       
       <motion.div
         initial={{ opacity: 0, y: 20 }}

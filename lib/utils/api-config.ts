@@ -75,13 +75,10 @@ export const getApiUrl = () => {
   return fallbackUrl;
 };
 
-// Get alternative API URL for fallback purposes
+// This function is no longer needed as we're using the correct API URL
 export const getAlternativeApiUrl = () => {
-  // Try without the hyphen in the domain name as a fallback
-  if (isProd) {
-    return 'https://walk-inonline.com';
-  }
-  return DEV_API_URL;
+  // We're not using any alternative URL anymore
+  return getApiUrl();
 };
 
 // Use this function to get the full API endpoint URL
