@@ -8,7 +8,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
-import { signIn } from "next-auth/react"
+import { signIn } from "next-auth/react";
+import { getApiEndpoint } from "@/lib/utils/api-config";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -48,13 +49,24 @@ export default function LoginForm() {
     setError(null);
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
+      console.log("API URL:", getApiEndpoint("auth/login")); // Debug info
+      
+      const response = await fetch(getApiEndpoint("auth/login"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(values),
       });
+
+      // Check response type before parsing JSON
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        // If not JSON, get the text to see what was returned
+        const textResponse = await response.text();
+        console.error("Non-JSON response:", textResponse.substring(0, 500));
+        throw new Error("The server returned an invalid response format. Please try again later.");
+      }
 
       const data = await response.json();
 
@@ -79,6 +91,7 @@ export default function LoginForm() {
         router.push("/shop/dashboard");
       }
     } catch (error) {
+      console.error("Login error:", error);
       setError(error instanceof Error ? error.message : "Something went wrong");
     } finally {
       setIsLoading(false);
