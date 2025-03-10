@@ -4,6 +4,7 @@ import { handleUnauthorizedResponse } from "@/lib/utils/auth-utils";
 import { DashboardData } from "@/types/dashboard";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { getApiEndpoint } from "@/lib/utils/api-config";
 
 export const getShops = async (): Promise<Shop[]> => {
   const session = await getSession();
@@ -14,7 +15,7 @@ export const getShops = async (): Promise<Shop[]> => {
   }
 
   try {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops`, {
+    const response = await fetch(getApiEndpoint("shop-owners/shops"), {
       headers: {
         Authorization: `Bearer ${session.user.accessToken}`,
       },
@@ -23,6 +24,15 @@ export const getShops = async (): Promise<Shop[]> => {
     if (response.status === 401) {
       await handleUnauthorizedResponse();
       throw new Error("Session expired");
+    }
+
+    // Check content type before parsing
+    const contentType = response.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+      // If not JSON, get the text to see what was returned
+      const textResponse = await response.text();
+      console.error("Non-JSON response:", textResponse.substring(0, 500));
+      throw new Error("The server returned an invalid response format.");
     }
 
     if (!response.ok) {
@@ -54,7 +64,7 @@ export const getDashboardData = async (accessToken?: string): Promise<DashboardD
   }
 
   try {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/shop-owners/dashboard`, {
+    const response = await fetch(getApiEndpoint("shop-owners/dashboard"), {
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },
@@ -62,6 +72,14 @@ export const getDashboardData = async (accessToken?: string): Promise<DashboardD
 
     if (response.status === 401) {
       redirect("/api/auth/signin");
+    }
+
+    // Check content type before parsing
+    const contentType = response.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+      const textResponse = await response.text();
+      console.error("Non-JSON dashboard response:", textResponse.substring(0, 500));
+      throw new Error("The server returned an invalid response format.");
     }
 
     if (!response.ok) {

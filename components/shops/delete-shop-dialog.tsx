@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { getApiEndpoint } from "@/lib/utils/api-config";
 
 interface DeleteShopDialogProps {
   shopId: string;
@@ -41,7 +42,7 @@ export function DeleteShopDialog({
       }
 
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}`,
+        getApiEndpoint(`shop-owners/shops/${shopId}`),
         {
           method: "DELETE",
           headers: {
@@ -50,9 +51,17 @@ export function DeleteShopDialog({
         }
       );
 
+      // Check for non-JSON response
+      const contentType = response.headers.get("content-type");
       if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        throw new Error(errorData?.message || "Failed to delete shop");
+        if (contentType && contentType.includes("application/json")) {
+          const errorData = await response.json();
+          throw new Error(errorData?.message || "Failed to delete shop");
+        } else {
+          const textResponse = await response.text();
+          console.error("Non-JSON response:", textResponse.substring(0, 500));
+          throw new Error("Failed to delete shop. Invalid server response.");
+        }
       }
 
       toast.success("Shop deleted successfully");

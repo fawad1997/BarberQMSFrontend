@@ -14,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "sonner"
+import { getApiEndpoint } from "@/lib/utils/api-config"
 
 interface Shop {
   id: string
@@ -80,7 +81,7 @@ function ServiceModal({
       }
 
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/services/`,
+        getApiEndpoint(`shop-owners/shops/${shopId}/services/`),
         {
           method: "POST",
           headers: {
@@ -226,7 +227,7 @@ function EditServiceModal({
       }
 
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/services/${service.id}`,
+        getApiEndpoint(`shop-owners/shops/${shopId}/services/${service.id}`),
         {
           method: "PUT",
           headers: {
@@ -347,7 +348,7 @@ function DeleteServiceDialog({
   const handleDelete = async () => {
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/services/${service.id}`,
+        getApiEndpoint(`shop-owners/shops/services/${service.id}`),
         {
           method: "DELETE",
           headers: {
@@ -356,7 +357,18 @@ function DeleteServiceDialog({
         }
       )
 
-      if (!response.ok) throw new Error("Failed to delete service")
+      // Check content type before parsing
+      const contentType = response.headers.get("content-type");
+      if (!response.ok) {
+        if (contentType && contentType.includes("application/json")) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || "Failed to delete service");
+        } else {
+          const textResponse = await response.text();
+          console.error("Non-JSON response:", textResponse.substring(0, 500));
+          throw new Error("Failed to delete service. Invalid server response.");
+        }
+      }
 
       onClose()
       onSuccess()
@@ -450,26 +462,43 @@ export default function ServicesPage() {
       try {
         // Fetch shops
         const shopsResponse = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/`,
+          getApiEndpoint("shop-owners/shops"),
           {
             headers: {
               Authorization: `Bearer ${session.user.accessToken}`,
             },
           }
         )
+        
+        // Check content type before parsing
+        const contentType = shopsResponse.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+          const textResponse = await shopsResponse.text();
+          console.error("Non-JSON shops response:", textResponse.substring(0, 500));
+          throw new Error("The server returned an invalid response format.");
+        }
+        
         const shopsData = await shopsResponse.json()
 
         // Fetch services for each shop
         const shopsWithServices = await Promise.all(
           shopsData.map(async (shop: Shop) => {
             const servicesResponse = await fetch(
-              `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shop.id}/services/`,
+              getApiEndpoint(`shop-owners/shops/${shop.id}/services`),
               {
                 headers: {
                   Authorization: `Bearer ${session.user.accessToken}`,
                 },
               }
             )
+            
+            // Check content type before parsing
+            const contentType = servicesResponse.headers.get("content-type");
+            if (!contentType || !contentType.includes("application/json")) {
+              console.error("Invalid service response for shop:", shop.id);
+              return { ...shop, services: [] };
+            }
+            
             const services = await servicesResponse.json()
             return { ...shop, services }
           })
@@ -579,13 +608,21 @@ export default function ServicesPage() {
 
               try {
                 const servicesResponse = await fetch(
-                  `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${selectedShopId}/services/`,
+                  getApiEndpoint(`shop-owners/shops/${selectedShopId}/services`),
                   {
                     headers: {
                       Authorization: `Bearer ${session.user.accessToken}`,
                     },
                   }
                 )
+
+                // Check content type before parsing
+                const contentType = servicesResponse.headers.get("content-type");
+                if (!contentType || !contentType.includes("application/json")) {
+                  console.error("Invalid service response");
+                  throw new Error("The server returned an invalid response format.");
+                }
+                
                 const services = await servicesResponse.json()
 
                 setShops(
@@ -619,13 +656,21 @@ export default function ServicesPage() {
 
               try {
                 const servicesResponse = await fetch(
-                  `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${selectedShopId}/services/`,
+                  getApiEndpoint(`shop-owners/shops/${selectedShopId}/services`),
                   {
                     headers: {
                       Authorization: `Bearer ${session.user.accessToken}`,
                     },
                   }
                 )
+
+                // Check content type before parsing
+                const contentType = servicesResponse.headers.get("content-type");
+                if (!contentType || !contentType.includes("application/json")) {
+                  console.error("Invalid service response");
+                  throw new Error("The server returned an invalid response format.");
+                }
+                
                 const services = await servicesResponse.json()
 
                 setShops(
@@ -659,13 +704,21 @@ export default function ServicesPage() {
 
               try {
                 const servicesResponse = await fetch(
-                  `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${selectedShopId}/services/`,
+                  getApiEndpoint(`shop-owners/shops/${selectedShopId}/services`),
                   {
                     headers: {
                       Authorization: `Bearer ${session.user.accessToken}`,
                     },
                   }
                 )
+
+                // Check content type before parsing
+                const contentType = servicesResponse.headers.get("content-type");
+                if (!contentType || !contentType.includes("application/json")) {
+                  console.error("Invalid service response");
+                  throw new Error("The server returned an invalid response format.");
+                }
+                
                 const services = await servicesResponse.json()
 
                 setShops(

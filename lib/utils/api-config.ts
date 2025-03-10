@@ -1,6 +1,6 @@
 // Default API URLs
 const DEV_API_URL = 'http://localhost:8000';
-const PROD_API_URL = 'https://walk-inonline.com/';
+const PROD_API_URL = 'https://walk-inonline.com';
 
 // Determine environment
 const isProd = process.env.NODE_ENV === 'production';
@@ -11,7 +11,8 @@ export const getApiUrl = () => {
   
   // If we have an environment variable, use it
   if (envApiUrl) {
-    return envApiUrl;
+    // Remove trailing slash if present
+    return envApiUrl.endsWith('/') ? envApiUrl.slice(0, -1) : envApiUrl;
   }
   
   // Otherwise, fallback based on environment
