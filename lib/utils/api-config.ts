@@ -10,6 +10,53 @@ console.log(`API Configuration - Environment: ${isProd ? 'Production' : 'Develop
 console.log(`API Configuration - NODE_ENV: ${process.env.NODE_ENV}`);
 console.log(`API Configuration - NEXT_PUBLIC_API_URL: ${process.env.NEXT_PUBLIC_API_URL}`);
 
+// Test API connectivity
+export const testApiConnection = async (): Promise<{success: boolean; message: string}> => {
+  const baseUrl = getApiUrl();
+  
+  try {
+    // Try a simple HEAD request to check if the API is reachable
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+    
+    const response = await fetch(baseUrl, {
+      method: 'HEAD',
+      signal: controller.signal,
+      mode: 'cors',
+      cache: 'no-cache',
+    });
+    
+    clearTimeout(timeoutId);
+    
+    return {
+      success: response.ok,
+      message: response.ok 
+        ? `API connection successful (${response.status})` 
+        : `API connection failed with status: ${response.status}`
+    };
+  } catch (error) {
+    console.error('API connectivity test failed:', error);
+    let errorMessage = 'Unknown error';
+    
+    if (error instanceof Error) {
+      errorMessage = error.message;
+      // Check for specific network errors
+      if (error.name === 'AbortError') {
+        errorMessage = 'Connection timed out';
+      } else if (error.message.includes('Network request failed')) {
+        errorMessage = 'Network request failed - API server may be unreachable';
+      } else if (error.message.includes('Failed to fetch')) {
+        errorMessage = 'Failed to fetch - CORS issue or server unreachable';
+      }
+    }
+    
+    return {
+      success: false,
+      message: `API connection failed: ${errorMessage}. API URL: ${baseUrl}`
+    };
+  }
+};
+
 // Get API URL from environment variable or fallback
 export const getApiUrl = () => {
   const envApiUrl = process.env.NEXT_PUBLIC_API_URL;
@@ -28,6 +75,15 @@ export const getApiUrl = () => {
   return fallbackUrl;
 };
 
+// Get alternative API URL for fallback purposes
+export const getAlternativeApiUrl = () => {
+  // Try without the hyphen in the domain name as a fallback
+  if (isProd) {
+    return 'https://walk-inonline.com';
+  }
+  return DEV_API_URL;
+};
+
 // Use this function to get the full API endpoint URL
 export const getApiEndpoint = (endpoint: string) => {
   const baseUrl = getApiUrl();
@@ -38,10 +94,8 @@ export const getApiEndpoint = (endpoint: string) => {
   // Build the full URL
   const fullUrl = `${baseUrl}/${cleanEndpoint}`;
   
-  // Log the constructed URL (only in development)
-  if (typeof window !== 'undefined' && !isProd) {
-    console.log(`API Request: ${fullUrl}`);
-  }
+  // Log the constructed URL
+  console.log(`API Request: ${fullUrl}`);
   
   // Return the full URL
   return fullUrl;

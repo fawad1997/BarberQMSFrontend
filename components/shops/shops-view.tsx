@@ -5,11 +5,12 @@ import { getShops } from "@/lib/services/shopService";
 import { Shop } from "@/types/shop";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MapPin, Phone, Mail, Clock, Trash2 } from "lucide-react";
+import { MapPin, Phone, Mail, Clock, Trash2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { DeleteShopDialog } from "./delete-shop-dialog";
 import { ApiError } from "@/components/ui/api-error";
+import { testApiConnection } from "@/lib/utils/api-config";
 
 export default function ShopsView() {
   const router = useRouter();
@@ -17,8 +18,26 @@ export default function ShopsView() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [errorCode, setErrorCode] = useState<number | null>(null);
+  const [networkStatus, setNetworkStatus] = useState<string | null>(null);
   const [selectedShop, setSelectedShop] = useState<Shop | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [usingFallbackApi, setUsingFallbackApi] = useState(false);
+
+  // Check API connectivity
+  useEffect(() => {
+    const checkApiConnection = async () => {
+      try {
+        const result = await testApiConnection();
+        setNetworkStatus(result.message);
+        console.log('API connection test:', result);
+      } catch (error) {
+        console.error('API connectivity test failed:', error);
+        setNetworkStatus('API connectivity test failed');
+      }
+    };
+    
+    checkApiConnection();
+  }, []);
 
   useEffect(() => {
     const fetchShops = async () => {
@@ -27,13 +46,21 @@ export default function ShopsView() {
         setError(null);
         setErrorCode(null);
         console.log("Fetching shops...");
-        const data = await getShops();
+        const data = await getShops(usingFallbackApi);
         console.log("Shops fetched successfully:", data);
         setShops(data);
       } catch (error) {
         console.error("Error fetching shops:", error);
         
         if (error instanceof Error) {
+          // Check if it's a network error and we haven't tried the fallback yet
+          if (error.name === 'NetworkError' && !usingFallbackApi) {
+            console.log("Network error detected, trying fallback API...");
+            setUsingFallbackApi(true);
+            // Don't set error yet, we'll try the fallback API in the next render
+            return;
+          }
+          
           setError(error);
           // Check if it's an API error with status code
           if ('status' in error && typeof error.status === 'number') {
@@ -48,7 +75,7 @@ export default function ShopsView() {
     };
 
     fetchShops();
-  }, []);
+  }, [usingFallbackApi]);
 
   const handleDeleteClick = (shop: Shop) => {
     setSelectedShop(shop);
@@ -64,31 +91,8 @@ export default function ShopsView() {
   };
 
   const handleRetry = () => {
-    const fetchShopsAgain = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-        setErrorCode(null);
-        const data = await getShops();
-        setShops(data);
-      } catch (error) {
-        console.error("Error retrying fetch shops:", error);
-        
-        if (error instanceof Error) {
-          setError(error);
-          // Check if it's an API error with status code
-          if ('status' in error && typeof error.status === 'number') {
-            setErrorCode(error.status);
-          }
-        } else {
-          setError(new Error('An unknown error occurred'));
-        }
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchShopsAgain();
+    // Reset fallback flag to try the primary API first
+    setUsingFallbackApi(false);
   };
 
   if (isLoading) {
@@ -105,6 +109,33 @@ export default function ShopsView() {
           error={error}
           onRetry={handleRetry}
         />
+        
+        {networkStatus && (
+          <div className="mt-4 p-4 border rounded-md bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800">
+            <div className="flex items-center gap-2 mb-2">
+              <AlertTriangle className="h-4 w-4 text-amber-500" />
+              <h3 className="font-medium">Network Diagnostics</h3>
+            </div>
+            <p className="text-sm mb-2">{networkStatus}</p>
+            <p className="text-xs opacity-80 mb-2">
+              API URL: {process.env.NEXT_PUBLIC_API_URL || 'Not set in environment'}
+            </p>
+            {usingFallbackApi && (
+              <p className="text-xs opacity-80">Using fallback API endpoint.</p>
+            )}
+            <div className="mt-3">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setUsingFallbackApi(!usingFallbackApi)}
+              >
+                {usingFallbackApi 
+                  ? "Try Primary API Again" 
+                  : "Try Alternative API Endpoint"}
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -117,6 +148,16 @@ export default function ShopsView() {
           Create New Shop
         </Button>
       </div>
+      
+      {usingFallbackApi && (
+        <div className="mb-6 p-3 text-sm bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-md">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-amber-500" />
+            <p>Using alternative API endpoint. Network connectivity issues detected with primary API.</p>
+          </div>
+        </div>
+      )}
+      
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -162,7 +203,7 @@ export default function ShopsView() {
                   <div className="flex items-center gap-2">
                     <Clock className="h-4 w-4" />
                     <span className="text-sm">
-                     Average Wait Time: {shop.average_wait_time?.toString() || '0'} minutes
+                      Average Wait Time: {String(shop.average_wait_time || 0)} minutes
                     </span>
                   </div>
                 </CardContent>

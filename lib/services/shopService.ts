@@ -4,7 +4,7 @@ import { handleUnauthorizedResponse } from "@/lib/utils/auth-utils";
 import { DashboardData } from "@/types/dashboard";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { getApiEndpoint } from "@/lib/utils/api-config";
+import { getApiEndpoint, getAlternativeApiUrl } from "@/lib/utils/api-config";
 
 // Custom error classes for better error handling
 class ApiError extends Error {
@@ -32,7 +32,7 @@ class AuthenticationError extends Error {
   }
 }
 
-export const getShops = async (): Promise<Shop[]> => {
+export const getShops = async (useFallbackApi: boolean = false): Promise<Shop[]> => {
   const session = await getSession();
   
   if (!session?.user?.accessToken) {
@@ -42,9 +42,18 @@ export const getShops = async (): Promise<Shop[]> => {
 
   try {
     console.log("Fetching shops from API...");
-    console.log("API URL:", getApiEndpoint("shop-owners/shops"));
     
-    const response = await fetch(getApiEndpoint("shop-owners/shops"), {
+    let apiUrl = '';
+    if (useFallbackApi) {
+      // Use the alternative API URL
+      apiUrl = `${getAlternativeApiUrl()}/shop-owners/shops`;
+      console.log("Using fallback API URL:", apiUrl);
+    } else {
+      apiUrl = getApiEndpoint("shop-owners/shops");
+      console.log("Using primary API URL:", apiUrl);
+    }
+    
+    const response = await fetch(apiUrl, {
       headers: {
         Authorization: `Bearer ${session.user.accessToken}`,
       },
@@ -102,14 +111,25 @@ const handleError = (error: any) => {
   throw error;
 };
 
-export const getDashboardData = async (accessToken?: string): Promise<DashboardData> => {
+export const getDashboardData = async (accessToken?: string, useFallbackApi: boolean = false): Promise<DashboardData> => {
   if (!accessToken) {
     throw new AuthenticationError("No access token provided");
   }
 
   try {
     console.log("Fetching dashboard data...");
-    const response = await fetch(getApiEndpoint("shop-owners/dashboard"), {
+    
+    let apiUrl = '';
+    if (useFallbackApi) {
+      // Use the alternative API URL
+      apiUrl = `${getAlternativeApiUrl()}/shop-owners/dashboard`;
+      console.log("Using fallback API URL for dashboard:", apiUrl);
+    } else {
+      apiUrl = getApiEndpoint("shop-owners/dashboard");
+      console.log("Using primary API URL for dashboard:", apiUrl);
+    }
+    
+    const response = await fetch(apiUrl, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },
