@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { getShops } from "@/lib/services/shopService";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { motion } from "framer-motion";
 import { Shop } from "@/types/shop";
@@ -26,6 +26,10 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { PlusCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface QueueItem {
   id: number;
@@ -218,6 +222,86 @@ function QueueSection({ items, shopId }: { items: QueueItem[], shopId: string })
   );
 }
 
+function NoShopsState() {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+      className="container py-10 flex flex-col items-center justify-center text-center"
+    >
+      <div className="mb-8">
+        <img 
+          src="/empty-shop.svg" 
+          alt="No Shops" 
+          className="w-64 h-64 mx-auto opacity-80"
+          onError={(e) => {
+            e.currentTarget.src = "https://api.iconify.design/solar:shop-2-outline.svg?color=%23888";
+          }}
+        />
+      </div>
+      <h2 className="text-2xl font-bold mb-3">No Shops Found</h2>
+      <p className="text-muted-foreground mb-8 max-w-md">
+        You haven't created any shops yet. Create a shop first to manage queue.
+      </p>
+      <Link href="/shop/shops/create">
+        <Button>
+          <PlusCircle className="mr-2 h-4 w-4" />
+          Create Your First Shop
+        </Button>
+      </Link>
+    </motion.div>
+  );
+}
+
+function LoadingState() {
+  return (
+    <div className="container mx-auto py-10">
+      <Skeleton className="mb-6 h-8 w-48" />
+      <Card className="p-6">
+        <div className="space-y-4">
+          <div className="flex flex-col space-y-2">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+          <div className="mt-6">
+            <Skeleton className="h-10 w-full mb-6" />
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <Card key={i}>
+                  <CardContent className="p-4">
+                    <div className="flex justify-between">
+                      <div className="space-y-2">
+                        <Skeleton className="h-4 w-24" />
+                        <Skeleton className="h-4 w-32" />
+                      </div>
+                      <Skeleton className="h-8 w-8 rounded-full" />
+                    </div>
+                    <div className="grid grid-cols-3 gap-4 mt-4">
+                      <div>
+                        <Skeleton className="h-3 w-16 mb-2" />
+                        <Skeleton className="h-4 w-24" />
+                      </div>
+                      <div>
+                        <Skeleton className="h-3 w-16 mb-2" />
+                        <Skeleton className="h-4 w-24" />
+                      </div>
+                      <div>
+                        <Skeleton className="h-3 w-16 mb-2" />
+                        <Skeleton className="h-4 w-24" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 export default function QueuePage() {
   const [shops, setShops] = useState<Shop[]>([]);
   const [selectedShopId, setSelectedShopId] = useState<string>("");
@@ -293,15 +377,16 @@ export default function QueuePage() {
   }, [selectedShopId]);
 
   if (isLoading) {
-    return (
-      <div className="container py-8">
-        <div className="animate-pulse">Loading shops...</div>
-      </div>
-    );
+    return <LoadingState />;
   }
 
   if (error) {
     return <div className="container py-8 text-red-500">{error}</div>;
+  }
+
+  // Show NoShopsState when there are no shops
+  if (shops.length === 0) {
+    return <NoShopsState />;
   }
 
   return (
