@@ -6,6 +6,9 @@ import "./globals.css"
 import { Toaster } from 'sonner';
 import AuthProvider from "@/components/providers/auth-provider"
 
+// Dynamically import the navigation events component
+const NavigationEvents = dynamic(() => import('@/components/providers/navigation-events'), { ssr: false })
+
 const inter = Inter({ subsets: ["latin"] })
 
 // Dynamic imports for heavy components
@@ -64,6 +67,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
         <AuthProvider>
+          <NavigationEvents />
           <Suspense fallback={<div>Loading...</div>}>
             <div className="flex min-h-screen flex-col">
               <Navbar />
