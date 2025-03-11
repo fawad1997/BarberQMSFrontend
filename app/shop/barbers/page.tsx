@@ -38,6 +38,10 @@ import { BarberServicesModal } from "@/components/shops/barbers/BarberServicesMo
 import { AddScheduleModal } from "@/components/shops/barbers/AddScheduleModal"
 import { EditScheduleModal } from "@/components/shops/barbers/EditScheduleModal"
 import { ScheduleList } from "@/components/shops/barbers/ScheduleList"
+import Link from "next/link"
+import { PlusCircle } from "lucide-react"
+import { Session } from "next-auth"
+import { AlertCircle, X } from "lucide-react"
 
 interface AddBarberFormData {
   full_name: string
@@ -568,6 +572,11 @@ export default function BarbersPage() {
     )
   }
 
+  // Show NoShopsState when there are no shops
+  if (shops.length === 0) {
+    return <NoShopsState />
+  }
+
   return (
     <div className="container mx-auto py-10">
       <h1 className="mb-6 text-2xl font-bold">Barbers Management</h1>
@@ -628,6 +637,11 @@ export default function BarbersPage() {
                             accessToken={accessToken}
                             shopId={shop.id}
                             barberId={barber.id}
+                            onAdd={() => {
+                              setSelectedBarber(barber);
+                              setSelectedShopId(shop.id);
+                              setIsAddScheduleModalOpen(true);
+                            }}
                           />
                           <div className="mt-2 flex items-center justify-between">
                             <div className="space-x-2">
@@ -822,6 +836,33 @@ function LoadingState() {
           </Card>
         ))}
       </div>
+    </div>
+  )
+}
+
+function NoShopsState() {
+  return (
+    <div className="container mx-auto py-10 flex flex-col items-center justify-center text-center">
+      <div className="mb-8">
+        <img 
+          src="/empty-shop.svg" 
+          alt="No Shops" 
+          className="w-64 h-64 mx-auto opacity-80"
+          onError={(e) => {
+            e.currentTarget.src = "https://api.iconify.design/solar:shop-2-outline.svg?color=%23888";
+          }}
+        />
+      </div>
+      <h2 className="text-2xl font-bold mb-3">No Shops Found</h2>
+      <p className="text-muted-foreground mb-8 max-w-md">
+        You haven't created any shops yet. Create a shop first to manage barbers.
+      </p>
+      <Link href="/shop/shops/create">
+        <Button>
+          <PlusCircle className="mr-2 h-4 w-4" />
+          Create Your First Shop
+        </Button>
+      </Link>
     </div>
   )
 }

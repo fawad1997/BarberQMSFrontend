@@ -15,6 +15,8 @@ import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "sonner"
 import { getApiEndpoint } from "@/lib/utils/api-config"
+import { PlusCircle } from "lucide-react"
+import Link from "next/link"
 
 interface Shop {
   id: string
@@ -438,6 +440,33 @@ function LoadingState() {
   )
 }
 
+function NoShopsState() {
+  return (
+    <div className="container mx-auto py-10 flex flex-col items-center justify-center text-center">
+      <div className="mb-8">
+        <img 
+          src="/empty-shop.svg" 
+          alt="No Shops" 
+          className="w-64 h-64 mx-auto opacity-80"
+          onError={(e) => {
+            e.currentTarget.src = "https://api.iconify.design/solar:shop-2-outline.svg?color=%23888";
+          }}
+        />
+      </div>
+      <h2 className="text-2xl font-bold mb-3">No Shops Found</h2>
+      <p className="text-muted-foreground mb-8 max-w-md">
+        You haven't created any shops yet. Create a shop first to manage services.
+      </p>
+      <Link href="/shop/shops/create">
+        <Button>
+          <PlusCircle className="mr-2 h-4 w-4" />
+          Create Your First Shop
+        </Button>
+      </Link>
+    </div>
+  )
+}
+
 export default function ServicesPage() {
   const [shops, setShops] = useState<Shop[]>([])
   const [loading, setLoading] = useState(true)
@@ -517,6 +546,11 @@ export default function ServicesPage() {
 
   if (loading) {
     return <LoadingState />
+  }
+
+  // Show NoShopsState when there are no shops
+  if (shops.length === 0) {
+    return <NoShopsState />
   }
 
   return (
