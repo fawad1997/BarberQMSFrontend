@@ -173,3 +173,50 @@ keywords: [
   ogImage: `${baseUrl}/og.jpg`,
 }
 ```
+
+
+## Project Collaboration Guidelines
+This section outlines the steps for working on the project. Follow these steps to ensure a smooth workflow and to prevent any conflicts with the production code.
+
+## 1. Clone the Repository
+
+Clone the repository to your local machine:
+```bash
+git clone https://github.com/fawad1997/BarberQMSFrontend
+```
+
+## 2. Create the Develop Branch (Only Fawad)
+For the first time if we dont have a `develop` branch yet, create it from the main branch:
+
+```bash
+git checkout -b develop
+git push -u origin develop
+```
+The `develop` branch is where all new changes are made and tested before merging into production.
+
+## 2. Switch to the Develop Branch
+
+As a junior developer, you will only work on `develop` branch.
+```bash
+git checkout develop
+git pull origin develop
+```
+
+## 3. Develop Your Feature/Work
+Make the necessary changes in your local working environment. Once you have made changes:
+1. Stage your changes:
+```bash
+git add .
+```
+2. Commit your changes:
+```bash
+git commit -m "Describe your changes or feature"
+```
+3. Pull if there are any changes on Develop baranch
+```bash
+git pull origin develop
+```
+4. Push Your work to GitHub
+```bash
+git push -u origin develop
+```
