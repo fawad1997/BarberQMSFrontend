@@ -25,13 +25,26 @@ export async function middleware(req: NextRequest) {
       return NextResponse.redirect(new URL("/shop/dashboard", req.url))
     }
 
-    // If not a shop owner trying to access shop paths, redirect to home
-    if (isShopPath && (!token || token.role !== "SHOP_OWNER")) {
-      console.log("Redirecting non-shop owner from shop path to home")
-      return NextResponse.redirect(new URL("/", req.url))
+    // If shop path but no token, expired token, or not a shop owner, redirect to login
+    if (isShopPath) {
+      if (!token || token.role !== "SHOP_OWNER") {
+        console.log("Redirecting to login: token missing or invalid role")
+        return NextResponse.redirect(new URL("/login", req.url))
+      }
+      
+      // Check if token is expired by checking token expiry
+      if (token.exp && Date.now() >= token.exp * 1000) {
+        console.log("Redirecting to login: token expired")
+        return NextResponse.redirect(new URL("/login?error=SessionExpired", req.url))
+      }
     }
   } catch (error) {
     console.error("Middleware error:", error)
+    // If there's an error processing the token (like an expired JWT), redirect to login
+    if (isShopPath) {
+      console.log("Redirecting to login due to token error")
+      return NextResponse.redirect(new URL("/login?error=AuthError", req.url))
+    }
   }
 
   // Allow the request to continue
