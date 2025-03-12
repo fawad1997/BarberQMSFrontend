@@ -18,6 +18,19 @@ export async function middleware(req: NextRequest) {
     console.log("Middleware triggered for path:", path)
     console.log("Token exists:", !!token)
     console.log("User role:", token?.role)
+    
+    if (token) {
+      // Log token expiry info for debugging
+      const tokenExp = token.exp as number | undefined;
+      const currentTime = Date.now() / 1000;
+      if (tokenExp) {
+        console.log("Token expiry time:", new Date(tokenExp * 1000).toISOString());
+        console.log("Current time:", new Date(currentTime * 1000).toISOString());
+        console.log("Token expired:", currentTime >= tokenExp);
+      } else {
+        console.log("Token has no expiration");
+      }
+    }
 
     // If user is a shop owner and trying to access home page, redirect to dashboard
     if (isHomePath && token && token.role === "SHOP_OWNER") {
@@ -33,7 +46,9 @@ export async function middleware(req: NextRequest) {
       }
       
       // Check if token is expired by checking token expiry
-      if (token.exp && Date.now() >= token.exp * 1000) {
+      // The exp claim is in seconds since Unix epoch, Date.now() is in milliseconds
+      const tokenExp = token.exp as number | undefined;
+      if (tokenExp && Date.now() / 1000 >= tokenExp) {
         console.log("Redirecting to login: token expired")
         return NextResponse.redirect(new URL("/login?error=SessionExpired", req.url))
       }

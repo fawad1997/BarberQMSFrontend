@@ -105,7 +105,7 @@ const handleError = (error: any) => {
 
 export const getDashboardData = async (accessToken?: string): Promise<DashboardData> => {
   if (!accessToken) {
-    throw new AuthenticationError("No access token provided");
+    redirect('/login?error=NoToken');
   }
 
   try {
@@ -117,10 +117,13 @@ export const getDashboardData = async (accessToken?: string): Promise<DashboardD
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },
+      // Set a short timeout to avoid hanging
+      cache: 'no-store',
     });
 
     if (response.status === 401) {
-      throw new AuthenticationError("Session expired");
+      console.log("Authentication failed - redirecting to login");
+      redirect('/login?error=SessionExpired');
     }
 
     // Check content type before parsing
@@ -138,8 +141,14 @@ export const getDashboardData = async (accessToken?: string): Promise<DashboardD
 
     return response.json();
   } catch (error) {
-    if (error instanceof AuthenticationError || error instanceof ApiError) {
+    if (error instanceof ApiError) {
       throw error;
+    }
+    
+    // If it's any kind of authentication error, redirect to login
+    if (error instanceof AuthenticationError || 
+        (error instanceof Error && error.message.includes('auth'))) {
+      redirect('/login?error=AuthError');
     }
     
     // Handle network errors
