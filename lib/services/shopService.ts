@@ -104,8 +104,17 @@ const handleError = (error: any) => {
 };
 
 export const getDashboardData = async (accessToken?: string): Promise<DashboardData> => {
+  // More robust token validation
   if (!accessToken) {
+    console.log("No access token provided, redirecting to login");
     redirect('/login?error=NoToken');
+    return {} as DashboardData; // This line won't execute due to redirect, but helps TypeScript
+  }
+
+  if (typeof accessToken !== 'string' || accessToken.trim() === '') {
+    console.log("Invalid token format, redirecting to login");
+    redirect('/login?error=InvalidToken');
+    return {} as DashboardData; // This line won't execute due to redirect, but helps TypeScript
   }
 
   try {
@@ -113,45 +122,73 @@ export const getDashboardData = async (accessToken?: string): Promise<DashboardD
     const apiUrl = getApiEndpoint("shop-owners/dashboard");
     console.log("Using API URL for dashboard:", apiUrl);
     
+    // Log token details for debugging (only first/last few chars for security)
+    const tokenStart = accessToken.substring(0, 10);
+    const tokenEnd = accessToken.length > 10 ? accessToken.substring(accessToken.length - 5) : '';
+    console.log(`Using token: ${tokenStart}...${tokenEnd}, length: ${accessToken.length}`);
+    
     const response = await fetch(apiUrl, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
+        'Accept': 'application/json'
       },
-      // Set a short timeout to avoid hanging
       cache: 'no-store',
     });
 
-    if (response.status === 401) {
-      console.log("Authentication failed - redirecting to login");
+    console.log("Dashboard response status:", response.status);
+
+    // Immediately handle auth errors
+    if (response.status === 401 || response.status === 403) {
+      console.log(`Authentication failed with status ${response.status} - redirecting to login`);
       redirect('/login?error=SessionExpired');
+      return {} as DashboardData; // This line won't execute due to redirect, but helps TypeScript
     }
 
-    // Check content type before parsing
-    const contentType = response.headers.get("content-type");
-    if (!contentType || !contentType.includes("application/json")) {
-      const textResponse = await response.text();
-      console.error("Non-JSON dashboard response:", textResponse.substring(0, 500));
-      throw new ApiError(`The server returned an invalid response format: ${contentType || 'unknown'}`, response.status);
-    }
-
+    // If non-OK status, handle generically
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new ApiError(errorData.message || `Failed to fetch dashboard data. Status code: ${response.status}`, response.status);
+      console.error(`Non-OK response: ${response.status}`);
+      // Try to get JSON error if available
+      try {
+        const errorData = await response.json();
+        throw new ApiError(errorData.message || `API Error: ${response.status}`, response.status);
+      } catch (parseError) {
+        // If can't parse JSON, use text or status
+        const text = await response.text().catch(() => "Unknown error");
+        throw new ApiError(`Failed to fetch dashboard data: ${text.substring(0, 100)}`, response.status);
+      }
     }
 
-    return response.json();
-  } catch (error) {
-    if (error instanceof ApiError) {
-      throw error;
+    // For successful responses, ensure we get valid JSON
+    try {
+      const data = await response.json();
+      return data;
+    } catch (parseError) {
+      console.error("Error parsing dashboard JSON:", parseError);
+      throw new ApiError("Invalid response format from server", response.status);
+    }
+  } catch (error: any) {
+    console.error("Dashboard fetch error:", error);
+    
+    // Handle specific auth-related errors
+    if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+      redirect('/login?error=SessionExpired');
+      return {} as DashboardData; // This line won't execute due to redirect, but helps TypeScript
     }
     
-    // If it's any kind of authentication error, redirect to login
-    if (error instanceof AuthenticationError || 
-        (error instanceof Error && error.message.includes('auth'))) {
+    // Check for token-related errors in the error message
+    const errorMessage = (error?.message || '').toLowerCase();
+    if (
+      error instanceof AuthenticationError || 
+      errorMessage.includes('auth') ||
+      errorMessage.includes('token') ||
+      errorMessage.includes('unauthorized')
+    ) {
+      console.log("Authentication error detected, redirecting to login:", errorMessage);
       redirect('/login?error=AuthError');
+      return {} as DashboardData; // This line won't execute due to redirect, but helps TypeScript
     }
     
-    // Handle network errors
+    // For network errors, throw a consistent error
     throw new NetworkError(
       "Failed to connect to the server. Please check your internet connection and try again.",
       error

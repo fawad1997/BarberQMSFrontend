@@ -38,7 +38,14 @@ export default async function DashboardPage() {
     redirect("/login")
   }
 
+  // Check if token exists and is not empty
+  if (!session.user.accessToken || session.user.accessToken.trim() === '') {
+    console.log("Missing or empty access token - redirecting to login");
+    redirect("/login?error=InvalidToken");
+  }
+
   try {
+    console.log("Attempting to fetch dashboard data...");
     const dashboardData = await getDashboardData(session.user.accessToken)
 
     return (
@@ -204,14 +211,26 @@ export default async function DashboardPage() {
     )
   } catch (error) {
     console.error("Error loading dashboard:", error);
-    // If there's an authentication error, redirect to login
-    if (error instanceof Error && 
-        (error.name === 'AuthenticationError' || 
-         error.message.includes('Session expired') || 
-         error.message.includes('token'))) {
-      redirect("/login?error=SessionExpired");
+    
+    // Force redirect to login for any type of error related to authentication or fetching data
+    if (error instanceof Error) {
+      const errorMsg = error.message.toLowerCase();
+      const errorName = error.name.toLowerCase();
+      
+      if (
+        errorName.includes('auth') || 
+        errorName.includes('network') || 
+        errorMsg.includes('failed to connect') || 
+        errorMsg.includes('token') || 
+        errorMsg.includes('unauthorized') || 
+        errorMsg.includes('session')
+      ) {
+        console.log("Authentication or network error detected, redirecting to login");
+        return redirect("/login?error=SessionExpired");
+      }
     }
-    // For other errors, throw to Next.js error boundary
-    throw error;
+    
+    // For truly unexpected errors, throw to Next.js error boundary
+    throw new Error("Failed to load dashboard data. Please try again later.");
   }
 }
