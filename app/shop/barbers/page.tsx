@@ -231,7 +231,6 @@ function EditBarberModal({
             email: data.email,
             phone_number: data.phone_number,
             status: data.status,
-            shop: shopId,
           }),
         }
       )
