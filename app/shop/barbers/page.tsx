@@ -95,7 +95,13 @@ function AddBarberModal({
       )
 
       if (!response.ok) {
-        throw new Error("Failed to add barber")
+        // Parse the error response to get the detailed message
+        const errorData = await response.json()
+        const errorMessage = errorData.detail || 
+                            errorData.message || 
+                            errorData.error || 
+                            `Failed to add barber (Status: ${response.status})`
+        throw new Error(errorMessage)
       }
 
       toast.success("Barber has been added successfully")
@@ -104,7 +110,8 @@ function AddBarberModal({
       onClose()
     } catch (error) {
       console.error("Error adding barber:", error)
-      toast.error("Failed to add barber. Please try again.")
+      // Display the specific error message from the backend
+      toast.error(error instanceof Error ? error.message : "Failed to add barber. Please try again.")
     }
   }
 
@@ -230,9 +237,14 @@ function EditBarberModal({
       )
 
       if (!response.ok) {
+        // Parse the error response to get the detailed message
         const errorData = await response.json()
         console.error("API Error Response:", errorData)
-        throw new Error("Failed to update barber")
+        const errorMessage = errorData.detail || 
+                            errorData.message || 
+                            errorData.error || 
+                            `Failed to update barber (Status: ${response.status})`
+        throw new Error(errorMessage)
       }
 
       toast.success("Barber has been updated successfully")
@@ -240,7 +252,8 @@ function EditBarberModal({
       onClose()
     } catch (error) {
       console.error("Error updating barber:", error)
-      toast.error("Failed to update barber. Please try again.")
+      // Display the specific error message from the backend
+      toast.error(error instanceof Error ? error.message : "Failed to update barber. Please try again.")
     }
   }
 
@@ -523,14 +536,34 @@ export default function BarbersPage() {
       )
 
       if (!response.ok) {
-        throw new Error("Failed to delete barber")
+        // Parse error response for more specific error message
+        let errorMessage = `Failed to delete barber (Status: ${response.status})`;
+        
+        // Try to parse JSON response if available
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.detail || 
+                        errorData.message || 
+                        errorData.error || 
+                        errorMessage;
+        } catch (parseError) {
+          // If can't parse JSON, use text or status code
+          try {
+            const textError = await response.text();
+            if (textError) errorMessage = textError;
+          } catch (textError) {
+            // Keep the default error message if text can't be parsed
+          }
+        }
+        
+        throw new Error(errorMessage);
       }
 
       toast.success("Barber has been removed successfully")
       await refreshBarbers(barberToDelete.shopId)
     } catch (error) {
       console.error("Error deleting barber:", error)
-      toast.error("Failed to delete barber. Please try again.")
+      toast.error(error instanceof Error ? error.message : "Failed to delete barber. Please try again.")
     } finally {
       setIsDeleteDialogOpen(false)
       setBarberToDelete(null)
