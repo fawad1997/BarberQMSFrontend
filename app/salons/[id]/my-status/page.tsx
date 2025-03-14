@@ -44,7 +44,16 @@ export default function MyStatusPage({ params }: { params: { id: string } }) {
           throw new Error(data.message || 'Failed to fetch status');
         }
 
-        setStatus(data);
+        // Map API response fields to match our interface
+        setStatus({
+          position: data.position_in_queue,
+          estimated_wait_time: data.estimated_wait_time,
+          status: data.status,
+          checked_in_at: data.check_in_time,
+          full_name: data.full_name,
+          barber_name: data.barber_name, // This might need to be fetched separately using barber_id
+          service_name: data.service_name // This might need to be fetched separately using service_id
+        });
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch status');
       } finally {

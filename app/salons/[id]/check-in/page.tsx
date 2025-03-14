@@ -107,7 +107,7 @@ export default function CheckInPage({ params }: { params: { id: string } }) {
         phone_number: phoneNumber,
         number_of_people: Number(numberOfPeople),
       };
-
+  
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/queue/`, {
         method: 'POST',
         headers: {
@@ -115,13 +115,22 @@ export default function CheckInPage({ params }: { params: { id: string } }) {
         },
         body: JSON.stringify(checkInData),
       });
-
+      console.log(checkInData);
+  
       const data = await response.json();
-
+  
       if (!response.ok) {
-        throw new Error(data.message || 'Failed to check in');
+        // Extract the specific error detail
+        const errorMessage = data.detail || 'Failed to check in';
+        
+        // Handle the "Already in queue" error specifically
+        if (errorMessage === "Already in queue") {
+          throw new Error("You're already in the queue for this salon");
+        }
+        
+        throw new Error(errorMessage);
       }
-
+  
       // Store check-in data in localStorage
       localStorage.setItem('checkInPhone', phoneNumber);
       localStorage.setItem('checkInShopId', params.id);
@@ -136,7 +145,7 @@ export default function CheckInPage({ params }: { params: { id: string } }) {
     } finally {
       setIsCheckingIn(false);
     }
-  };
+  }
 
   const getBarbersByService = (serviceId: number | null) => {
     if (!serviceId) return salon.barbers;
