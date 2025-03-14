@@ -109,7 +109,7 @@ export function BarberServicesModal({
       if (isSelected) {
         // Remove service
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/barbers/${barberId}/services/${service.id}/`,
+          `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/barbers/${barberId}/services/${service.id}`,
           {
             method: 'DELETE',
             headers: {
