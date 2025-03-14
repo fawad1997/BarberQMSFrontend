@@ -1,11 +1,21 @@
-"use client";
-
+"use client"
 import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { Clock, User } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface QueueStatus {
   position: number;
@@ -22,6 +32,8 @@ export default function MyStatusPage({ params }: { params: { id: string } }) {
   const [status, setStatus] = useState<QueueStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isLeaveDialogOpen, setIsLeaveDialogOpen] = useState(false);
+  const [isLeaving, setIsLeaving] = useState(false);
 
   useEffect(() => {
     const checkInPhone = localStorage.getItem('checkInPhone');
@@ -67,6 +79,36 @@ export default function MyStatusPage({ params }: { params: { id: string } }) {
 
     return () => clearInterval(interval);
   }, [params.id, router]);
+
+  const handleLeaveQueue = async () => {
+    const checkInPhone = localStorage.getItem('checkInPhone');
+    const checkInShopId = localStorage.getItem('checkInShopId');
+
+    if (checkInPhone && checkInShopId) {
+      setIsLeaving(true);
+      try {
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/queue/leave?phone=${checkInPhone}&shop_id=${checkInShopId}`,
+          { method: "DELETE" }
+        );
+        const data = await response.json();
+
+        if (response.ok) {
+          toast.success(data.message || "Successfully left the queue");
+          localStorage.removeItem('checkInPhone');
+          localStorage.removeItem('checkInShopId');
+          router.push(`/salons/${params.id}/check-in`);
+        } else {
+          throw new Error(data.message || 'Failed to leave the queue');
+        }
+      } catch (err) {
+        toast.error('Error: ' + (err instanceof Error ? err.message : 'Failed to leave the queue'));
+      } finally {
+        setIsLeaving(false);
+        setIsLeaveDialogOpen(false);
+      }
+    }
+  };
 
   if (loading) {
     return (
@@ -153,17 +195,36 @@ export default function MyStatusPage({ params }: { params: { id: string } }) {
             <Button
               variant="outline"
               className="w-full"
-              onClick={() => {
-                localStorage.removeItem('checkInPhone');
-                localStorage.removeItem('checkInShopId');
-                router.push(`/salons/${params.id}`);
-              }}
+              onClick={() => setIsLeaveDialogOpen(true)}
+              disabled={isLeaving}
             >
-              Leave Queue
+              {isLeaving ? "Leaving Queue..." : "Leave Queue"}
             </Button>
           </div>
         </div>
       </Card>
+
+      {/* Leave Queue Confirmation Dialog */}
+      <AlertDialog open={isLeaveDialogOpen} onOpenChange={setIsLeaveDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Leave Queue</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to leave the queue? You will lose your current position.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isLeaving}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleLeaveQueue}
+              disabled={isLeaving}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {isLeaving ? "Leaving..." : "Leave Queue"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </motion.div>
   );
-} 
+}
