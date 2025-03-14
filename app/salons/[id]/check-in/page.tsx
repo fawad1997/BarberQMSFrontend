@@ -108,7 +108,7 @@ export default function CheckInPage({ params }: { params: { id: string } }) {
         number_of_people: Number(numberOfPeople),
       };
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/queue`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/queue/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
