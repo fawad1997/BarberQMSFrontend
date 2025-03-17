@@ -136,6 +136,15 @@ export default function AppointmentPage({ params }: { params: { id: string } }) 
     if (!salon?.formatted_hours || !time) return false;
     
     const { start, end } = parseBusinessHours(salon.formatted_hours);
+    
+    // Handle case where end time is earlier than start time (overnight hours)
+    if (end <= start) {
+      // If end is before or equal to start, it means the shop is open overnight
+      // So the time is valid if it's either after the start OR before the end
+      return time >= start || time <= end;
+    }
+    
+    // Normal case: shop opens and closes on the same day
     return time >= start && time <= end;
   };
 
@@ -165,30 +174,69 @@ export default function AppointmentPage({ params }: { params: { id: string } }) 
         phone_number: phoneNumber,
       };
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/appointments`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/appointments/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(appointmentData),
       });
-
+      console.log(appointmentData);
       const data = await response.json();
+      console.log(data);
 
       if (!response.ok) {
-        throw new Error(data.message || 'Failed to book appointment');
+        // Extract the specific error message from different possible response formats
+        let errorMessage = 'Failed to book appointment';
+        
+        // Check if there's a direct message in the response
+        if (typeof data.message === 'string') {
+          errorMessage = data.message;
+        }
+        // Check if there's a direct error in the response
+        else if (typeof data.error === 'string') {
+          errorMessage = data.error;
+        }
+        // Check if we have a detail field with an array of validation errors
+        else if (data.detail && Array.isArray(data.detail)) {
+          // Extract the actual error message from the validation errors
+          const messages = data.detail.map((error: any) => {
+            // If msg property exists, use that
+            if (error.msg) return error.msg;
+            // Sometimes the message might be directly in the error
+            if (typeof error === 'string') return error;
+            return null;
+          }).filter(Boolean);
+          
+          if (messages.length > 0) {
+            errorMessage = messages.join('. ');
+          }
+        }
+        // If there's a string detail field
+        else if (typeof data.detail === 'string') {
+          errorMessage = data.detail;
+        }
+        
+        throw new Error(errorMessage);
       }
 
       // Show success message using sonner toast
       toast.success("Appointment Booked!", {
         description: "Your appointment has been successfully scheduled.",
       });
-
-      // Optional: Reset form or redirect
-      // router.push(`/appointments/${data.id}`);
+      
+      // Reset form fields after successful booking
+      setFullName("");
+      setPhoneNumber("");
+      setNumberOfPeople("1");
+      setAppointmentDate("");
+      setAppointmentTime("");
+      setSelectedService(null);
+      setSelectedBarber(null);
+      setIsAdvanceBooking(false);
       
     } catch (error) {
-      // Show error message using sonner toast
+      // Show error message using sonner toast with the exact error detail
       toast.error("Booking Failed", {
         description: error instanceof Error ? error.message : "Failed to book appointment",
       });
