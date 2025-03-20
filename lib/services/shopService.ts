@@ -45,18 +45,32 @@ export const getShops = async (unused: boolean = false): Promise<Shop[]> => {
     const apiUrl = getApiEndpoint("/shop-owners/shops");
     console.log("Using API URL:", apiUrl);
     
+    // Log token details for debugging (only first/last few chars for security)
+    const tokenStart = session.user.accessToken.substring(0, 10);
+    const tokenEnd = session.user.accessToken.length > 10 ? session.user.accessToken.substring(session.user.accessToken.length - 5) : '';
+    console.log(`Using token: ${tokenStart}...${tokenEnd}, length: ${session.user.accessToken.length}`);
+    
     const response = await fetch(apiUrl, {
       headers: {
-        Authorization: `Bearer ${session.user.accessToken}`,
+        'Authorization': `Bearer ${session.user.accessToken}`,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
       },
+      mode: 'cors',
+      cache: 'no-store',
+      credentials: 'include'
     });
 
     console.log("Response status:", response.status);
+    console.log("Response headers:", Object.fromEntries(response.headers.entries()));
     
     if (response.status === 401) {
       await handleUnauthorizedResponse();
       throw new AuthenticationError("Session expired");
     }
+
+    // Clone the response for error handling
+    const responseClone = response.clone();
 
     // Check content type before parsing
     const contentType = response.headers.get("content-type");
@@ -64,20 +78,29 @@ export const getShops = async (unused: boolean = false): Promise<Shop[]> => {
     
     if (!contentType || !contentType.includes("application/json")) {
       // If not JSON, get the text to see what was returned
-      const textResponse = await response.text();
-      console.error("Non-JSON response:", textResponse.substring(0, 500));
+      const textResponse = await responseClone.text();
+      console.error("Non-JSON response:", textResponse);
       throw new ApiError(`The server returned an invalid response format: ${contentType || 'unknown'}`, response.status);
     }
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new ApiError(errorData.message || `Failed to fetch shops. Status code: ${response.status}`, response.status);
+      try {
+        const errorData = await responseClone.json();
+        console.error("Error response data:", errorData);
+        throw new ApiError(errorData.message || `Failed to fetch shops. Status code: ${response.status}`, response.status);
+      } catch (parseError) {
+        const textResponse = await responseClone.text();
+        console.error("Raw error response:", textResponse);
+        throw new ApiError(`Failed to fetch shops: ${textResponse || 'Unknown error'}`, response.status);
+      }
     }
 
     const result = await response.json();
     console.log("Shop data fetched successfully");
     return result;
   } catch (error) {
+    console.error("Error in getShops:", error);
+    
     if (error instanceof AuthenticationError) {
       throw error;
     }
@@ -87,7 +110,14 @@ export const getShops = async (unused: boolean = false): Promise<Shop[]> => {
     }
     
     // Handle network errors or other unexpected errors
-    console.error("Error fetching shops:", error);
+    if (error instanceof TypeError && error.message === 'Failed to fetch') {
+      console.error("Network error - Backend server might be down or unreachable");
+      throw new NetworkError(
+        "Unable to connect to the server. Please check if the backend server is running at http://localhost:8000", 
+        error
+      );
+    }
+    
     throw new NetworkError(
       "Failed to connect to the server. Please check your internet connection and try again.", 
       error
@@ -108,13 +138,13 @@ export const getDashboardData = async (accessToken?: string): Promise<DashboardD
   if (!accessToken) {
     console.log("No access token provided, redirecting to login");
     redirect('/login?error=NoToken');
-    return {} as DashboardData; // This line won't execute due to redirect, but helps TypeScript
+    return {} as DashboardData;
   }
 
   if (typeof accessToken !== 'string' || accessToken.trim() === '') {
     console.log("Invalid token format, redirecting to login");
     redirect('/login?error=InvalidToken');
-    return {} as DashboardData; // This line won't execute due to redirect, but helps TypeScript
+    return {} as DashboardData;
   }
 
   try {
@@ -129,38 +159,48 @@ export const getDashboardData = async (accessToken?: string): Promise<DashboardD
     
     const response = await fetch(apiUrl, {
       headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Accept': 'application/json'
+        'Authorization': `Bearer ${accessToken}`,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
       },
       cache: 'no-store',
     });
 
     console.log("Dashboard response status:", response.status);
+    console.log("Response headers:", Object.fromEntries(response.headers.entries()));
+
+    // Clone the response for error handling
+    const responseClone = response.clone();
 
     // Immediately handle auth errors
     if (response.status === 401 || response.status === 403) {
       console.log(`Authentication failed with status ${response.status} - redirecting to login`);
       redirect('/login?error=SessionExpired');
-      return {} as DashboardData; // This line won't execute due to redirect, but helps TypeScript
+      return {} as DashboardData;
     }
 
     // If non-OK status, handle generically
     if (!response.ok) {
       console.error(`Non-OK response: ${response.status}`);
-      // Try to get JSON error if available
+      let errorMessage = 'Unknown error';
+      
       try {
-        const errorData = await response.json();
-        throw new ApiError(errorData.message || `API Error: ${response.status}`, response.status);
+        const errorData = await responseClone.json();
+        console.error("Error response data:", errorData);
+        errorMessage = errorData.message || errorData.detail || 'Unknown error';
       } catch (parseError) {
-        // If can't parse JSON, use text or status
-        const text = await response.text().catch(() => "Unknown error");
-        throw new ApiError(`Failed to fetch dashboard data: ${text.substring(0, 100)}`, response.status);
+        const textResponse = await responseClone.text();
+        console.error("Raw error response:", textResponse);
+        errorMessage = textResponse || 'Unknown error';
       }
+      
+      throw new ApiError(`Failed to fetch dashboard data: ${errorMessage}`, response.status);
     }
 
     // For successful responses, ensure we get valid JSON
     try {
       const data = await response.json();
+      console.log("Successfully parsed dashboard data");
       return data;
     } catch (parseError) {
       console.error("Error parsing dashboard JSON:", parseError);
@@ -172,7 +212,7 @@ export const getDashboardData = async (accessToken?: string): Promise<DashboardD
     // Handle specific auth-related errors
     if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
       redirect('/login?error=SessionExpired');
-      return {} as DashboardData; // This line won't execute due to redirect, but helps TypeScript
+      return {} as DashboardData;
     }
     
     // Check for token-related errors in the error message
@@ -185,7 +225,7 @@ export const getDashboardData = async (accessToken?: string): Promise<DashboardD
     ) {
       console.log("Authentication error detected, redirecting to login:", errorMessage);
       redirect('/login?error=AuthError');
-      return {} as DashboardData; // This line won't execute due to redirect, but helps TypeScript
+      return {} as DashboardData;
     }
     
     // For network errors, throw a consistent error
