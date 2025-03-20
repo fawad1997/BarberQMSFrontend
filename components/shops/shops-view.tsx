@@ -5,10 +5,11 @@ import { getShops } from "@/lib/services/shopService";
 import { Shop } from "@/types/shop";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MapPin, Phone, Mail, Clock, Trash2, AlertTriangle } from "lucide-react";
+import { MapPin, Phone, Mail, Clock, Trash2, AlertTriangle,Edit } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { DeleteShopDialog } from "./delete-shop-dialog";
+import { EditShop } from "./Edit-shop-dialog"; 
 import { ApiError } from "@/components/ui/api-error";
 import { testApiConnection } from "@/lib/utils/api-config";
 
@@ -21,6 +22,7 @@ export default function ShopsView() {
   const [networkStatus, setNetworkStatus] = useState<string | null>(null);
   const [selectedShop, setSelectedShop] = useState<Shop | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   // Check API connectivity
   useEffect(() => {
@@ -38,6 +40,7 @@ export default function ShopsView() {
     checkApiConnection();
   }, []);
 
+  // Fetch shops
   useEffect(() => {
     const fetchShops = async () => {
       try {
@@ -68,11 +71,13 @@ export default function ShopsView() {
     fetchShops();
   }, []);
 
+  // Handle delete click
   const handleDeleteClick = (shop: Shop) => {
     setSelectedShop(shop);
     setIsDeleteDialogOpen(true);
   };
 
+  // Handle delete completion
   const handleDeleteComplete = () => {
     if (selectedShop) {
       setShops((currentShops) =>
@@ -109,6 +114,21 @@ export default function ShopsView() {
     };
     
     fetchShopsAgain();
+  };
+
+  // Handle edit click (Opens Edit Form)
+  const handleEditClick = (shop: Shop) => {
+    setSelectedShop(shop);
+    setIsEditDialogOpen(true);
+  };
+
+  // Handle edit completion (Updates shop in UI)
+  const handleEditComplete = (updatedShop: Shop) => {
+    setShops((currentShops) =>
+      currentShops.map((shop) => (shop.id === updatedShop.id ? updatedShop : shop))
+    );
+    setIsEditDialogOpen(false);
+    setSelectedShop(null);
   };
 
   if (isLoading) {
@@ -159,7 +179,7 @@ export default function ShopsView() {
           Create New Shop
         </Button>
       </div>
-      
+
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -177,14 +197,26 @@ export default function ShopsView() {
             shops.map((shop) => (
               <Card key={shop.id}>
                 <CardHeader className="relative">
+                  {/* Delete Button */}
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="absolute right-4 top-4 text-gray-500 hover:text-red-600"
+                    className="absolute right-8 top-4 text-gray-500 hover:text-red-600"
                     onClick={() => handleDeleteClick(shop)}
                   >
                     <Trash2 className="h-5 w-5" />
                   </Button>
+
+                  {/* Edit Button */}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-20 top-4 text-gray-500 hover:text-blue-600"
+                    onClick={() => handleEditClick(shop)}
+                  >
+                    <Edit className="h-5 w-5" />
+                  </Button>
+
                   <CardTitle>{shop.name}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -215,6 +247,7 @@ export default function ShopsView() {
         </div>
       </motion.div>
 
+      {/* Delete Dialog */}
       {selectedShop && (
         <DeleteShopDialog
           shopId={selectedShop.id.toString()}
@@ -227,6 +260,21 @@ export default function ShopsView() {
           onDelete={handleDeleteComplete}
         />
       )}
+
+      {/* Edit Dialog */}
+      {selectedShop && isEditDialogOpen && (
+  <EditShop
+    isOpen={isEditDialogOpen}
+    onClose={() => {
+      setIsEditDialogOpen(false);
+      setSelectedShop(null);
+    }}
+    shopId={selectedShop.id.toString()}
+    initialData={selectedShop} // Pre-fills form with existing data
+    onEditComplete={handleEditComplete}
+  />
+)}
+
     </div>
   );
 }
