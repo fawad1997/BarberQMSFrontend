@@ -42,6 +42,7 @@ import Link from "next/link"
 import { PlusCircle } from "lucide-react"
 import { Session } from "next-auth"
 import { AlertCircle, X } from "lucide-react"
+import { BarberScheduleCalendar } from "@/components/shops/barbers/BarberScheduleCalendar"
 
 interface AddBarberFormData {
   full_name: string
@@ -634,103 +635,110 @@ export default function BarbersPage() {
                   No barbers found for this shop.
                 </p>
               ) : (
-                <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2">
-                  {shop.barbers.map((barber) => (
-                    <Card key={barber.id}>
-                      <CardContent className="pt-6">
-                        <div className="space-y-2">
-                          <h3 className="font-semibold">{barber.full_name}</h3>
-                          <p className="text-sm text-muted-foreground">
-                            Email: {barber.email}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            Phone: {barber.phone_number}
-                          </p>
-                          <span
-                            className={`rounded-full px-2 py-1 text-xs ${
-                              barber.status === "available"
-                                ? "bg-green-100 text-green-800"
-                                : barber.status === "in_service"
-                                ? "bg-blue-100 text-blue-800"
-                                : barber.status === "on_break"
-                                ? "bg-yellow-100 text-yellow-800"
-                                : "bg-red-100 text-red-800"
-                            }`}
-                          >
-                            {barber.status.replace("_", " ")}
-                          </span>
-                          {/* Schedule Management */}
-                          <ScheduleList
-                            schedules={barber.schedules || []}
-                            onEdit={handleScheduleEdit}
-                            onDelete={async (schedule) => {
-                              await refreshBarbers(shop.id)
-                            }}
-                            accessToken={accessToken}
-                            shopId={shop.id}
-                            barberId={barber.id}
-                            onAdd={() => {
-                              setSelectedBarber(barber);
-                              setSelectedShopId(shop.id);
-                              setIsAddScheduleModalOpen(true);
-                            }}
-                          />
-                          <div className="mt-2 flex items-center justify-between">
-                            <div className="space-x-2">
+                <>
+                  <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2">
+                    {shop.barbers.map((barber) => (
+                      <Card key={barber.id}>
+                        <CardContent className="pt-6">
+                          <div className="space-y-2">
+                            <h3 className="font-semibold">{barber.full_name}</h3>
+                            <p className="text-sm text-muted-foreground">
+                              Email: {barber.email}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              Phone: {barber.phone_number}
+                            </p>
+                            <span
+                              className={`rounded-full px-2 py-1 text-xs ${
+                                barber.status === "available"
+                                  ? "bg-green-100 text-green-800"
+                                  : barber.status === "in_service"
+                                  ? "bg-blue-100 text-blue-800"
+                                  : barber.status === "on_break"
+                                  ? "bg-yellow-100 text-yellow-800"
+                                  : "bg-red-100 text-red-800"
+                              }`}
+                            >
+                              {barber.status.replace("_", " ")}
+                            </span>
+                            {/* Schedule Management */}
+                            <ScheduleList
+                              schedules={barber.schedules || []}
+                              onEdit={handleScheduleEdit}
+                              onDelete={async (schedule) => {
+                                await refreshBarbers(shop.id)
+                              }}
+                              accessToken={accessToken}
+                              shopId={shop.id}
+                              barberId={barber.id}
+                              onAdd={() => {
+                                setSelectedBarber(barber);
+                                setSelectedShopId(shop.id);
+                                setIsAddScheduleModalOpen(true);
+                              }}
+                            />
+                            <div className="mt-2 flex items-center justify-between">
+                              <div className="space-x-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedBarberForServices(barber)
+                                    setSelectedShopId(shop.id)
+                                    setIsServicesModalOpen(true)
+                                  }}
+                                >
+                                  Services
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedBarber(barber)
+                                    setSelectedShopId(shop.id)
+                                    setIsEditModalOpen(true)
+                                  }}
+                                >
+                                  Edit
+                                </Button>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => {
+                                    setBarberToDelete({
+                                      id: barber.id,
+                                      name: barber.full_name,
+                                      shopId: shop.id,
+                                    })
+                                    setIsDeleteDialogOpen(true)
+                                  }}
+                                >
+                                  Remove
+                                </Button>
+                              </div>
                               <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setSelectedBarberForServices(barber)
-                                  setSelectedShopId(shop.id)
-                                  setIsServicesModalOpen(true)
-                                }}
-                              >
-                                Services
-                              </Button>
-                              <Button
-                                variant="outline"
+                                variant="secondary"
                                 size="sm"
                                 onClick={() => {
                                   setSelectedBarber(barber)
                                   setSelectedShopId(shop.id)
-                                  setIsEditModalOpen(true)
+                                  setIsAddScheduleModalOpen(true)
                                 }}
                               >
-                                Edit
-                              </Button>
-                              <Button
-                                variant="destructive"
-                                size="sm"
-                                onClick={() => {
-                                  setBarberToDelete({
-                                    id: barber.id,
-                                    name: barber.full_name,
-                                    shopId: shop.id,
-                                  })
-                                  setIsDeleteDialogOpen(true)
-                                }}
-                              >
-                                Remove
+                                Add Schedule
                               </Button>
                             </div>
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => {
-                                setSelectedBarber(barber)
-                                setSelectedShopId(shop.id)
-                                setIsAddScheduleModalOpen(true)
-                              }}
-                            >
-                              Add Schedule
-                            </Button>
                           </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                  <BarberScheduleCalendar 
+                    barbers={shop.barbers}
+                    shopId={shop.id}
+                    accessToken={accessToken}
+                  />
+                </>
               )}
             </CardContent>
           </Card>
