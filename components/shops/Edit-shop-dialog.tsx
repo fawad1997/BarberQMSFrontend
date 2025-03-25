@@ -33,7 +33,7 @@ const shopFormSchema = z.object({
   email: z.string().email("Invalid email address"),
   opening_time: z.string().min(1, "Opening time is required"),
   closing_time: z.string().min(1, "Closing time is required"),
-  average_wait_time: z.string().min(1, "Average wait time is required"),
+  average_wait_time: z.number().min(0, "Average wait time must be a positive number"),
   has_advertisement: z.boolean().default(false),
 });
 
@@ -222,7 +222,13 @@ export function EditShop({ isOpen, onClose, shopId, initialData, onEditComplete 
                 <FormItem>
                   <FormLabel>Average Wait Time (minutes)</FormLabel>
                   <FormControl>
-                    <Input type="number" min="1" placeholder="Enter average wait time in minutes" {...field} />
+                    <Input 
+                      type="number" 
+                      min="0" 
+                      placeholder="Enter average wait time in minutes" 
+                      {...field}
+                      onChange={(e) => field.onChange(Number(e.target.value))}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
