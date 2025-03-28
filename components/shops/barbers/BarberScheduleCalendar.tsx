@@ -42,6 +42,8 @@ interface EventFormData {
   clientPhone: string
   clientEmail: string
   color?: string
+  id?: string
+  hasReminder?: boolean
 }
 
 const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
@@ -57,6 +59,7 @@ export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberS
   const [events, setEvents] = useState<any[]>([])
   const [isCreateEventModalOpen, setIsCreateEventModalOpen] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
+  const [isEditing, setIsEditing] = useState(false)
   const [formData, setFormData] = useState<EventFormData>({
     title: '',
     start: '',
@@ -67,7 +70,9 @@ export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberS
     clientName: '',
     clientPhone: '',
     clientEmail: '',
-    color: eventColors.appointment
+    color: eventColors.appointment,
+    hasReminder: false,
+    reminderTime: ''
   })
 
   useEffect(() => {
@@ -165,11 +170,21 @@ export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberS
       return
     }
 
+    // Format the dates to match the datetime-local input format
+    const formatDate = (date: Date) => {
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+      const hours = String(date.getHours()).padStart(2, '0')
+      const minutes = String(date.getMinutes()).padStart(2, '0')
+      return `${year}-${month}-${day}T${hours}:${minutes}`
+    }
+
     setSelectedDate(selectInfo.start)
     setFormData({
       ...formData,
-      start: selectInfo.start.toISOString().slice(0, 16),
-      end: selectInfo.end.toISOString().slice(0, 16),
+      start: formatDate(selectInfo.start),
+      end: formatDate(selectInfo.end),
     })
     setIsCreateEventModalOpen(true)
   }
@@ -209,9 +224,10 @@ export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberS
         return
       }
 
-      // Check for overlapping appointments
+      // Check for overlapping appointments (excluding the current appointment when editing)
       const hasOverlap = events.some(event => {
         if (event.extendedProps.type !== 'appointment') return false
+        if (isEditing && event.id === formData.id) return false
 
         const eventStart = new Date(event.start)
         const eventEnd = new Date(event.end)
@@ -225,34 +241,6 @@ export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberS
 
       if (hasOverlap) {
         toast.error('This time slot is already booked. Please choose a different time.')
-        return
-      }
-
-      // Check if the appointment falls within barber's working hours
-      const appointmentDay = startDate.getDay()
-      const appointmentTime = startDate.toLocaleTimeString('en-US', { 
-        hour12: false, 
-        hour: '2-digit', 
-        minute: '2-digit',
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-      })
-
-      const hasWorkingHours = events.some(event => {
-        if (event.extendedProps.type !== 'schedule') return false
-        
-        const scheduleDay = new Date(event.start).getDay()
-        const scheduleStart = event.start.split('T')[1].slice(0, 5)
-        const scheduleEnd = event.end.split('T')[1].slice(0, 5)
-        
-        return (
-          scheduleDay === appointmentDay &&
-          appointmentTime >= scheduleStart &&
-          appointmentTime < scheduleEnd
-        )
-      })
-
-      if (!hasWorkingHours) {
-        toast.error('This appointment is outside of working hours. Please choose a time during working hours.')
         return
       }
 
@@ -270,13 +258,17 @@ export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberS
         is_all_day: formData.isAllDay,
         shop_id: shopId,
         barber_id: selectedBarber.id,
-        end_time: formattedEndTime
+        end_time: formattedEndTime,
+        has_reminder: formData.hasReminder || false,
+        reminder_time: formData.reminderTime || null
       }
 
       const endpoint = `${process.env.NEXT_PUBLIC_API_URL}/appointments/`
+      const method = isEditing ? 'PUT' : 'POST'
+      const url = isEditing ? `${endpoint}${formData.id}/` : endpoint
 
-      const response = await fetch(endpoint, {
-        method: 'POST',
+      const response = await fetch(url, {
+        method,
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${accessToken}`,
@@ -292,7 +284,7 @@ export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberS
         if (errorData.detail === 'Appointment time is outside shop operating hours') {
           // Proceed with the appointment creation by creating a new event
           const newEvent = {
-            id: Date.now(), // Temporary ID
+            id: isEditing ? formData.id : Date.now(),
             title: formData.title,
             start: formattedStartTime,
             end: formattedEndTime,
@@ -304,13 +296,23 @@ export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberS
               clientName: formData.clientName,
               clientPhone: formData.clientPhone,
               clientEmail: formData.clientEmail,
-              barberName: selectedBarber.full_name
+              barberName: selectedBarber.full_name,
+              hasReminder: formData.hasReminder,
+              reminderTime: formData.reminderTime
             }
           }
 
-          setEvents([...events, newEvent])
-          toast.success('Appointment created successfully')
+          if (isEditing) {
+            setEvents(events.map(event => 
+              event.id === formData.id ? newEvent : event
+            ))
+          } else {
+            setEvents([...events, newEvent])
+          }
+
+          toast.success(`Appointment ${isEditing ? 'updated' : 'created'} successfully`)
           setIsCreateEventModalOpen(false)
+          setIsEditing(false)
           setFormData({
             title: '',
             start: '',
@@ -321,7 +323,9 @@ export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberS
             clientName: '',
             clientPhone: '',
             clientEmail: '',
-            color: eventColors.appointment
+            color: eventColors.appointment,
+            hasReminder: false,
+            reminderTime: ''
           })
           return
         }
@@ -344,13 +348,23 @@ export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberS
           clientName: formData.clientName,
           clientPhone: formData.clientPhone,
           clientEmail: formData.clientEmail,
-          barberName: selectedBarber.full_name
+          barberName: selectedBarber.full_name,
+          hasReminder: formData.hasReminder,
+          reminderTime: formData.reminderTime
         }
       }
 
-      setEvents([...events, newEvent])
-      toast.success('Appointment created successfully')
+      if (isEditing) {
+        setEvents(events.map(event => 
+          event.id === formData.id ? newEvent : event
+        ))
+      } else {
+        setEvents([...events, newEvent])
+      }
+
+      toast.success(`Appointment ${isEditing ? 'updated' : 'created'} successfully`)
       setIsCreateEventModalOpen(false)
+      setIsEditing(false)
       setFormData({
         title: '',
         start: '',
@@ -361,11 +375,75 @@ export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberS
         clientName: '',
         clientPhone: '',
         clientEmail: '',
-        color: eventColors.appointment
+        color: eventColors.appointment,
+        hasReminder: false,
+        reminderTime: ''
       })
     } catch (error) {
       console.error('Error creating appointment:', error)
       toast.error(error instanceof Error ? error.message : 'Failed to create appointment')
+    }
+  }
+
+  const handleEventClick = (clickInfo: any) => {
+    const event = clickInfo.event
+    const props = event.extendedProps
+
+    if (props.type === 'appointment') {
+      // Handle appointment click for editing
+      const formatDate = (date: Date) => {
+        const year = date.getFullYear()
+        const month = String(date.getMonth() + 1).padStart(2, '0')
+        const day = String(date.getDate()).padStart(2, '0')
+        const hours = String(date.getHours()).padStart(2, '0')
+        const minutes = String(date.getMinutes()).padStart(2, '0')
+        return `${year}-${month}-${day}T${hours}:${minutes}`
+      }
+
+      setFormData({
+        title: event.title,
+        start: formatDate(event.start),
+        end: formatDate(event.end),
+        description: props.description || '',
+        type: 'appointment',
+        isAllDay: false,
+        clientName: props.clientName,
+        clientPhone: props.clientPhone,
+        clientEmail: props.clientEmail,
+        color: eventColors.appointment,
+        id: event.id,
+        hasReminder: props.hasReminder || false,
+        reminderTime: props.reminderTime || ''
+      })
+      setIsEditing(true)
+      setIsCreateEventModalOpen(true)
+    } else if (props.type === 'schedule') {
+      // Handle schedule click for creating new appointment
+      const formatDate = (date: Date) => {
+        const year = date.getFullYear()
+        const month = String(date.getMonth() + 1).padStart(2, '0')
+        const day = String(date.getDate()).padStart(2, '0')
+        const hours = String(date.getHours()).padStart(2, '0')
+        const minutes = String(date.getMinutes()).padStart(2, '0')
+        return `${year}-${month}-${day}T${hours}:${minutes}`
+      }
+
+      setFormData({
+        title: '',
+        start: formatDate(event.start),
+        end: formatDate(event.end),
+        description: '',
+        type: 'appointment',
+        isAllDay: false,
+        clientName: '',
+        clientPhone: '',
+        clientEmail: '',
+        color: eventColors.appointment,
+        hasReminder: false,
+        reminderTime: ''
+      })
+      setIsEditing(false)
+      setIsCreateEventModalOpen(true)
     }
   }
 
@@ -445,12 +523,11 @@ export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberS
               right: 'dayGridMonth,timeGridWeek,timeGridDay'
             }}
             events={events}
-            slotMinTime="08:00:00"
-            slotMaxTime="20:00:00"
             allDaySlot={true}
             height="100%"
             selectable={true}
             select={handleDateSelect}
+            eventClick={handleEventClick}
             eventContent={renderEventContent}
             eventTimeFormat={{
               hour: '2-digit',
@@ -477,21 +554,43 @@ export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberS
               const props = event.extendedProps
               info.el.title = `
                 ${event.title}
-                Client: ${props.clientName}
-                Phone: ${props.clientPhone}
-                Email: ${props.clientEmail}
-                ${props.description ? `\nDescription: ${props.description}` : ''}
+                ${props.type === 'appointment' ? `
+                  Client: ${props.clientName}
+                  Phone: ${props.clientPhone}
+                  Email: ${props.clientEmail}
+                  ${props.description ? `\nDescription: ${props.description}` : ''}
+                  ${props.hasReminder ? `\nReminder: ${props.reminderTime}` : ''}
+                ` : ''}
               `
             }}
           />
         </div>
       </CardContent>
 
-      {/* Create Appointment Modal */}
-      <Dialog open={isCreateEventModalOpen} onOpenChange={setIsCreateEventModalOpen}>
+      {/* Create/Edit Appointment Modal */}
+      <Dialog open={isCreateEventModalOpen} onOpenChange={(open) => {
+        setIsCreateEventModalOpen(open)
+        if (!open) {
+          setIsEditing(false)
+          setFormData({
+            title: '',
+            start: '',
+            end: '',
+            description: '',
+            type: 'appointment',
+            isAllDay: false,
+            clientName: '',
+            clientPhone: '',
+            clientEmail: '',
+            color: eventColors.appointment,
+            hasReminder: false,
+            reminderTime: ''
+          })
+        }
+      }}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>New Appointment</DialogTitle>
+            <DialogTitle>{isEditing ? 'Edit Appointment' : 'New Appointment'}</DialogTitle>
           </DialogHeader>
           <Tabs defaultValue="appointment" className="w-full" onValueChange={(value) => {
             const type = value as 'appointment' | 'reminder'
@@ -583,25 +682,52 @@ export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberS
                 />
                 <Label htmlFor="allDay">All Day Event</Label>
               </div>
-              {formData.type === 'reminder' && (
-                <div className="space-y-2">
-                  <Label htmlFor="reminderTime">Reminder Time</Label>
-                  <Input
-                    id="reminderTime"
-                    type="time"
-                    value={formData.reminderTime}
-                    onChange={(e) => setFormData({ ...formData, reminderTime: e.target.value })}
+              <div className="space-y-2">
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="hasReminder"
+                    checked={formData.hasReminder}
+                    onCheckedChange={(checked) => setFormData({ ...formData, hasReminder: checked })}
                   />
+                  <Label htmlFor="hasReminder">Set Reminder</Label>
                 </div>
-              )}
+                {formData.hasReminder && (
+                  <div className="space-y-2">
+                    <Label htmlFor="reminderTime">Reminder Time</Label>
+                    <Input
+                      id="reminderTime"
+                      type="time"
+                      value={formData.reminderTime}
+                      onChange={(e) => setFormData({ ...formData, reminderTime: e.target.value })}
+                    />
+                  </div>
+                )}
+              </div>
             </TabsContent>
           </Tabs>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsCreateEventModalOpen(false)}>
+            <Button variant="outline" onClick={() => {
+              setIsCreateEventModalOpen(false)
+              setIsEditing(false)
+              setFormData({
+                title: '',
+                start: '',
+                end: '',
+                description: '',
+                type: 'appointment',
+                isAllDay: false,
+                clientName: '',
+                clientPhone: '',
+                clientEmail: '',
+                color: eventColors.appointment,
+                hasReminder: false,
+                reminderTime: ''
+              })
+            }}>
               Cancel
             </Button>
             <Button onClick={handleEventSubmit}>
-              Create {formData.type.charAt(0).toUpperCase() + formData.type.slice(1)}
+              {isEditing ? 'Update' : 'Create'} Appointment
             </Button>
           </DialogFooter>
         </DialogContent>
