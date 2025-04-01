@@ -54,6 +54,17 @@ interface QueueItem {
   } | null;
 }
 
+interface Appointment {
+  id: number;
+  shop_id: number;
+  barber_id: number | null;
+  service_id: number | null;
+  appointment_time: string;
+  number_of_people: number;
+  status: string;
+  created_at: string;
+}
+
 function SortableCard({ item }: { item: QueueItem }) {
   const {
     attributes,
@@ -222,6 +233,74 @@ function QueueSection({ items, shopId }: { items: QueueItem[], shopId: string })
   );
 }
 
+function AppointmentCard({ appointment }: { appointment: Appointment }) {
+  return (
+    <Card className="p-4 hover:shadow-lg transition-shadow">
+      <div className="space-y-3">
+        <div className="flex justify-between items-start border-b pb-2">
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="font-medium text-lg">Appointment #{appointment.id}</h3>
+              <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+                {appointment.status}
+              </span>
+            </div>
+          </div>
+          <div className="text-right">
+            <span className="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded-full">
+              {new Date(appointment.appointment_time).toLocaleString('en-US', {
+                weekday: 'short', 
+                month: 'short', 
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true
+              })}
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 text-sm">
+          <div>
+            <p className="text-muted-foreground">Created At</p>
+            <p className="font-medium">{new Date(appointment.created_at).toLocaleDateString()}</p>
+          </div>
+          <div>
+            <p className="text-muted-foreground">Party Size</p>
+            <p className="font-medium">{appointment.number_of_people} {appointment.number_of_people === 1 ? 'person' : 'people'}</p>
+          </div>
+          <div>
+            <p className="text-muted-foreground">Barber ID</p>
+            <p className="font-medium">
+              {appointment.barber_id ? appointment.barber_id : 'Not assigned'}
+            </p>
+          </div>
+          <div>
+            <p className="text-muted-foreground">Service ID</p>
+            <p className="font-medium">
+              {appointment.service_id ? appointment.service_id : 'Not selected'}
+            </p>
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function AppointmentSection({ appointments }: { appointments: Appointment[] }) {
+  return (
+    <div className="space-y-4">
+      {appointments.map((appointment) => (
+        <AppointmentCard key={appointment.id} appointment={appointment} />
+      ))}
+      
+      {appointments.length === 0 && (
+        <p className="text-muted-foreground text-center py-4">No appointments scheduled</p>
+      )}
+    </div>
+  );
+}
+
 function NoShopsState() {
   return (
     <motion.div
@@ -308,6 +387,8 @@ export default function QueuePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [queueData, setQueueData] = useState<QueueItem[]>([]);
+  const [appointmentsData, setAppointmentsData] = useState<Appointment[]>([]);
+  const [activeTab, setActiveTab] = useState<string>("main");
 
   useEffect(() => {
     const fetchShops = async () => {
@@ -373,7 +454,50 @@ export default function QueuePage() {
       }
     };
 
+    const fetchAppointmentsData = async () => {
+      if (!selectedShopId) return;
+      
+      try {
+        const session = await getSession();
+        
+        if (!session?.user?.accessToken) {
+          await handleUnauthorizedResponse();
+          throw new Error("No access token found. Please login again.");
+        }
+
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/appointments/shop/${selectedShopId}/appointments`,
+          {
+            headers: {
+              'Authorization': `Bearer ${session.user.accessToken}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        );
+
+        if (response.status === 401) {
+          await handleUnauthorizedResponse();
+          throw new Error("Session expired");
+        }
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || "Failed to fetch appointments data");
+        }
+
+        const data = await response.json();
+        setAppointmentsData(data);
+      } catch (error) {
+        if (error instanceof Error && error.message === "Session expired") {
+          throw error;
+        }
+        console.error('Error fetching appointments data:', error);
+        setError('Failed to fetch appointments data. Please try again.');
+      }
+    };
+
     fetchQueueData();
+    fetchAppointmentsData();
   }, [selectedShopId]);
 
   if (isLoading) {
@@ -424,27 +548,29 @@ export default function QueuePage() {
 
             {selectedShopId && (
               <div className="mt-6">
-                <Tabs defaultValue="queue" className="w-full">
-                  <TabsList className="grid w-full grid-cols-3">
-                    <TabsTrigger value="queue">Queue</TabsTrigger>
-                    <TabsTrigger value="appointments">Appointments</TabsTrigger>
+                <Tabs defaultValue="main" className="w-full" onValueChange={setActiveTab}>
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="main">Queue & Appointments</TabsTrigger>
                     <TabsTrigger value="completed">Completed</TabsTrigger>
                   </TabsList>
-                  <TabsContent value="queue">
-                    <QueueSection 
-                      items={queueData.filter(item => 
-                        !item.service_start_time && !item.service_end_time
-                      )}
-                      shopId={selectedShopId}
-                    />
-                  </TabsContent>
-                  <TabsContent value="appointments">
-                    <QueueSection 
-                      items={queueData.filter(item => 
-                        item.service_start_time && !item.service_end_time
-                      )}
-                      shopId={selectedShopId}
-                    />
+                  <TabsContent value="main">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <h3 className="text-lg font-medium mb-4">Queue</h3>
+                        <QueueSection 
+                          items={queueData.filter(item => 
+                            !item.service_start_time && !item.service_end_time
+                          )}
+                          shopId={selectedShopId}
+                        />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-medium mb-4">Appointments</h3>
+                        <AppointmentSection 
+                          appointments={appointmentsData}
+                        />
+                      </div>
+                    </div>
                   </TabsContent>
                   <TabsContent value="completed">
                     <QueueSection 
