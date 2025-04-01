@@ -387,7 +387,8 @@ export default function QueuePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [queueData, setQueueData] = useState<QueueItem[]>([]);
-  const [appointmentsData, setAppointmentsData] = useState<Appointment[]>([]);
+  const [scheduledAppointments, setScheduledAppointments] = useState<Appointment[]>([]);
+  const [completedAppointments, setCompletedAppointments] = useState<Appointment[]>([]);
   const [activeTab, setActiveTab] = useState<string>("main");
 
   useEffect(() => {
@@ -465,8 +466,9 @@ export default function QueuePage() {
           throw new Error("No access token found. Please login again.");
         }
 
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/appointments/shop/${selectedShopId}/appointments`,
+        // Fetch scheduled appointments
+        const scheduledResponse = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/appointments/shop/${selectedShopId}/appointments?status=scheduled`,
           {
             headers: {
               'Authorization': `Bearer ${session.user.accessToken}`,
@@ -475,18 +477,43 @@ export default function QueuePage() {
           }
         );
 
-        if (response.status === 401) {
+        if (scheduledResponse.status === 401) {
           await handleUnauthorizedResponse();
           throw new Error("Session expired");
         }
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || "Failed to fetch appointments data");
+        if (!scheduledResponse.ok) {
+          const errorData = await scheduledResponse.json();
+          throw new Error(errorData.message || "Failed to fetch scheduled appointments");
         }
 
-        const data = await response.json();
-        setAppointmentsData(data);
+        const scheduledData = await scheduledResponse.json();
+        setScheduledAppointments(scheduledData);
+
+        // Fetch completed appointments
+        const completedResponse = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/appointments/shop/${selectedShopId}/appointments?status=completed`,
+          {
+            headers: {
+              'Authorization': `Bearer ${session.user.accessToken}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        );
+
+        if (completedResponse.status === 401) {
+          await handleUnauthorizedResponse();
+          throw new Error("Session expired");
+        }
+
+        if (!completedResponse.ok) {
+          const errorData = await completedResponse.json();
+          throw new Error(errorData.message || "Failed to fetch completed appointments");
+        }
+
+        const completedData = await completedResponse.json();
+        setCompletedAppointments(completedData);
+
       } catch (error) {
         if (error instanceof Error && error.message === "Session expired") {
           throw error;
@@ -567,18 +594,29 @@ export default function QueuePage() {
                       <div>
                         <h3 className="text-lg font-medium mb-4">Appointments</h3>
                         <AppointmentSection 
-                          appointments={appointmentsData}
+                          appointments={scheduledAppointments}
                         />
                       </div>
                     </div>
                   </TabsContent>
                   <TabsContent value="completed">
-                    <QueueSection 
-                      items={queueData.filter(item => 
-                        item.service_end_time
-                      )}
-                      shopId={selectedShopId}
-                    />
+                    <div className="space-y-6">
+                      <div>
+                        <h3 className="text-lg font-medium mb-4">Completed Queue</h3>
+                        <QueueSection 
+                          items={queueData.filter(item => 
+                            item.service_end_time
+                          )}
+                          shopId={selectedShopId}
+                        />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-medium mb-4">Completed Appointments</h3>
+                        <AppointmentSection 
+                          appointments={completedAppointments}
+                        />
+                      </div>
+                    </div>
                   </TabsContent>
                 </Tabs>
               </div>
