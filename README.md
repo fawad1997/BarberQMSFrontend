@@ -13,6 +13,7 @@ WalkInOnline is a streamlined, AI-powered queue and appointment management platf
 - [Available Scripts](#available-scripts)
 - [Authentication](#authentication)
 - [Configuration](#configuration)
+- [Real-Time Updates](#real-time-updates)
 - [Contributing](#contributing)
 - [License](#license)
 - [Website Configuration](#configure-the-website)
@@ -37,6 +38,7 @@ cd BarberQMSFrontend
 
 ```bash
 NEXT_PUBLIC_API_URL=http://localhost:4000
+NEXT_PUBLIC_WS_URL=ws://localhost:8000
 NEXTAUTH_URL=http://localhost:8000
 NEXTAUTH_SECRET=your-secret-key-here
 ```
@@ -92,7 +94,9 @@ walkinonline/
 ## Features
 
 - AI-powered queue estimation
-- Real-time notifications
+- Real-time queue updates with WebSockets
+- Dynamic position updates during queue reordering
+- Live notifications for new customers and appointments
 - User feedback system
 - Appointment scheduling
 - Shop owner dashboard
@@ -121,6 +125,17 @@ You can customize the website by modifying the following files:
 - `config/contents.ts` - Manage website content
 - `config/settings.ts` - Modify site settings
 - `config/site.ts` - Update site-wide information
+
+## Real-Time Updates
+
+The application now supports real-time updates using WebSockets for queue management:
+
+- **Queue Position Updates**: Position numbers update in real-time during drag and drop operations
+- **Live Queue Additions**: New customers appear in the queue instantly
+- **WebSocket Fallback**: Falls back to polling if WebSockets are unavailable
+- **Appointment Status Updates**: Receive instant updates when appointment statuses change
+
+For detailed WebSocket implementation information, see [WebSocket Setup Documentation](./docs/websocket-setup.md).
 
 ## Contributing
 

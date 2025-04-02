@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { getShops } from "@/lib/services/shopService";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -65,30 +65,35 @@ interface Appointment {
   created_at: string;
 }
 
-function SortableCard({ item }: { item: QueueItem }) {
+function SortableCard({ item, updatedPosition }: { item: QueueItem, updatedPosition?: number }) {
   const {
     attributes,
     listeners,
     setNodeRef,
     transform,
     transition,
+    isDragging
   } = useSortable({ id: item.id });
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
+    zIndex: isDragging ? 10 : 1,
   };
+
+  // Use the updatedPosition if provided, otherwise use the original position
+  const displayPosition = updatedPosition !== undefined ? updatedPosition : item.position_in_queue;
 
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <Card className="p-4 hover:shadow-lg transition-shadow cursor-move">
+      <Card className={`p-4 hover:shadow-lg transition-shadow cursor-move ${isDragging ? 'shadow-xl border-blue-400' : ''}`}>
         <div className="space-y-3">
           <div className="flex justify-between items-start border-b pb-2">
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-medium text-lg">{item.full_name}</h3>
                 <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
-                  Position: {item.position_in_queue}
+                  Position: {displayPosition}
                 </span>
               </div>
               <p className="text-sm text-muted-foreground">{item.phone_number}</p>
@@ -141,8 +146,84 @@ function SortableCard({ item }: { item: QueueItem }) {
   );
 }
 
+// Add a utility function for WebSocket connection with retry
+function createWebSocketWithRetry(url: string, onMessage: (data: any) => void, maxRetries = 3) {
+  let retries = 0;
+  let ws: WebSocket | null = null;
+  let connectionFailed = false;
+  
+  function connect() {
+    // Don't attempt to reconnect if we've determined the connection is failing
+    if (connectionFailed) return;
+    
+    console.log(`Attempting to connect to WebSocket: ${url}`);
+    
+    try {
+      ws = new WebSocket(url);
+      
+      ws.onopen = () => {
+        console.log(`WebSocket connection established: ${url}`);
+        retries = 0; // Reset retry counter on successful connection
+      };
+      
+      ws.onmessage = (event: MessageEvent) => {
+        try {
+          const data = JSON.parse(event.data as string);
+          console.log('WebSocket message received:', data);
+          onMessage(data);
+        } catch (error) {
+          console.error('Error processing WebSocket message:', error);
+        }
+      };
+      
+      ws.onerror = (error: Event) => {
+        console.error('WebSocket error:', error);
+        // Don't retry on error, wait for the close event which will follow
+      };
+      
+      ws.onclose = (event: CloseEvent) => {
+        console.log(`WebSocket connection closed: ${url}, code: ${event.code}`);
+        
+        // If this is the first attempt or we haven't hit max retries
+        if (retries < maxRetries) {
+          // Exponential backoff: wait longer between each retry
+          const timeout = Math.min(1000 * Math.pow(2, retries), 10000);
+          console.log(`Attempting to reconnect in ${timeout/1000} seconds...`);
+          
+          setTimeout(() => {
+            retries++;
+            connect();
+          }, timeout);
+        } else {
+          console.error(`Maximum WebSocket retry attempts (${maxRetries}) reached. Falling back to polling.`);
+          connectionFailed = true;
+        }
+      };
+    } catch (error) {
+      console.error('Error creating WebSocket connection:', error);
+      connectionFailed = true;
+    }
+  }
+  
+  connect();
+  
+  return {
+    close: () => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.close();
+      }
+    },
+    isConnectionFailed: () => connectionFailed
+  };
+}
+
 function QueueSection({ items, shopId }: { items: QueueItem[], shopId: string }) {
   const [sortedItems, setSortedItems] = useState(items);
+  const [tempPositions, setTempPositions] = useState<Record<number, number>>({});
+  const [isLoading, setIsLoading] = useState(false);
+  const [usingPolling, setUsingPolling] = useState(false);
+  const webSocketRef = useRef<{ close: () => void; isConnectionFailed: () => boolean } | null>(null);
+  
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -154,16 +235,139 @@ function QueueSection({ items, shopId }: { items: QueueItem[], shopId: string })
     setSortedItems(items);
   }, [items]);
 
+  // Setup WebSocket connection
+  useEffect(() => {
+    if (!shopId) return;
+    
+    // WebSocket connection with retry
+    const wsUrl = `${process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000'}/ws/queue/${shopId}/`;
+    
+    const handleMessage = (data: any) => {
+      if (data.type === 'queue_update') {
+        // Update the queue with the new data
+        setSortedItems(data.queue_items);
+      } else if (data.type === 'new_entry') {
+        // Add the new entry to the queue
+        setSortedItems(prevItems => [...prevItems, data.queue_item]);
+      }
+    };
+    
+    // Create WebSocket with retry mechanism
+    const wsConnection = createWebSocketWithRetry(wsUrl, handleMessage);
+    webSocketRef.current = wsConnection;
+    
+    // Check if WebSocket connection fails and set up polling
+    const checkConnection = setInterval(() => {
+      if (webSocketRef.current && webSocketRef.current.isConnectionFailed()) {
+        setUsingPolling(true);
+        clearInterval(checkConnection);
+      }
+    }, 5000);
+    
+    // Cleanup on unmount
+    return () => {
+      clearInterval(checkConnection);
+      if (webSocketRef.current) {
+        webSocketRef.current.close();
+      }
+    };
+  }, [shopId]);
+
+  // If WebSocket connection fails, fall back to polling
+  useEffect(() => {
+    if (!usingPolling || !shopId) return;
+    
+    console.log("Using polling fallback for queue updates");
+    
+    // Function to fetch queue data via API
+    const fetchQueueData = async () => {
+      try {
+        const session = await getSession();
+        
+        if (!session?.user?.accessToken) {
+          await handleUnauthorizedResponse();
+          throw new Error("No access token found");
+        }
+        
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/queue/`,
+          {
+            headers: {
+              'Authorization': `Bearer ${session.user.accessToken}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        );
+        
+        if (response.status === 401) {
+          await handleUnauthorizedResponse();
+          throw new Error("Session expired");
+        }
+        
+        if (!response.ok) {
+          throw new Error("Failed to fetch queue data");
+        }
+        
+        const data = await response.json();
+        setSortedItems(data);
+      } catch (error) {
+        console.error("Error polling queue data:", error);
+      }
+    };
+    
+    // Initial fetch
+    fetchQueueData();
+    
+    // Set up regular polling
+    const pollingInterval = setInterval(fetchQueueData, 5000);
+    
+    return () => clearInterval(pollingInterval);
+  }, [usingPolling, shopId]);
+
+  // Handle drag start to update temporary positions
+  const handleDragStart = (event: any) => {
+    setIsLoading(true);
+  };
+  
+  // Handle drag movement to update temporary positions in real-time
+  const handleDragOver = (event: any) => {
+    const { active, over } = event;
+    
+    if (over && active.id !== over.id) {
+      const oldIndex = sortedItems.findIndex((item) => item.id === active.id);
+      const newIndex = sortedItems.findIndex((item) => item.id === over.id);
+      
+      // Create a temporary array with the new order
+      const newOrder = arrayMove([...sortedItems], oldIndex, newIndex);
+      
+      // Calculate temporary positions for all items
+      const newPositions: Record<number, number> = {};
+      newOrder.forEach((item, index) => {
+        newPositions[item.id] = index + 1;
+      });
+      
+      setTempPositions(newPositions);
+    }
+  };
+
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
+    setIsLoading(false);
+    setTempPositions({}); // Clear temporary positions
 
     if (over && active.id !== over.id) {
       try {
         const oldIndex = sortedItems.findIndex((item) => item.id === active.id);
         const newIndex = sortedItems.findIndex((item) => item.id === over.id);
 
-        // Update the UI optimistically
-        setSortedItems((items) => arrayMove(items, oldIndex, newIndex));
+        // Create a new array with the updated order
+        const newItems = arrayMove([...sortedItems], oldIndex, newIndex).map((item, index) => ({
+          ...item,
+          position_in_queue: index + 1 // Update the position property for each item
+        }));
+
+        // Update the UI immediately with correct positions
+        setSortedItems(newItems);
 
         // Get session for authentication
         const session = await getSession();
@@ -230,10 +434,24 @@ function QueueSection({ items, shopId }: { items: QueueItem[], shopId: string })
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 relative">
+      {isLoading && (
+        <div className="absolute inset-0 bg-white/50 flex items-center justify-center z-50">
+          <div className="animate-pulse text-blue-500 font-medium">Updating positions...</div>
+        </div>
+      )}
+      
+      {usingPolling && (
+        <div className="mb-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-700">
+          Using polling for updates. Real-time WebSocket connection unavailable.
+        </div>
+      )}
+      
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
         <SortableContext
@@ -241,7 +459,11 @@ function QueueSection({ items, shopId }: { items: QueueItem[], shopId: string })
           strategy={verticalListSortingStrategy}
         >
           {sortedItems.map((item) => (
-            <SortableCard key={item.id} item={item} />
+            <SortableCard 
+              key={item.id} 
+              item={item} 
+              updatedPosition={tempPositions[item.id]}
+            />
           ))}
         </SortableContext>
       </DndContext>
@@ -307,14 +529,113 @@ function AppointmentCard({ appointment }: { appointment: Appointment }) {
   );
 }
 
-function AppointmentSection({ appointments }: { appointments: Appointment[] }) {
+function AppointmentSection({ appointments, shopId }: { appointments: Appointment[], shopId: string }) {
+  const [sortedAppointments, setSortedAppointments] = useState(appointments);
+  const [usingPolling, setUsingPolling] = useState(false);
+  const webSocketRef = useRef<{ close: () => void; isConnectionFailed: () => boolean } | null>(null);
+  
+  // Setup WebSocket connection for appointments
+  useEffect(() => {
+    if (!shopId) return;
+    
+    // WebSocket connection with retry
+    const wsUrl = `${process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000'}/ws/appointments/${shopId}/`;
+    
+    const handleMessage = (data: any) => {
+      if (data.type === 'appointment_update') {
+        // Update the appointments with the new data
+        setSortedAppointments(data.appointments);
+      } else if (data.type === 'new_appointment') {
+        // Add the new appointment
+        setSortedAppointments(prevItems => [...prevItems, data.appointment]);
+      }
+    };
+    
+    // Create WebSocket with retry mechanism
+    const wsConnection = createWebSocketWithRetry(wsUrl, handleMessage);
+    webSocketRef.current = wsConnection;
+    
+    // Check if WebSocket connection fails and set up polling
+    const checkConnection = setInterval(() => {
+      if (webSocketRef.current && webSocketRef.current.isConnectionFailed()) {
+        setUsingPolling(true);
+        clearInterval(checkConnection);
+      }
+    }, 5000);
+    
+    // Cleanup on unmount
+    return () => {
+      clearInterval(checkConnection);
+      if (webSocketRef.current) {
+        webSocketRef.current.close();
+      }
+    };
+  }, [shopId]);
+
+  // If WebSocket connection fails, fall back to polling
+  useEffect(() => {
+    if (!usingPolling || !shopId) return;
+    
+    console.log("Using polling fallback for appointment updates");
+    
+    // Function to fetch appointment data via API
+    const fetchAppointmentData = async () => {
+      try {
+        const session = await getSession();
+        
+        if (!session?.user?.accessToken) {
+          await handleUnauthorizedResponse();
+          throw new Error("No access token found");
+        }
+        
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/appointments/shop/${shopId}/appointments?status=scheduled`,
+          {
+            headers: {
+              'Authorization': `Bearer ${session.user.accessToken}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        );
+        
+        if (response.status === 401) {
+          await handleUnauthorizedResponse();
+          throw new Error("Session expired");
+        }
+        
+        if (!response.ok) {
+          throw new Error("Failed to fetch appointment data");
+        }
+        
+        const data = await response.json();
+        setSortedAppointments(data);
+      } catch (error) {
+        console.error("Error polling appointment data:", error);
+      }
+    };
+    
+    // Initial fetch
+    fetchAppointmentData();
+    
+    // Set up regular polling
+    const pollingInterval = setInterval(fetchAppointmentData, 8000);
+    
+    return () => clearInterval(pollingInterval);
+  }, [usingPolling, shopId]);
+
   return (
     <div className="space-y-4">
-      {appointments.map((appointment) => (
+      {usingPolling && (
+        <div className="mb-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-700">
+          Using polling for updates. Real-time WebSocket connection unavailable.
+        </div>
+      )}
+      
+      {sortedAppointments.map((appointment) => (
         <AppointmentCard key={appointment.id} appointment={appointment} />
       ))}
       
-      {appointments.length === 0 && (
+      {sortedAppointments.length === 0 && (
         <p className="text-muted-foreground text-center py-4">No appointments scheduled</p>
       )}
     </div>
@@ -411,6 +732,118 @@ export default function QueuePage() {
   const [completedAppointments, setCompletedAppointments] = useState<Appointment[]>([]);
   const [activeTab, setActiveTab] = useState<string>("main");
 
+  // Define fetchQueueData function so it can be referenced in useEffect
+  const fetchQueueData = async () => {
+    if (!selectedShopId) return;
+    
+    try {
+      const session = await getSession();
+      
+      if (!session?.user?.accessToken) {
+        await handleUnauthorizedResponse();
+        throw new Error("No access token found. Please login again.");
+      }
+
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${selectedShopId}/queue/`,
+        {
+          headers: {
+            'Authorization': `Bearer ${session.user.accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (response.status === 401) {
+        await handleUnauthorizedResponse();
+        throw new Error("Session expired");
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to fetch queue data");
+      }
+
+      const data = await response.json();
+      console.log("Queue data received:", data);
+      setQueueData(data);
+    } catch (error) {
+      if (error instanceof Error && error.message === "Session expired") {
+        throw error;
+      }
+      console.error('Error fetching queue data:', error);
+      setError('Failed to fetch queue data. Please try again.');
+    }
+  };
+
+  const fetchAppointmentsData = async () => {
+    if (!selectedShopId) return;
+    
+    try {
+      const session = await getSession();
+      
+      if (!session?.user?.accessToken) {
+        await handleUnauthorizedResponse();
+        throw new Error("No access token found. Please login again.");
+      }
+
+      // Fetch scheduled appointments
+      const scheduledResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/appointments/shop/${selectedShopId}/appointments?status=scheduled`,
+        {
+          headers: {
+            'Authorization': `Bearer ${session.user.accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (scheduledResponse.status === 401) {
+        await handleUnauthorizedResponse();
+        throw new Error("Session expired");
+      }
+
+      if (!scheduledResponse.ok) {
+        const errorData = await scheduledResponse.json();
+        throw new Error(errorData.message || "Failed to fetch scheduled appointments");
+      }
+
+      const scheduledData = await scheduledResponse.json();
+      setScheduledAppointments(scheduledData);
+
+      // Fetch completed appointments
+      const completedResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/appointments/shop/${selectedShopId}/appointments?status=completed`,
+        {
+          headers: {
+            'Authorization': `Bearer ${session.user.accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (completedResponse.status === 401) {
+        await handleUnauthorizedResponse();
+        throw new Error("Session expired");
+      }
+
+      if (!completedResponse.ok) {
+        const errorData = await completedResponse.json();
+        throw new Error(errorData.message || "Failed to fetch completed appointments");
+      }
+
+      const completedData = await completedResponse.json();
+      setCompletedAppointments(completedData);
+
+    } catch (error) {
+      if (error instanceof Error && error.message === "Session expired") {
+        throw error;
+      }
+      console.error('Error fetching appointments data:', error);
+      setError('Failed to fetch appointments data. Please try again.');
+    }
+  };
+
   useEffect(() => {
     const fetchShops = async () => {
       try {
@@ -432,120 +865,25 @@ export default function QueuePage() {
     fetchShops();
   }, []);
 
+  // Effect for initial data fetch and WebSocket updates
   useEffect(() => {
-    const fetchQueueData = async () => {
-      if (!selectedShopId) return;
-      
-      try {
-        const session = await getSession();
-        
-        if (!session?.user?.accessToken) {
-          await handleUnauthorizedResponse();
-          throw new Error("No access token found. Please login again.");
-        }
-
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${selectedShopId}/queue/`,
-          {
-            headers: {
-              'Authorization': `Bearer ${session.user.accessToken}`,
-              'Content-Type': 'application/json',
-            },
-          }
-        );
-
-        if (response.status === 401) {
-          await handleUnauthorizedResponse();
-          throw new Error("Session expired");
-        }
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || "Failed to fetch queue data");
-        }
-
-        const data = await response.json();
-        console.log("Queue data received:", data);
-        setQueueData(data);
-      } catch (error) {
-        if (error instanceof Error && error.message === "Session expired") {
-          throw error;
-        }
-        console.error('Error fetching queue data:', error);
-        setError('Failed to fetch queue data. Please try again.');
-      }
-    };
-
-    const fetchAppointmentsData = async () => {
-      if (!selectedShopId) return;
-      
-      try {
-        const session = await getSession();
-        
-        if (!session?.user?.accessToken) {
-          await handleUnauthorizedResponse();
-          throw new Error("No access token found. Please login again.");
-        }
-
-        // Fetch scheduled appointments
-        const scheduledResponse = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/appointments/shop/${selectedShopId}/appointments?status=scheduled`,
-          {
-            headers: {
-              'Authorization': `Bearer ${session.user.accessToken}`,
-              'Content-Type': 'application/json',
-            },
-          }
-        );
-
-        if (scheduledResponse.status === 401) {
-          await handleUnauthorizedResponse();
-          throw new Error("Session expired");
-        }
-
-        if (!scheduledResponse.ok) {
-          const errorData = await scheduledResponse.json();
-          throw new Error(errorData.message || "Failed to fetch scheduled appointments");
-        }
-
-        const scheduledData = await scheduledResponse.json();
-        setScheduledAppointments(scheduledData);
-
-        // Fetch completed appointments
-        const completedResponse = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/appointments/shop/${selectedShopId}/appointments?status=completed`,
-          {
-            headers: {
-              'Authorization': `Bearer ${session.user.accessToken}`,
-              'Content-Type': 'application/json',
-            },
-          }
-        );
-
-        if (completedResponse.status === 401) {
-          await handleUnauthorizedResponse();
-          throw new Error("Session expired");
-        }
-
-        if (!completedResponse.ok) {
-          const errorData = await completedResponse.json();
-          throw new Error(errorData.message || "Failed to fetch completed appointments");
-        }
-
-        const completedData = await completedResponse.json();
-        setCompletedAppointments(completedData);
-
-      } catch (error) {
-        if (error instanceof Error && error.message === "Session expired") {
-          throw error;
-        }
-        console.error('Error fetching appointments data:', error);
-        setError('Failed to fetch appointments data. Please try again.');
-      }
-    };
-
+    if (!selectedShopId) return;
+    
+    // Initial data fetch
     fetchQueueData();
     fetchAppointmentsData();
+    
+    // Poll for updates as a fallback if WebSockets aren't available
+    const pollInterval = setInterval(async () => {
+      try {
+        await fetchQueueData();
+        await fetchAppointmentsData();
+      } catch (error) {
+        console.error('Error polling for updates:', error);
+      }
+    }, 30000); // Poll every 30 seconds as a fallback
+    
+    return () => clearInterval(pollInterval);
   }, [selectedShopId]);
 
   if (isLoading) {
@@ -616,6 +954,7 @@ export default function QueuePage() {
                         <h3 className="text-lg font-medium mb-4">Appointments</h3>
                         <AppointmentSection 
                           appointments={scheduledAppointments}
+                          shopId={selectedShopId}
                         />
                       </div>
                     </div>
@@ -635,6 +974,7 @@ export default function QueuePage() {
                         <h3 className="text-lg font-medium mb-4">Completed Appointments</h3>
                         <AppointmentSection 
                           appointments={completedAppointments}
+                          shopId={selectedShopId}
                         />
                       </div>
                     </div>
