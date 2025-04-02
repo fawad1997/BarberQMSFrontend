@@ -172,9 +172,20 @@ function QueueSection({ items, shopId }: { items: QueueItem[], shopId: string })
           throw new Error("No access token found");
         }
 
+        // Create the reordered entries array with just the moved item
+        const reorderedItems = [{
+          queue_id: active.id as number,
+          new_position: newIndex + 1 // API expects 1-based index
+        }];
+
+        console.log("Reordering queue with data:", {
+          reordered_entries: reorderedItems,
+          status: "CHECKED_IN"
+        });
+
         // Make API call to update positions
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/queue/reorder`,
+          `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/queue/`,
           {
             method: 'PUT',
             headers: {
@@ -182,10 +193,8 @@ function QueueSection({ items, shopId }: { items: QueueItem[], shopId: string })
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              reordered_entries: [{
-                queue_id: active.id,
-                new_position: newIndex + 1 // Adding 1 since API might expect 1-based indexing
-              }]
+              reordered_entries: reorderedItems,
+              status: "CHECKED_IN" // Status must be uppercase
             })
           }
         );
@@ -196,7 +205,18 @@ function QueueSection({ items, shopId }: { items: QueueItem[], shopId: string })
         }
 
         if (!response.ok) {
-          throw new Error("Failed to update queue positions");
+          const errorText = await response.text();
+          console.error("API Error:", errorText);
+          
+          // Try to parse the error to make it more readable
+          try {
+            const jsonError = JSON.parse(errorText);
+            console.error("Parsed API Error:", jsonError);
+          } catch (e) {
+            // If not JSON, just log the raw error
+          }
+          
+          throw new Error(`Failed to update queue positions: ${errorText}`);
         }
 
       } catch (error) {
@@ -445,6 +465,7 @@ export default function QueuePage() {
         }
 
         const data = await response.json();
+        console.log("Queue data received:", data);
         setQueueData(data);
       } catch (error) {
         if (error instanceof Error && error.message === "Session expired") {
@@ -586,7 +607,7 @@ export default function QueuePage() {
                         <h3 className="text-lg font-medium mb-4">Queue</h3>
                         <QueueSection 
                           items={queueData.filter(item => 
-                            !item.service_start_time && !item.service_end_time
+                            item.status === "CHECKED_IN" && !item.service_end_time
                           )}
                           shopId={selectedShopId}
                         />
@@ -605,7 +626,7 @@ export default function QueuePage() {
                         <h3 className="text-lg font-medium mb-4">Completed Queue</h3>
                         <QueueSection 
                           items={queueData.filter(item => 
-                            item.service_end_time
+                            item.service_end_time !== null
                           )}
                           shopId={selectedShopId}
                         />
