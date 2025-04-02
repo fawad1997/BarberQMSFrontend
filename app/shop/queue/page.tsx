@@ -168,11 +168,19 @@ function createWebSocketWithRetry(url: string, onMessage: (data: any) => void, m
       
       ws.onmessage = (event: MessageEvent) => {
         try {
-          const data = JSON.parse(event.data as string);
-          console.log('WebSocket message received:', data);
+          // Ensure we're getting a string and log the raw data for debugging
+          console.log('Raw WebSocket message received:', event.data);
+          
+          // Make sure we properly parse JSON data from the message
+          const data = typeof event.data === 'string' 
+            ? JSON.parse(event.data) 
+            : event.data;
+            
+          console.log('Parsed WebSocket data:', data);
           onMessage(data);
         } catch (error) {
           console.error('Error processing WebSocket message:', error);
+          console.error('Raw message content that failed to parse:', event.data);
         }
       };
       
@@ -182,7 +190,7 @@ function createWebSocketWithRetry(url: string, onMessage: (data: any) => void, m
       };
       
       ws.onclose = (event: CloseEvent) => {
-        console.log(`WebSocket connection closed: ${url}, code: ${event.code}`);
+        console.log(`WebSocket connection closed: ${url}, code: ${event.code}, reason: ${event.reason || 'No reason provided'}`);
         
         // If this is the first attempt or we haven't hit max retries
         if (retries < maxRetries) {
@@ -530,9 +538,15 @@ function AppointmentCard({ appointment }: { appointment: Appointment }) {
 }
 
 function AppointmentSection({ appointments, shopId }: { appointments: Appointment[], shopId: string }) {
-  const [sortedAppointments, setSortedAppointments] = useState(appointments);
+  const [sortedAppointments, setSortedAppointments] = useState<Appointment[]>(appointments);
   const [usingPolling, setUsingPolling] = useState(false);
   const webSocketRef = useRef<{ close: () => void; isConnectionFailed: () => boolean } | null>(null);
+  
+  // Keep appointments in sync with props
+  useEffect(() => {
+    console.log(`Appointments prop updated with ${appointments.length} items`);
+    setSortedAppointments(appointments);
+  }, [appointments]);
   
   // Setup WebSocket connection for appointments
   useEffect(() => {
@@ -542,12 +556,24 @@ function AppointmentSection({ appointments, shopId }: { appointments: Appointmen
     const wsUrl = `${process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000'}/ws/appointments/${shopId}/`;
     
     const handleMessage = (data: any) => {
+      console.log("WebSocket message received for appointments:", data);
+      
       if (data.type === 'appointment_update') {
-        // Update the appointments with the new data
-        setSortedAppointments(data.appointments);
+        console.log(`Received ${data.appointments?.length || 0} appointments from WebSocket`);
+        if (Array.isArray(data.appointments)) {
+          setSortedAppointments(data.appointments);
+        } else {
+          console.error("Expected appointments array but received:", data.appointments);
+        }
       } else if (data.type === 'new_appointment') {
-        // Add the new appointment
-        setSortedAppointments(prevItems => [...prevItems, data.appointment]);
+        console.log("New appointment received:", data.appointment);
+        if (data.appointment) {
+          setSortedAppointments(prevItems => [...prevItems, data.appointment]);
+        } else {
+          console.error("Expected appointment object but received:", data.appointment);
+        }
+      } else {
+        console.log("Unknown WebSocket message type:", data.type);
       }
     };
     
@@ -558,6 +584,7 @@ function AppointmentSection({ appointments, shopId }: { appointments: Appointmen
     // Check if WebSocket connection fails and set up polling
     const checkConnection = setInterval(() => {
       if (webSocketRef.current && webSocketRef.current.isConnectionFailed()) {
+        console.log("WebSocket connection failed for appointments, switching to polling");
         setUsingPolling(true);
         clearInterval(checkConnection);
       }
@@ -581,6 +608,7 @@ function AppointmentSection({ appointments, shopId }: { appointments: Appointmen
     // Function to fetch appointment data via API
     const fetchAppointmentData = async () => {
       try {
+        console.log("Polling for appointment data...");
         const session = await getSession();
         
         if (!session?.user?.accessToken) {
@@ -588,6 +616,7 @@ function AppointmentSection({ appointments, shopId }: { appointments: Appointmen
           throw new Error("No access token found");
         }
         
+        // Fetch scheduled appointments
         const response = await fetch(
           `${process.env.NEXT_PUBLIC_API_URL}/appointments/shop/${shopId}/appointments?status=scheduled`,
           {
@@ -608,6 +637,7 @@ function AppointmentSection({ appointments, shopId }: { appointments: Appointmen
         }
         
         const data = await response.json();
+        console.log(`Polled and received ${data.length} appointments`);
         setSortedAppointments(data);
       } catch (error) {
         console.error("Error polling appointment data:", error);
@@ -622,6 +652,11 @@ function AppointmentSection({ appointments, shopId }: { appointments: Appointmen
     
     return () => clearInterval(pollingInterval);
   }, [usingPolling, shopId]);
+  
+  // Log when appointments are updated
+  useEffect(() => {
+    console.log(`Appointment state updated, now has ${sortedAppointments.length} items`);
+  }, [sortedAppointments]);
 
   return (
     <div className="space-y-4">
@@ -631,11 +666,11 @@ function AppointmentSection({ appointments, shopId }: { appointments: Appointmen
         </div>
       )}
       
-      {sortedAppointments.map((appointment) => (
-        <AppointmentCard key={appointment.id} appointment={appointment} />
-      ))}
-      
-      {sortedAppointments.length === 0 && (
+      {sortedAppointments.length > 0 ? (
+        sortedAppointments.map((appointment) => (
+          <AppointmentCard key={appointment.id} appointment={appointment} />
+        ))
+      ) : (
         <p className="text-muted-foreground text-center py-4">No appointments scheduled</p>
       )}
     </div>
