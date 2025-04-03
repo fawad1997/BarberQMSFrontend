@@ -67,11 +67,40 @@ interface Appointment {
   created_at: string;
 }
 
-function SortableCard({ item, updatedPosition, refreshQueue, isCompleted = false }: { 
+interface Service {
+  name: string;
+  duration: number;
+  price: number;
+  id: number;
+  shop_id: number;
+}
+
+interface Barber {
+  id: number;
+  user_id: number;
+  shop_id: number;
+  status: string;
+  full_name: string;
+  email: string;
+  phone_number: string;
+  is_active: boolean;
+  services: Service[];
+}
+
+function SortableCard({ 
+  item, 
+  updatedPosition, 
+  refreshQueue, 
+  isCompleted = false,
+  barbers = [],
+  shopId = ""
+}: { 
   item: QueueItem, 
   updatedPosition?: number,
   refreshQueue: () => Promise<void>,
-  isCompleted?: boolean
+  isCompleted?: boolean,
+  barbers?: Barber[],
+  shopId?: string
 }) {
   const {
     attributes,
@@ -90,6 +119,106 @@ function SortableCard({ item, updatedPosition, refreshQueue, isCompleted = false
 
   // Use the updatedPosition if provided, otherwise use the original position
   const displayPosition = updatedPosition !== undefined ? updatedPosition : item.position_in_queue;
+  
+  // Add state to track available services for the selected barber
+  const [availableServices, setAvailableServices] = useState<Service[]>([]);
+  
+  // Update available services when barber changes
+  useEffect(() => {
+    if (item.barber && item.barber.id) {
+      const selectedBarber = barbers.find(b => b.id === item.barber?.id);
+      if (selectedBarber && selectedBarber.services) {
+        setAvailableServices(selectedBarber.services);
+      } else {
+        setAvailableServices([]);
+      }
+    } else {
+      setAvailableServices([]);
+    }
+  }, [barbers, item.barber]);
+
+  // Handle barber assignment
+  const handleBarberChange = async (barberId: string) => {
+    if (isCompleted) return;
+    
+    try {
+      const session = await getSession();
+      
+      if (!session?.user?.accessToken) {
+        await handleUnauthorizedResponse();
+        throw new Error("No access token found");
+      }
+      
+      // If "none" is selected, use null for barber_id
+      const barberIdValue = barberId === "none" ? null : parseInt(barberId);
+      console.log(`Assigning barber ${barberIdValue} to queue item ${item.id}`);
+      
+      // Show a loading toast
+      const toastId = toast.loading(`Assigning barber...`);
+      
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/queue/${item.id}`,
+        {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${session.user.accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            barber_id: barberIdValue
+          })
+        }
+      );
+      
+      if (response.status === 401) {
+        await handleUnauthorizedResponse();
+        throw new Error("Session expired");
+      }
+      
+      if (!response.ok) {
+        // Try to extract error message from response
+        let errorMessage = "Failed to assign barber";
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.detail || errorData.message || errorMessage;
+        } catch (e) {
+          // If response is not JSON, try to get text
+          try {
+            errorMessage = await response.text() || errorMessage;
+          } catch (e2) {
+            // If that fails too, just use generic message
+          }
+        }
+        console.error(`API Error (${response.status}): ${errorMessage}`);
+        
+        // Dismiss the loading toast and show an error toast
+        toast.dismiss(toastId);
+        toast.error(`Failed: ${errorMessage}`, {
+          duration: 4000,
+        });
+        
+        throw new Error(errorMessage);
+      }
+      
+      // Success - the polling will update the UI
+      console.log(`Successfully assigned barber`);
+      
+      // Dismiss the loading toast
+      toast.dismiss(toastId);
+      
+      // Refresh the queue data immediately
+      await refreshQueue();
+      
+    } catch (error) {
+      console.error("Error assigning barber:", error);
+      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+      
+      // Show error toast if not already shown
+      toast.error(`Failed: ${errorMessage}`, {
+        duration: 4000,
+      });
+    }
+  };
 
   const handleStatusChange = async (newStatus: string) => {
     // Don't allow status changes in completed queue
@@ -199,6 +328,89 @@ function SortableCard({ item, updatedPosition, refreshQueue, isCompleted = false
     }
   };
 
+  // Add service assignment handler
+  const handleServiceChange = async (serviceId: string) => {
+    if (isCompleted) return;
+    
+    try {
+      const session = await getSession();
+      
+      if (!session?.user?.accessToken) {
+        await handleUnauthorizedResponse();
+        throw new Error("No access token found");
+      }
+      
+      // If "none" is selected, use null for service_id
+      const serviceIdValue = serviceId === "none" ? null : parseInt(serviceId);
+      console.log(`Assigning service ${serviceIdValue} to queue item ${item.id}`);
+      
+      // Show a loading toast
+      const toastId = toast.loading(`Assigning service...`);
+      
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/queue/${item.id}`,
+        {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${session.user.accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            service_id: serviceIdValue
+          })
+        }
+      );
+      
+      if (response.status === 401) {
+        await handleUnauthorizedResponse();
+        throw new Error("Session expired");
+      }
+      
+      if (!response.ok) {
+        // Try to extract error message from response
+        let errorMessage = "Failed to assign service";
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.detail || errorData.message || errorMessage;
+        } catch (e) {
+          // If response is not JSON, try to get text
+          try {
+            errorMessage = await response.text() || errorMessage;
+          } catch (e2) {
+            // If that fails too, just use generic message
+          }
+        }
+        console.error(`API Error (${response.status}): ${errorMessage}`);
+        
+        // Dismiss the loading toast and show an error toast
+        toast.dismiss(toastId);
+        toast.error(`Failed: ${errorMessage}`, {
+          duration: 4000,
+        });
+        
+        throw new Error(errorMessage);
+      }
+      
+      // Success - the polling will update the UI
+      console.log(`Successfully assigned service`);
+      
+      // Dismiss the loading toast
+      toast.dismiss(toastId);
+      
+      // Refresh the queue data immediately
+      await refreshQueue();
+      
+    } catch (error) {
+      console.error("Error assigning service:", error);
+      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+      
+      // Show error toast if not already shown
+      toast.error(`Failed: ${errorMessage}`, {
+        duration: 4000,
+      });
+    }
+  };
+
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
       <Card className={`p-4 hover:shadow-lg transition-shadow cursor-move ${isDragging ? 'shadow-xl border-blue-400' : ''}`}>
@@ -275,24 +487,71 @@ function SortableCard({ item, updatedPosition, refreshQueue, isCompleted = false
             </div>
             <div>
               <p className="text-muted-foreground">Barber</p>
-              <p className="font-medium">
-                {item.barber ? (
-                  <span className="flex items-center gap-1">
-                    {item.barber.full_name}
-                    <span className={`w-2 h-2 rounded-full ${
-                      item.barber.status === 'available' ? 'bg-green-500' : 'bg-yellow-500'
-                    }`} />
-                  </span>
-                ) : 'Not assigned'}
-              </p>
+              {isCompleted || barbers.length === 0 ? (
+                <p className="font-medium">
+                  {item.barber ? (
+                    <span className="flex items-center gap-1">
+                      {item.barber.full_name}
+                      <span className={`w-2 h-2 rounded-full ${
+                        item.barber.status === 'available' ? 'bg-green-500' : 'bg-yellow-500'
+                      }`} />
+                    </span>
+                  ) : 'Not assigned'}
+                </p>
+              ) : (
+                <Select
+                  value={item.barber?.id?.toString() || "none"}
+                  onValueChange={handleBarberChange}
+                >
+                  <SelectTrigger className="h-8 w-full text-sm">
+                    <SelectValue placeholder="Assign barber" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Not assigned</SelectItem>
+                    {barbers.map((barber) => (
+                      <SelectItem key={barber.id} value={barber.id.toString()}>
+                        <div className="flex items-center gap-1">
+                          {barber.full_name}
+                          <span className={`w-2 h-2 rounded-full ${
+                            barber.status === 'available' ? 'bg-green-500' : 'bg-yellow-500'
+                          }`} />
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
             <div>
               <p className="text-muted-foreground">Service</p>
-              <p className="font-medium">
-                {item.service ? (
-                  <span>{item.service.name} ({item.service.duration} min - ${item.service.price})</span>
-                ) : 'Not selected'}
-              </p>
+              {isCompleted || !item.barber?.id ? (
+                <p className="font-medium">
+                  {item.service ? (
+                    <span>{item.service.name} ({item.service.duration} min - ${item.service.price})</span>
+                  ) : 'Not selected'}
+                </p>
+              ) : availableServices.length === 0 ? (
+                <p className="font-medium text-muted-foreground">No services available</p>
+              ) : (
+                <Select
+                  value={item.service?.id?.toString() || "none"}
+                  onValueChange={handleServiceChange}
+                >
+                  <SelectTrigger className="h-8 w-full text-sm">
+                    <SelectValue placeholder="Select service" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No service</SelectItem>
+                    {availableServices.map((service) => (
+                      <SelectItem key={service.id} value={service.id.toString()}>
+                        <div className="whitespace-nowrap">
+                          {service.name} ({service.duration} min - ${service.price})
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           </div>
         </div>
@@ -301,11 +560,18 @@ function SortableCard({ item, updatedPosition, refreshQueue, isCompleted = false
   );
 }
 
-function QueueSection({ items, shopId, parentRefresh, isCompleted = false }: { 
+function QueueSection({ 
+  items, 
+  shopId, 
+  parentRefresh, 
+  isCompleted = false,
+  barbers = []
+}: { 
   items: QueueItem[], 
   shopId: string, 
   parentRefresh: () => Promise<void>,
-  isCompleted?: boolean
+  isCompleted?: boolean,
+  barbers?: Barber[]
 }) {
   const [sortedItems, setSortedItems] = useState(items);
   const [tempPositions, setTempPositions] = useState<Record<number, number>>({});
@@ -469,6 +735,8 @@ function QueueSection({ items, shopId, parentRefresh, isCompleted = false }: {
               updatedPosition={tempPositions[item.id]}
               refreshQueue={refreshQueue}
               isCompleted={isCompleted}
+              barbers={barbers}
+              shopId={shopId}
             />
           ))}
         </SortableContext>
@@ -668,6 +936,7 @@ export default function QueuePage() {
   const [activeTab, setActiveTab] = useState<string>("main");
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
   const [historyRefreshTrigger, setHistoryRefreshTrigger] = useState<number>(0);
+  const [shopBarbers, setShopBarbers] = useState<Barber[]>([]);
 
   // Function to refresh all queue data
   const refreshAllQueueData = async () => {
@@ -864,6 +1133,52 @@ export default function QueuePage() {
     }
   };
 
+  // Function to fetch barbers for the selected shop
+  const fetchShopBarbers = async () => {
+    if (!selectedShopId) return;
+    
+    try {
+      const session = await getSession();
+      
+      if (!session?.user?.accessToken) {
+        await handleUnauthorizedResponse();
+        throw new Error("No access token found. Please login again.");
+      }
+
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${selectedShopId}/barbers/`,
+        {
+          headers: {
+            'Authorization': `Bearer ${session.user.accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (response.status === 401) {
+        await handleUnauthorizedResponse();
+        throw new Error("Session expired");
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to fetch shop barbers");
+      }
+
+      const data = await response.json();
+      console.log("Shop barbers received:", data);
+      setShopBarbers(data);
+    } catch (error) {
+      if (error instanceof Error && error.message === "Session expired") {
+        throw error;
+      }
+      console.error('Error fetching shop barbers:', error);
+      toast.error("Failed to load barbers", {
+        duration: 3000,
+      });
+    }
+  };
+
   useEffect(() => {
     const fetchShops = async () => {
       try {
@@ -912,6 +1227,13 @@ export default function QueuePage() {
       fetchQueueHistoryData();
     }
   }, [activeTab, selectedShopId]);
+
+  // Fetch barbers when shop changes
+  useEffect(() => {
+    if (selectedShopId) {
+      fetchShopBarbers();
+    }
+  }, [selectedShopId]);
 
   if (isLoading) {
     return <LoadingState />;
@@ -979,6 +1301,8 @@ export default function QueuePage() {
                           shopId={selectedShopId}
                           parentRefresh={refreshAllQueueData}
                           key={`queue-main-${refreshTrigger}`}
+                          isCompleted={false}
+                          barbers={shopBarbers}
                         />
                       </div>
                       <div>
@@ -1024,6 +1348,7 @@ export default function QueuePage() {
                           parentRefresh={fetchQueueHistoryData}
                           key={`queue-history-${historyRefreshTrigger}`}
                           isCompleted={true}
+                          barbers={shopBarbers}
                         />
                       </div>
                       <div>
