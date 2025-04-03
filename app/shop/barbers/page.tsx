@@ -43,6 +43,9 @@ import { PlusCircle } from "lucide-react"
 import { Session } from "next-auth"
 import { AlertCircle, X } from "lucide-react"
 import { BarberScheduleCalendar } from "@/components/shops/barbers/BarberScheduleCalendar"
+import { useRouter } from 'next/navigation'
+import { useAuth } from '@/hooks/useAuth'
+import { Label } from "@/components/ui/label"
 
 interface AddBarberFormData {
   full_name: string
@@ -351,6 +354,7 @@ function DeleteBarberDialog({
 }
 
 export default function BarbersPage() {
+  const { user, accessToken, isLoading: isAuthLoading } = useAuth()
   const [shops, setShops] = useState<
     Array<{ id: number; name: string; barbers: Barber[] }>
   >([])
@@ -358,7 +362,6 @@ export default function BarbersPage() {
   const [error, setError] = useState<string | null>(null)
   const [selectedShopId, setSelectedShopId] = useState<number | null>(null)
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
-  const [accessToken, setAccessToken] = useState<string>("")
   const [selectedBarber, setSelectedBarber] = useState<Barber | null>(null)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
@@ -375,20 +378,16 @@ export default function BarbersPage() {
   const [isEditScheduleModalOpen, setIsEditScheduleModalOpen] = useState(false)
 
   useEffect(() => {
+    if (!user || !accessToken) return
+
     const fetchShopsAndBarbers = async () => {
       try {
-        const session = await getSession()
-        if (!session?.user?.accessToken) {
-          throw new Error("No access token found")
-        }
-        setAccessToken(session.user.accessToken)
-
         // Fetch shops
         const shopsResponse = await fetch(
           `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/`,
           {
             headers: {
-              Authorization: `Bearer ${session.user.accessToken}`,
+              Authorization: `Bearer ${accessToken}`,
             },
           }
         )
@@ -407,34 +406,12 @@ export default function BarbersPage() {
         setShops(simplifiedShops)
 
         // Fetch barbers for each shop
-        // Inside useEffect in BarbersPage
-
-        const fetchBarberSchedules = async (shopId: number, barberId: number) => {
-          try {
-            const response = await fetch(
-              `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/barbers/${barberId}/schedules/`,
-              {
-                headers: {
-                  Authorization: `Bearer ${session.user.accessToken}`,
-                },
-              }
-            )
-            if (!response.ok) {
-              throw new Error('Failed to fetch schedules')
-            }
-            return await response.json()
-          } catch (error) {
-            console.error('Error fetching schedules:', error)
-            return []
-          }
-        }
-
         for (const shop of simplifiedShops) {
           const barbersResponse = await fetch(
             `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shop.id}/barbers/`,
             {
               headers: {
-                Authorization: `Bearer ${session.user.accessToken}`,
+                Authorization: `Bearer ${accessToken}`,
               },
             }
           )
@@ -465,7 +442,7 @@ export default function BarbersPage() {
     }
 
     fetchShopsAndBarbers()
-  }, [])
+  }, [user, accessToken])
 
   const fetchBarberSchedules = async (shopId: number, barberId: number) => {
     try {
@@ -593,7 +570,7 @@ export default function BarbersPage() {
     }
   }
 
-  if (isLoading) {
+  if (isAuthLoading || isLoading) {
     return <LoadingState />
   }
 
