@@ -146,92 +146,11 @@ function SortableCard({ item, updatedPosition }: { item: QueueItem, updatedPosit
   );
 }
 
-// Add a utility function for WebSocket connection with retry
-function createWebSocketWithRetry(url: string, onMessage: (data: any) => void, maxRetries = 3) {
-  let retries = 0;
-  let ws: WebSocket | null = null;
-  let connectionFailed = false;
-  
-  function connect() {
-    // Don't attempt to reconnect if we've determined the connection is failing
-    if (connectionFailed) return;
-    
-    console.log(`Attempting to connect to WebSocket: ${url}`);
-    
-    try {
-      ws = new WebSocket(url);
-      
-      ws.onopen = () => {
-        console.log(`WebSocket connection established: ${url}`);
-        retries = 0; // Reset retry counter on successful connection
-      };
-      
-      ws.onmessage = (event: MessageEvent) => {
-        try {
-          // Ensure we're getting a string and log the raw data for debugging
-          console.log('Raw WebSocket message received:', event.data);
-          
-          // Make sure we properly parse JSON data from the message
-          const data = typeof event.data === 'string' 
-            ? JSON.parse(event.data) 
-            : event.data;
-            
-          console.log('Parsed WebSocket data:', data);
-          onMessage(data);
-        } catch (error) {
-          console.error('Error processing WebSocket message:', error);
-          console.error('Raw message content that failed to parse:', event.data);
-        }
-      };
-      
-      ws.onerror = (error: Event) => {
-        console.error('WebSocket error:', error);
-        // Don't retry on error, wait for the close event which will follow
-      };
-      
-      ws.onclose = (event: CloseEvent) => {
-        console.log(`WebSocket connection closed: ${url}, code: ${event.code}, reason: ${event.reason || 'No reason provided'}`);
-        
-        // If this is the first attempt or we haven't hit max retries
-        if (retries < maxRetries) {
-          // Exponential backoff: wait longer between each retry
-          const timeout = Math.min(1000 * Math.pow(2, retries), 10000);
-          console.log(`Attempting to reconnect in ${timeout/1000} seconds...`);
-          
-          setTimeout(() => {
-            retries++;
-            connect();
-          }, timeout);
-        } else {
-          console.error(`Maximum WebSocket retry attempts (${maxRetries}) reached. Falling back to polling.`);
-          connectionFailed = true;
-        }
-      };
-    } catch (error) {
-      console.error('Error creating WebSocket connection:', error);
-      connectionFailed = true;
-    }
-  }
-  
-  connect();
-  
-  return {
-    close: () => {
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.close();
-      }
-    },
-    isConnectionFailed: () => connectionFailed
-  };
-}
-
 function QueueSection({ items, shopId }: { items: QueueItem[], shopId: string }) {
   const [sortedItems, setSortedItems] = useState(items);
   const [tempPositions, setTempPositions] = useState<Record<number, number>>({});
   const [isLoading, setIsLoading] = useState(false);
-  const [usingPolling, setUsingPolling] = useState(false);
-  const webSocketRef = useRef<{ close: () => void; isConnectionFailed: () => boolean } | null>(null);
-  
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -243,49 +162,11 @@ function QueueSection({ items, shopId }: { items: QueueItem[], shopId: string })
     setSortedItems(items);
   }, [items]);
 
-  // Setup WebSocket connection
+  // Poll for queue updates
   useEffect(() => {
     if (!shopId) return;
     
-    // WebSocket connection with retry
-    const wsUrl = `${process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000'}/ws/queue/${shopId}/`;
-    
-    const handleMessage = (data: any) => {
-      if (data.type === 'queue_update') {
-        // Update the queue with the new data
-        setSortedItems(data.queue_items);
-      } else if (data.type === 'new_entry') {
-        // Add the new entry to the queue
-        setSortedItems(prevItems => [...prevItems, data.queue_item]);
-      }
-    };
-    
-    // Create WebSocket with retry mechanism
-    const wsConnection = createWebSocketWithRetry(wsUrl, handleMessage);
-    webSocketRef.current = wsConnection;
-    
-    // Check if WebSocket connection fails and set up polling
-    const checkConnection = setInterval(() => {
-      if (webSocketRef.current && webSocketRef.current.isConnectionFailed()) {
-        setUsingPolling(true);
-        clearInterval(checkConnection);
-      }
-    }, 5000);
-    
-    // Cleanup on unmount
-    return () => {
-      clearInterval(checkConnection);
-      if (webSocketRef.current) {
-        webSocketRef.current.close();
-      }
-    };
-  }, [shopId]);
-
-  // If WebSocket connection fails, fall back to polling
-  useEffect(() => {
-    if (!usingPolling || !shopId) return;
-    
-    console.log("Using polling fallback for queue updates");
+    console.log("Using polling for queue updates");
     
     // Function to fetch queue data via API
     const fetchQueueData = async () => {
@@ -323,14 +204,11 @@ function QueueSection({ items, shopId }: { items: QueueItem[], shopId: string })
       }
     };
     
-    // Initial fetch
-    fetchQueueData();
-    
     // Set up regular polling
-    const pollingInterval = setInterval(fetchQueueData, 5000);
+    const pollingInterval = setInterval(fetchQueueData, 5000); // Poll every 5 seconds
     
     return () => clearInterval(pollingInterval);
-  }, [usingPolling, shopId]);
+  }, [shopId]);
 
   // Handle drag start to update temporary positions
   const handleDragStart = (event: any) => {
@@ -449,12 +327,6 @@ function QueueSection({ items, shopId }: { items: QueueItem[], shopId: string })
         </div>
       )}
       
-      {usingPolling && (
-        <div className="mb-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-700">
-          Using polling for updates. Real-time WebSocket connection unavailable.
-        </div>
-      )}
-      
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -539,8 +411,6 @@ function AppointmentCard({ appointment }: { appointment: Appointment }) {
 
 function AppointmentSection({ appointments, shopId }: { appointments: Appointment[], shopId: string }) {
   const [sortedAppointments, setSortedAppointments] = useState<Appointment[]>(appointments);
-  const [usingPolling, setUsingPolling] = useState(false);
-  const webSocketRef = useRef<{ close: () => void; isConnectionFailed: () => boolean } | null>(null);
   
   // Keep appointments in sync with props
   useEffect(() => {
@@ -548,62 +418,11 @@ function AppointmentSection({ appointments, shopId }: { appointments: Appointmen
     setSortedAppointments(appointments);
   }, [appointments]);
   
-  // Setup WebSocket connection for appointments
+  // Poll for appointment updates
   useEffect(() => {
     if (!shopId) return;
     
-    // WebSocket connection with retry
-    const wsUrl = `${process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000'}/ws/appointments/${shopId}/`;
-    
-    const handleMessage = (data: any) => {
-      console.log("WebSocket message received for appointments:", data);
-      
-      if (data.type === 'appointment_update') {
-        console.log(`Received ${data.appointments?.length || 0} appointments from WebSocket`);
-        if (Array.isArray(data.appointments)) {
-          setSortedAppointments(data.appointments);
-        } else {
-          console.error("Expected appointments array but received:", data.appointments);
-        }
-      } else if (data.type === 'new_appointment') {
-        console.log("New appointment received:", data.appointment);
-        if (data.appointment) {
-          setSortedAppointments(prevItems => [...prevItems, data.appointment]);
-        } else {
-          console.error("Expected appointment object but received:", data.appointment);
-        }
-      } else {
-        console.log("Unknown WebSocket message type:", data.type);
-      }
-    };
-    
-    // Create WebSocket with retry mechanism
-    const wsConnection = createWebSocketWithRetry(wsUrl, handleMessage);
-    webSocketRef.current = wsConnection;
-    
-    // Check if WebSocket connection fails and set up polling
-    const checkConnection = setInterval(() => {
-      if (webSocketRef.current && webSocketRef.current.isConnectionFailed()) {
-        console.log("WebSocket connection failed for appointments, switching to polling");
-        setUsingPolling(true);
-        clearInterval(checkConnection);
-      }
-    }, 5000);
-    
-    // Cleanup on unmount
-    return () => {
-      clearInterval(checkConnection);
-      if (webSocketRef.current) {
-        webSocketRef.current.close();
-      }
-    };
-  }, [shopId]);
-
-  // If WebSocket connection fails, fall back to polling
-  useEffect(() => {
-    if (!usingPolling || !shopId) return;
-    
-    console.log("Using polling fallback for appointment updates");
+    console.log("Using polling for appointment updates");
     
     // Function to fetch appointment data via API
     const fetchAppointmentData = async () => {
@@ -644,28 +463,14 @@ function AppointmentSection({ appointments, shopId }: { appointments: Appointmen
       }
     };
     
-    // Initial fetch
-    fetchAppointmentData();
-    
     // Set up regular polling
-    const pollingInterval = setInterval(fetchAppointmentData, 8000);
+    const pollingInterval = setInterval(fetchAppointmentData, 8000); // Poll every 8 seconds
     
     return () => clearInterval(pollingInterval);
-  }, [usingPolling, shopId]);
-  
-  // Log when appointments are updated
-  useEffect(() => {
-    console.log(`Appointment state updated, now has ${sortedAppointments.length} items`);
-  }, [sortedAppointments]);
+  }, [shopId]);
 
   return (
-    <div className="space-y-4">
-      {usingPolling && (
-        <div className="mb-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-700">
-          Using polling for updates. Real-time WebSocket connection unavailable.
-        </div>
-      )}
-      
+    <div className="space-y-4">      
       {sortedAppointments.length > 0 ? (
         sortedAppointments.map((appointment) => (
           <AppointmentCard key={appointment.id} appointment={appointment} />
@@ -900,7 +705,7 @@ export default function QueuePage() {
     fetchShops();
   }, []);
 
-  // Effect for initial data fetch and WebSocket updates
+  // Effect for polling data
   useEffect(() => {
     if (!selectedShopId) return;
     
@@ -908,7 +713,7 @@ export default function QueuePage() {
     fetchQueueData();
     fetchAppointmentsData();
     
-    // Poll for updates as a fallback if WebSockets aren't available
+    // Set up polling interval
     const pollInterval = setInterval(async () => {
       try {
         await fetchQueueData();
@@ -916,7 +721,7 @@ export default function QueuePage() {
       } catch (error) {
         console.error('Error polling for updates:', error);
       }
-    }, 30000); // Poll every 30 seconds as a fallback
+    }, 15000); // Poll every 15 seconds
     
     return () => clearInterval(pollInterval);
   }, [selectedShopId]);
