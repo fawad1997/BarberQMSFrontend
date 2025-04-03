@@ -156,8 +156,9 @@ function SortableCard({
       // Show a loading toast
       const toastId = toast.loading(`Assigning barber...`);
       
+      // Use the specific barber endpoint
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/queue/${item.id}`,
+        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/queue/${item.id}/barber`,
         {
           method: 'PUT',
           headers: {
@@ -200,13 +201,14 @@ function SortableCard({
         throw new Error(errorMessage);
       }
       
-      // Success - the polling will update the UI
-      console.log(`Successfully assigned barber`);
+      // Get the updated queue item from the response
+      const updatedQueueItem = await response.json();
+      console.log(`Successfully assigned barber`, updatedQueueItem);
       
       // Dismiss the loading toast
       toast.dismiss(toastId);
       
-      // Refresh the queue data immediately
+      // Refresh the queue data immediately to show the updated barber assignment
       await refreshQueue();
       
     } catch (error) {
@@ -328,7 +330,7 @@ function SortableCard({
     }
   };
 
-  // Add service assignment handler
+  // Update the handleServiceChange function to use a specific service endpoint
   const handleServiceChange = async (serviceId: string) => {
     if (isCompleted) return;
     
@@ -347,8 +349,9 @@ function SortableCard({
       // Show a loading toast
       const toastId = toast.loading(`Assigning service...`);
       
+      // Use the specific service endpoint
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/queue/${item.id}`,
+        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/queue/${item.id}/service`,
         {
           method: 'PUT',
           headers: {
@@ -391,13 +394,14 @@ function SortableCard({
         throw new Error(errorMessage);
       }
       
-      // Success - the polling will update the UI
-      console.log(`Successfully assigned service`);
+      // Get the updated queue item from the response
+      const updatedQueueItem = await response.json();
+      console.log(`Successfully assigned service`, updatedQueueItem);
       
       // Dismiss the loading toast
       toast.dismiss(toastId);
       
-      // Refresh the queue data immediately
+      // Refresh the queue data immediately to show the updated service assignment
       await refreshQueue();
       
     } catch (error) {
