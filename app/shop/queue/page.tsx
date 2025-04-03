@@ -30,9 +30,11 @@ import { PlusCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
 
 interface QueueItem {
   id: number;
+  shop_id: number;
   full_name: string;
   phone_number: string;
   status: string;
@@ -65,7 +67,11 @@ interface Appointment {
   created_at: string;
 }
 
-function SortableCard({ item, updatedPosition }: { item: QueueItem, updatedPosition?: number }) {
+function SortableCard({ item, updatedPosition, refreshQueue }: { 
+  item: QueueItem, 
+  updatedPosition?: number,
+  refreshQueue: () => Promise<void>
+}) {
   const {
     attributes,
     listeners,
@@ -84,6 +90,111 @@ function SortableCard({ item, updatedPosition }: { item: QueueItem, updatedPosit
   // Use the updatedPosition if provided, otherwise use the original position
   const displayPosition = updatedPosition !== undefined ? updatedPosition : item.position_in_queue;
 
+  const handleStatusChange = async (newStatus: string) => {
+    try {
+      const session = await getSession();
+      
+      if (!session?.user?.accessToken) {
+        await handleUnauthorizedResponse();
+        throw new Error("No access token found");
+      }
+      
+      console.log(`Sending status update request to shop_id: ${item.shop_id}, queue_id: ${item.id}, status: ${newStatus}`);
+      
+      // Show a loading toast
+      const toastId = toast.loading(`Updating status to ${newStatus.toLowerCase()}...`);
+      
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${item.shop_id}/queue/${item.id}`,
+        {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${session.user.accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            status: newStatus
+          })
+        }
+      );
+      
+      if (response.status === 401) {
+        await handleUnauthorizedResponse();
+        throw new Error("Session expired");
+      }
+      
+      if (!response.ok) {
+        // Try to extract error message from response
+        let errorMessage = "Failed to update status";
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.detail || errorData.message || errorMessage;
+        } catch (e) {
+          // If response is not JSON, try to get text
+          try {
+            errorMessage = await response.text() || errorMessage;
+          } catch (e2) {
+            // If that fails too, just use generic message
+          }
+        }
+        console.error(`API Error (${response.status}): ${errorMessage}`);
+        
+        // Dismiss the loading toast and show an error toast
+        toast.dismiss(toastId);
+        toast.error(`Failed: ${errorMessage}`, {
+          duration: 4000,
+        });
+        
+        throw new Error(errorMessage);
+      }
+      
+      // Success - the polling will update the UI
+      console.log(`Successfully updated status to ${newStatus}`);
+      
+      // Dismiss the loading toast and show a success toast
+      toast.dismiss(toastId);
+      toast.success(`Status updated to ${newStatus.toLowerCase()}`, {
+        duration: 3000,
+      });
+      
+      // Refresh the queue data immediately
+      await refreshQueue();
+      
+    } catch (error) {
+      console.error("Error updating status:", error);
+      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+      
+      // Show error toast if not already shown
+      toast.error(`Failed: ${errorMessage}`, {
+        duration: 4000,
+      });
+    }
+  };
+  
+  // Define status colors for visual cues
+  const getStatusColor = (status: string) => {
+    switch(status) {
+      case "ARRIVED": return "bg-yellow-100 text-yellow-800";
+      case "CHECKED_IN": return "bg-blue-100 text-blue-800";
+      case "IN_SERVICE": return "bg-purple-100 text-purple-800";
+      case "COMPLETED": return "bg-green-100 text-green-800";
+      case "CANCELLED": return "bg-red-100 text-red-800";
+      default: return "bg-gray-100 text-gray-800";
+    }
+  };
+  
+  // Define status icon for visual cues
+  const getStatusIcon = (status: string) => {
+    switch(status) {
+      case "ARRIVED": return "🚶";
+      case "CHECKED_IN": return "✓";
+      case "IN_SERVICE": return "✂️";
+      case "COMPLETED": return "✅";
+      case "CANCELLED": return "❌";
+      default: return "⏳";
+    }
+  };
+
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
       <Card className={`p-4 hover:shadow-lg transition-shadow cursor-move ${isDragging ? 'shadow-xl border-blue-400' : ''}`}>
@@ -99,9 +210,41 @@ function SortableCard({ item, updatedPosition }: { item: QueueItem, updatedPosit
               <p className="text-sm text-muted-foreground">{item.phone_number}</p>
             </div>
             <div className="text-right">
-              <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">
-                {item.status}
-              </span>
+              <Select
+                value={item.status}
+                onValueChange={handleStatusChange}
+              >
+                <SelectTrigger className={`h-8 w-36 ${getStatusColor(item.status)}`}>
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ARRIVED">
+                    <div className="flex items-center gap-2">
+                      <span>🚶</span> Arrived
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="CHECKED_IN">
+                    <div className="flex items-center gap-2">
+                      <span>✓</span> Checked In
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="IN_SERVICE">
+                    <div className="flex items-center gap-2">
+                      <span>✂️</span> In Service
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="COMPLETED">
+                    <div className="flex items-center gap-2">
+                      <span>✅</span> Completed
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="CANCELLED">
+                    <div className="flex items-center gap-2">
+                      <span>❌</span> Cancelled
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
@@ -146,7 +289,7 @@ function SortableCard({ item, updatedPosition }: { item: QueueItem, updatedPosit
   );
 }
 
-function QueueSection({ items, shopId }: { items: QueueItem[], shopId: string }) {
+function QueueSection({ items, shopId, parentRefresh }: { items: QueueItem[], shopId: string, parentRefresh: () => Promise<void> }) {
   const [sortedItems, setSortedItems] = useState(items);
   const [tempPositions, setTempPositions] = useState<Record<number, number>>({});
   const [isLoading, setIsLoading] = useState(false);
@@ -162,50 +305,26 @@ function QueueSection({ items, shopId }: { items: QueueItem[], shopId: string })
     setSortedItems(items);
   }, [items]);
 
-  // Poll for queue updates
+  // Function to fetch queue data (just call parent refresh)
+  const refreshQueue = async () => {
+    try {
+      setIsLoading(true);
+      await parentRefresh();
+    } catch (error) {
+      console.error("Error refreshing queue data:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Restore polling for queue updates at a less frequent interval
   useEffect(() => {
     if (!shopId) return;
     
-    console.log("Using polling for queue updates");
+    // Don't need to do the initial fetch since parent component handles it
     
-    // Function to fetch queue data via API
-    const fetchQueueData = async () => {
-      try {
-        const session = await getSession();
-        
-        if (!session?.user?.accessToken) {
-          await handleUnauthorizedResponse();
-          throw new Error("No access token found");
-        }
-        
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/queue/`,
-          {
-            headers: {
-              'Authorization': `Bearer ${session.user.accessToken}`,
-              'Content-Type': 'application/json',
-            },
-          }
-        );
-        
-        if (response.status === 401) {
-          await handleUnauthorizedResponse();
-          throw new Error("Session expired");
-        }
-        
-        if (!response.ok) {
-          throw new Error("Failed to fetch queue data");
-        }
-        
-        const data = await response.json();
-        setSortedItems(data);
-      } catch (error) {
-        console.error("Error polling queue data:", error);
-      }
-    };
-    
-    // Set up regular polling
-    const pollingInterval = setInterval(fetchQueueData, 5000); // Poll every 5 seconds
+    // Set up regular polling as a backup
+    const pollingInterval = setInterval(refreshQueue, 15000); // Poll every 15 seconds
     
     return () => clearInterval(pollingInterval);
   }, [shopId]);
@@ -343,6 +462,7 @@ function QueueSection({ items, shopId }: { items: QueueItem[], shopId: string })
               key={item.id} 
               item={item} 
               updatedPosition={tempPositions[item.id]}
+              refreshQueue={refreshQueue}
             />
           ))}
         </SortableContext>
@@ -409,7 +529,11 @@ function AppointmentCard({ appointment }: { appointment: Appointment }) {
   );
 }
 
-function AppointmentSection({ appointments, shopId }: { appointments: Appointment[], shopId: string }) {
+function AppointmentSection({ appointments, shopId, parentRefresh }: { 
+  appointments: Appointment[], 
+  shopId: string,
+  parentRefresh?: () => Promise<void>
+}) {
   const [sortedAppointments, setSortedAppointments] = useState<Appointment[]>(appointments);
   
   // Keep appointments in sync with props
@@ -418,56 +542,19 @@ function AppointmentSection({ appointments, shopId }: { appointments: Appointmen
     setSortedAppointments(appointments);
   }, [appointments]);
   
-  // Poll for appointment updates
+  // Use parent refresh if provided, otherwise poll directly
   useEffect(() => {
     if (!shopId) return;
     
-    console.log("Using polling for appointment updates");
-    
-    // Function to fetch appointment data via API
-    const fetchAppointmentData = async () => {
-      try {
-        console.log("Polling for appointment data...");
-        const session = await getSession();
-        
-        if (!session?.user?.accessToken) {
-          await handleUnauthorizedResponse();
-          throw new Error("No access token found");
-        }
-        
-        // Fetch scheduled appointments
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/appointments/shop/${shopId}/appointments?status=scheduled`,
-          {
-            headers: {
-              'Authorization': `Bearer ${session.user.accessToken}`,
-              'Content-Type': 'application/json',
-            },
-          }
-        );
-        
-        if (response.status === 401) {
-          await handleUnauthorizedResponse();
-          throw new Error("Session expired");
-        }
-        
-        if (!response.ok) {
-          throw new Error("Failed to fetch appointment data");
-        }
-        
-        const data = await response.json();
-        console.log(`Polled and received ${data.length} appointments`);
-        setSortedAppointments(data);
-      } catch (error) {
-        console.error("Error polling appointment data:", error);
+    // Set up regular polling as a backup
+    const pollingInterval = setInterval(async () => {
+      if (parentRefresh) {
+        await parentRefresh();
       }
-    };
-    
-    // Set up regular polling
-    const pollingInterval = setInterval(fetchAppointmentData, 8000); // Poll every 8 seconds
+    }, 15000); // Poll every 15 seconds
     
     return () => clearInterval(pollingInterval);
-  }, [shopId]);
+  }, [shopId, parentRefresh]);
 
   return (
     <div className="space-y-4">      
@@ -571,6 +658,22 @@ export default function QueuePage() {
   const [scheduledAppointments, setScheduledAppointments] = useState<Appointment[]>([]);
   const [completedAppointments, setCompletedAppointments] = useState<Appointment[]>([]);
   const [activeTab, setActiveTab] = useState<string>("main");
+  const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
+
+  // Function to refresh all queue data
+  const refreshAllQueueData = async () => {
+    if (!selectedShopId) return;
+    
+    try {
+      console.log("Refreshing all queue data");
+      await fetchQueueData();
+      await fetchAppointmentsData();
+      // Increment refresh trigger to force components to update
+      setRefreshTrigger(prev => prev + 1);
+    } catch (error) {
+      console.error("Error refreshing queue data:", error);
+    }
+  };
 
   // Define fetchQueueData function so it can be referenced in useEffect
   const fetchQueueData = async () => {
@@ -606,7 +709,14 @@ export default function QueuePage() {
 
       const data = await response.json();
       console.log("Queue data received:", data);
-      setQueueData(data);
+      
+      // Add shop_id to each queue item
+      const dataWithShopId = data.map((item: QueueItem) => ({
+        ...item,
+        shop_id: parseInt(selectedShopId)
+      }));
+      
+      setQueueData(dataWithShopId);
     } catch (error) {
       if (error instanceof Error && error.message === "Session expired") {
         throw error;
@@ -785,9 +895,13 @@ export default function QueuePage() {
                         <h3 className="text-lg font-medium mb-4">Queue</h3>
                         <QueueSection 
                           items={queueData.filter(item => 
-                            item.status === "CHECKED_IN" && !item.service_end_time
+                            !item.service_end_time && 
+                            item.status !== "COMPLETED" && 
+                            item.status !== "CANCELLED"
                           )}
                           shopId={selectedShopId}
+                          parentRefresh={refreshAllQueueData}
+                          key={`queue-main-${refreshTrigger}`}
                         />
                       </div>
                       <div>
@@ -795,6 +909,8 @@ export default function QueuePage() {
                         <AppointmentSection 
                           appointments={scheduledAppointments}
                           shopId={selectedShopId}
+                          parentRefresh={refreshAllQueueData}
+                          key={`appointments-main-${refreshTrigger}`}
                         />
                       </div>
                     </div>
@@ -805,9 +921,13 @@ export default function QueuePage() {
                         <h3 className="text-lg font-medium mb-4">Completed Queue</h3>
                         <QueueSection 
                           items={queueData.filter(item => 
-                            item.service_end_time !== null
+                            item.service_end_time !== null || 
+                            item.status === "COMPLETED" || 
+                            item.status === "CANCELLED"
                           )}
                           shopId={selectedShopId}
+                          parentRefresh={refreshAllQueueData}
+                          key={`queue-completed-${refreshTrigger}`}
                         />
                       </div>
                       <div>
@@ -815,6 +935,8 @@ export default function QueuePage() {
                         <AppointmentSection 
                           appointments={completedAppointments}
                           shopId={selectedShopId}
+                          parentRefresh={refreshAllQueueData}
+                          key={`appointments-completed-${refreshTrigger}`}
                         />
                       </div>
                     </div>
