@@ -67,10 +67,11 @@ interface Appointment {
   created_at: string;
 }
 
-function SortableCard({ item, updatedPosition, refreshQueue }: { 
+function SortableCard({ item, updatedPosition, refreshQueue, isCompleted = false }: { 
   item: QueueItem, 
   updatedPosition?: number,
-  refreshQueue: () => Promise<void>
+  refreshQueue: () => Promise<void>,
+  isCompleted?: boolean
 }) {
   const {
     attributes,
@@ -91,6 +92,9 @@ function SortableCard({ item, updatedPosition, refreshQueue }: {
   const displayPosition = updatedPosition !== undefined ? updatedPosition : item.position_in_queue;
 
   const handleStatusChange = async (newStatus: string) => {
+    // Don't allow status changes in completed queue
+    if (isCompleted) return;
+    
     try {
       const session = await getSession();
       
@@ -210,41 +214,49 @@ function SortableCard({ item, updatedPosition, refreshQueue }: {
               <p className="text-sm text-muted-foreground">{item.phone_number}</p>
             </div>
             <div className="text-right">
-              <Select
-                value={item.status}
-                onValueChange={handleStatusChange}
-              >
-                <SelectTrigger className={`h-8 w-36 ${getStatusColor(item.status)}`}>
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ARRIVED">
-                    <div className="flex items-center gap-2">
-                      <span>🚶</span> Arrived
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="CHECKED_IN">
-                    <div className="flex items-center gap-2">
-                      <span>✓</span> Checked In
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="IN_SERVICE">
-                    <div className="flex items-center gap-2">
-                      <span>✂️</span> In Service
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="COMPLETED">
-                    <div className="flex items-center gap-2">
-                      <span>✅</span> Completed
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="CANCELLED">
-                    <div className="flex items-center gap-2">
-                      <span>❌</span> Cancelled
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+              {isCompleted ? (
+                // If in completed section, show status as non-editable badge
+                <span className={`inline-flex h-8 px-3 items-center rounded-md text-xs font-medium ${getStatusColor(item.status)}`}>
+                  <span className="mr-1">{getStatusIcon(item.status)}</span> {item.status}
+                </span>
+              ) : (
+                // Otherwise show the editable dropdown
+                <Select
+                  value={item.status}
+                  onValueChange={handleStatusChange}
+                >
+                  <SelectTrigger className={`h-8 w-36 ${getStatusColor(item.status)}`}>
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ARRIVED">
+                      <div className="flex items-center gap-2">
+                        <span>🚶</span> Arrived
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="CHECKED_IN">
+                      <div className="flex items-center gap-2">
+                        <span>✓</span> Checked In
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="IN_SERVICE">
+                      <div className="flex items-center gap-2">
+                        <span>✂️</span> In Service
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="COMPLETED">
+                      <div className="flex items-center gap-2">
+                        <span>✅</span> Completed
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="CANCELLED">
+                      <div className="flex items-center gap-2">
+                        <span>❌</span> Cancelled
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           </div>
 
@@ -289,7 +301,12 @@ function SortableCard({ item, updatedPosition, refreshQueue }: {
   );
 }
 
-function QueueSection({ items, shopId, parentRefresh }: { items: QueueItem[], shopId: string, parentRefresh: () => Promise<void> }) {
+function QueueSection({ items, shopId, parentRefresh, isCompleted = false }: { 
+  items: QueueItem[], 
+  shopId: string, 
+  parentRefresh: () => Promise<void>,
+  isCompleted?: boolean
+}) {
   const [sortedItems, setSortedItems] = useState(items);
   const [tempPositions, setTempPositions] = useState<Record<number, number>>({});
   const [isLoading, setIsLoading] = useState(false);
@@ -316,18 +333,6 @@ function QueueSection({ items, shopId, parentRefresh }: { items: QueueItem[], sh
       setIsLoading(false);
     }
   };
-
-  // Restore polling for queue updates at a less frequent interval
-  useEffect(() => {
-    if (!shopId) return;
-    
-    // Don't need to do the initial fetch since parent component handles it
-    
-    // Set up regular polling as a backup
-    const pollingInterval = setInterval(refreshQueue, 15000); // Poll every 15 seconds
-    
-    return () => clearInterval(pollingInterval);
-  }, [shopId]);
 
   // Handle drag start to update temporary positions
   const handleDragStart = (event: any) => {
@@ -463,6 +468,7 @@ function QueueSection({ items, shopId, parentRefresh }: { items: QueueItem[], sh
               item={item} 
               updatedPosition={tempPositions[item.id]}
               refreshQueue={refreshQueue}
+              isCompleted={isCompleted}
             />
           ))}
         </SortableContext>
@@ -653,12 +659,15 @@ export default function QueuePage() {
   const [shops, setShops] = useState<Shop[]>([]);
   const [selectedShopId, setSelectedShopId] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [queueData, setQueueData] = useState<QueueItem[]>([]);
+  const [queueHistoryData, setQueueHistoryData] = useState<QueueItem[]>([]);
   const [scheduledAppointments, setScheduledAppointments] = useState<Appointment[]>([]);
   const [completedAppointments, setCompletedAppointments] = useState<Appointment[]>([]);
   const [activeTab, setActiveTab] = useState<string>("main");
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
+  const [historyRefreshTrigger, setHistoryRefreshTrigger] = useState<number>(0);
 
   // Function to refresh all queue data
   const refreshAllQueueData = async () => {
@@ -672,6 +681,67 @@ export default function QueuePage() {
       setRefreshTrigger(prev => prev + 1);
     } catch (error) {
       console.error("Error refreshing queue data:", error);
+    }
+  };
+
+  // Function to fetch queue history data
+  const fetchQueueHistoryData = async () => {
+    if (!selectedShopId) return;
+    
+    try {
+      setIsHistoryLoading(true); // Only set history loading to true
+      const session = await getSession();
+      
+      if (!session?.user?.accessToken) {
+        await handleUnauthorizedResponse();
+        throw new Error("No access token found. Please login again.");
+      }
+
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${selectedShopId}/queue/history`,
+        {
+          headers: {
+            'Authorization': `Bearer ${session.user.accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (response.status === 401) {
+        await handleUnauthorizedResponse();
+        throw new Error("Session expired");
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to fetch queue history data");
+      }
+
+      const data = await response.json();
+      console.log("Queue history data received:", data);
+      
+      // Add shop_id to each queue history item
+      const dataWithShopId = data.map((item: QueueItem) => ({
+        ...item,
+        shop_id: parseInt(selectedShopId)
+      }));
+      
+      setQueueHistoryData(dataWithShopId);
+      
+      // Increment history refresh trigger to force only history to update
+      setHistoryRefreshTrigger(prev => prev + 1);
+      
+      // Remove success toast
+    } catch (error) {
+      if (error instanceof Error && error.message === "Session expired") {
+        throw error;
+      }
+      console.error('Error fetching queue history data:', error);
+      toast.error("Failed to refresh history data", {
+        duration: 3000,
+      });
+    } finally {
+      setIsHistoryLoading(false); // Only set history loading to false
     }
   };
 
@@ -836,6 +906,13 @@ export default function QueuePage() {
     return () => clearInterval(pollInterval);
   }, [selectedShopId]);
 
+  // Effect for fetching history data when tab changes to completed
+  useEffect(() => {
+    if (activeTab === "completed" && selectedShopId) {
+      fetchQueueHistoryData();
+    }
+  }, [activeTab, selectedShopId]);
+
   if (isLoading) {
     return <LoadingState />;
   }
@@ -918,16 +995,35 @@ export default function QueuePage() {
                   <TabsContent value="completed">
                     <div className="space-y-6">
                       <div>
-                        <h3 className="text-lg font-medium mb-4">Completed Queue</h3>
+                        <div className="flex justify-between items-center mb-4">
+                          <h3 className="text-lg font-medium">Completed Queue</h3>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={fetchQueueHistoryData}
+                            disabled={isHistoryLoading}
+                          >
+                            {isHistoryLoading ? (
+                              <>
+                                <span className="mr-2">
+                                  <svg className="animate-spin h-4 w-4 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                  </svg>
+                                </span>
+                                Refreshing...
+                              </>
+                            ) : (
+                              'Refresh History'
+                            )}
+                          </Button>
+                        </div>
                         <QueueSection 
-                          items={queueData.filter(item => 
-                            item.service_end_time !== null || 
-                            item.status === "COMPLETED" || 
-                            item.status === "CANCELLED"
-                          )}
+                          items={queueHistoryData}
                           shopId={selectedShopId}
-                          parentRefresh={refreshAllQueueData}
-                          key={`queue-completed-${refreshTrigger}`}
+                          parentRefresh={fetchQueueHistoryData}
+                          key={`queue-history-${historyRefreshTrigger}`}
+                          isCompleted={true}
                         />
                       </div>
                       <div>
