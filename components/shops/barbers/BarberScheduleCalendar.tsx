@@ -22,7 +22,11 @@ import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, Clock, Users, Mail, Phone } from "lucide-react"
+import { Calendar, Clock, Users, Mail, Phone, Bell, Trash2, Edit2 } from "lucide-react"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { format } from "date-fns"
 
 interface BarberScheduleCalendarProps {
   barbers: Barber[]
@@ -74,6 +78,8 @@ export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberS
     hasReminder: false,
     reminderTime: ''
   })
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [appointmentToDelete, setAppointmentToDelete] = useState<any>(null)
 
   useEffect(() => {
     if (selectedBarber) {
@@ -120,7 +126,7 @@ export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberS
             endDateTime.setHours(parseInt(endHours), parseInt(endMinutes))
             
             return {
-              id: schedule.id,
+            id: schedule.id,
               title: `${selectedBarber.full_name} - ${dayNames[schedule.day_of_week]}`,
               start: startDateTime.toISOString(),
               end: endDateTime.toISOString(),
@@ -269,10 +275,10 @@ export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberS
 
       const response = await fetch(url, {
         method,
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+          },
         body: JSON.stringify(requestBody),
       })
 
@@ -447,14 +453,138 @@ export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberS
     }
   }
 
+  const handleDeleteAppointment = async () => {
+    try {
+      if (!appointmentToDelete?.id) {
+        toast.error('No appointment selected for deletion')
+        return
+      }
+
+      const endpoint = `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/appointments/${appointmentToDelete.id}/`
+      
+      const response = await fetch(endpoint, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Failed to delete appointment')
+      }
+
+      // Remove the appointment from the events list
+      setEvents(events.filter(event => event.id !== appointmentToDelete.id))
+      
+      toast.success('Appointment deleted successfully')
+      setIsDeleteDialogOpen(false)
+      setAppointmentToDelete(null)
+    } catch (error) {
+      console.error('Error deleting appointment:', error)
+      toast.error(error instanceof Error ? error.message : 'Failed to delete appointment')
+    }
+  }
+
   const renderEventContent = (eventInfo: any) => {
+    const props = eventInfo.event.extendedProps
+    const isAppointment = props.type === 'appointment'
+    
     return (
       <div className="flex items-center gap-2 p-1">
         <div 
           className="w-2 h-2 rounded-full" 
           style={{ backgroundColor: eventInfo.event.backgroundColor }}
         />
-        <span className="text-sm font-medium">{eventInfo.event.title}</span>
+        <span className="text-sm font-medium truncate">{eventInfo.event.title}</span>
+        {isAppointment && props.hasReminder && (
+          <Bell className="w-3 h-3 text-yellow-500" />
+        )}
+      </div>
+    )
+  }
+
+  const renderEventTooltip = (event: any) => {
+    const props = event.extendedProps
+    if (props.type !== 'appointment') return null
+
+    return (
+      <div className="space-y-2 p-2">
+        <div className="flex items-center justify-between">
+          <h4 className="font-semibold">{event.title}</h4>
+          <div className="flex items-center gap-2">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleEventClick({ event })
+                    }}
+                  >
+                    <Edit2 className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Edit appointment</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-red-500 hover:text-red-600"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setAppointmentToDelete(event)
+                      setIsDeleteDialogOpen(true)
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Delete appointment</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+        </div>
+        <div className="space-y-1 text-sm">
+          <div className="flex items-center gap-2">
+            <Clock className="h-4 w-4" />
+            <span>{format(new Date(event.start), 'MMM d, yyyy h:mm a')}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            <span>{props.clientName}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Phone className="h-4 w-4" />
+            <span>{props.clientPhone}</span>
+          </div>
+          {props.clientEmail && (
+            <div className="flex items-center gap-2">
+              <Mail className="h-4 w-4" />
+              <span>{props.clientEmail}</span>
+            </div>
+          )}
+          {props.description && (
+            <p className="mt-2 text-sm text-gray-600">{props.description}</p>
+          )}
+          {props.hasReminder && (
+            <div className="flex items-center gap-2 mt-2 text-yellow-600">
+              <Bell className="h-4 w-4" />
+              <span>Reminder set for {props.reminderTime}</span>
+            </div>
+          )}
+        </div>
       </div>
     )
   }
@@ -532,12 +662,12 @@ export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberS
             eventTimeFormat={{
               hour: '2-digit',
               minute: '2-digit',
-              meridiem: false
+              meridiem: true
             }}
             slotLabelFormat={{
               hour: '2-digit',
               minute: '2-digit',
-              meridiem: false
+              meridiem: true
             }}
             slotLabelClassNames="text-sm font-medium"
             dayHeaderClassNames="text-sm font-medium"
@@ -552,16 +682,17 @@ export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberS
             eventDidMount={(info) => {
               const event = info.event
               const props = event.extendedProps
-              info.el.title = `
-                ${event.title}
-                ${props.type === 'appointment' ? `
+              if (props.type === 'appointment') {
+                const tooltipContent = `
+                  ${event.title}
                   Client: ${props.clientName}
                   Phone: ${props.clientPhone}
-                  Email: ${props.clientEmail}
-                  ${props.description ? `\nDescription: ${props.description}` : ''}
-                  ${props.hasReminder ? `\nReminder: ${props.reminderTime}` : ''}
-                ` : ''}
-              `
+                  ${props.clientEmail ? `Email: ${props.clientEmail}` : ''}
+                  ${props.description ? `Description: ${props.description}` : ''}
+                  ${props.hasReminder ? `Reminder: ${props.reminderTime}` : ''}
+                `
+                info.el.title = tooltipContent
+              }
             }}
           />
         </div>
@@ -605,12 +736,12 @@ export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberS
               <TabsTrigger value="reminder">Reminder</TabsTrigger>
             </TabsList>
             <TabsContent value={formData.type} className="space-y-4">
-              <div className="space-y-2">
+            <div className="space-y-2">
                 <Label htmlFor="title">Title</Label>
-                <Input
-                  id="title"
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              <Input
+                id="title"
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   placeholder="Enter appointment title"
                   required
                 />
@@ -643,14 +774,14 @@ export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberS
                   value={formData.clientEmail}
                   onChange={(e) => setFormData({ ...formData, clientEmail: e.target.value })}
                   placeholder="Enter client email"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="description">Description</Label>
                 <Textarea
-                  id="description"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                id="description"
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="Enter appointment description"
                 />
               </div>
@@ -662,8 +793,8 @@ export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberS
                   value={formData.start}
                   onChange={(e) => setFormData({ ...formData, start: e.target.value })}
                   required
-                />
-              </div>
+              />
+            </div>
               <div className="space-y-2">
                 <Label htmlFor="end">End Time</Label>
                 <Input
@@ -700,9 +831,9 @@ export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberS
                       value={formData.reminderTime}
                       onChange={(e) => setFormData({ ...formData, reminderTime: e.target.value })}
                     />
-                  </div>
-                )}
               </div>
+            )}
+          </div>
             </TabsContent>
           </Tabs>
           <DialogFooter>
@@ -732,6 +863,29 @@ export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberS
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Appointment</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this appointment? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setIsDeleteDialogOpen(false)
+              setAppointmentToDelete(null)
+            }}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteAppointment} className="bg-red-500 hover:bg-red-600">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   )
-}
+} 
