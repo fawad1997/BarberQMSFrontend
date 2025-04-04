@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { getShops } from "@/lib/services/shopService";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Shop } from "@/types/shop";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getSession } from "next-auth/react";
@@ -26,11 +26,32 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { PlusCircle } from "lucide-react";
+import { 
+  PlusCircle, 
+  UserIcon, 
+  Users, 
+  Clock, 
+  Scissors, 
+  CheckCircle2, 
+  XCircle, 
+  CalendarClock, 
+  RefreshCcw, 
+  Calendar, 
+  MoreHorizontal, 
+  Loader2, 
+  ArrowDown, 
+  ArrowUp, 
+  GripVertical, 
+  Store, 
+  Building2, 
+  Timer
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 interface QueueItem {
   id: number;
@@ -332,24 +353,24 @@ function SortableCard({
   // Define status colors for visual cues
   const getStatusColor = (status: string) => {
     switch(status) {
-      case "ARRIVED": return "bg-yellow-100 text-yellow-800";
-      case "CHECKED_IN": return "bg-blue-100 text-blue-800";
-      case "IN_SERVICE": return "bg-purple-100 text-purple-800";
-      case "COMPLETED": return "bg-green-100 text-green-800";
-      case "CANCELLED": return "bg-red-100 text-red-800";
-      default: return "bg-gray-100 text-gray-800";
+      case "ARRIVED": return "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800";
+      case "CHECKED_IN": return "bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-800";
+      case "IN_SERVICE": return "bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 border-purple-200 dark:border-purple-800";
+      case "COMPLETED": return "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800";
+      case "CANCELLED": return "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 border-red-200 dark:border-red-800";
+      default: return "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-300 border-gray-200 dark:border-gray-700";
     }
   };
   
   // Define status icon for visual cues
   const getStatusIcon = (status: string) => {
     switch(status) {
-      case "ARRIVED": return "🚶";
-      case "CHECKED_IN": return "✓";
-      case "IN_SERVICE": return "✂️";
-      case "COMPLETED": return "✅";
-      case "CANCELLED": return "❌";
-      default: return "⏳";
+      case "ARRIVED": return <UserIcon className="w-3.5 h-3.5" />;
+      case "CHECKED_IN": return <CheckCircle2 className="w-3.5 h-3.5" />;
+      case "IN_SERVICE": return <Scissors className="w-3.5 h-3.5" />;
+      case "COMPLETED": return <CheckCircle2 className="w-3.5 h-3.5" />;
+      case "CANCELLED": return <XCircle className="w-3.5 h-3.5" />;
+      default: return <Clock className="w-3.5 h-3.5" />;
     }
   };
 
@@ -439,61 +460,83 @@ function SortableCard({
   };
 
   return (
-    <div ref={setNodeRef} style={style} {...(isDraggable ? attributes : {})} {...(isDraggable ? listeners : {})}>
-      <Card className={`p-4 ${isDraggable ? 'hover:shadow-lg transition-shadow cursor-move' : ''} ${isDragging ? 'shadow-xl border-blue-400' : ''}`}>
+    <motion.div 
+      ref={setNodeRef} 
+      style={style} 
+      {...(isDraggable ? attributes : {})} 
+      {...(isDraggable ? listeners : {})}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -10 }}
+      transition={{ duration: 0.2 }}
+      layout
+      className="mb-3"
+    >
+      <Card className={cn(
+        "p-4 border transition-all dark:border-gray-800",
+        isDraggable && "hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-md",
+        isDragging && "shadow-lg border-blue-400 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20",
+        !isCompleted && item.status === "IN_SERVICE" && "border-l-4 border-l-purple-500 dark:border-l-purple-600"
+      )}>
         <div className="space-y-3">
-          <div className="flex justify-between items-start border-b pb-2">
+          <div className="flex justify-between items-start border-b pb-2 dark:border-gray-800">
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-medium text-lg">{item.full_name}</h3>
+                <h3 className="font-medium text-lg flex items-center">
+                  {item.full_name}
+                </h3>
                 {/* Only show position for active queue items */}
                 {isDraggable && (
-                  <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
-                    Position: {displayPosition}
-                  </span>
+                  <Badge variant="outline" className="flex items-center bg-blue-50 dark:bg-blue-900/20 gap-1 border-blue-200 dark:border-blue-800">
+                    {isDraggable && <GripVertical className="h-3 w-3 text-blue-500 dark:text-blue-400" />}
+                    <span>{displayPosition}</span>
+                  </Badge>
                 )}
               </div>
-              <p className="text-sm text-muted-foreground">{item.phone_number}</p>
+              <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                <UserIcon className="h-3 w-3 text-muted-foreground" /> 
+                {item.phone_number}
+              </p>
             </div>
             <div className="text-right">
               {isCompleted ? (
                 // If in completed section, show status as non-editable badge
-                <span className={`inline-flex h-8 px-3 items-center rounded-md text-xs font-medium ${getStatusColor(item.status)}`}>
-                  <span className="mr-1">{getStatusIcon(item.status)}</span> {item.status}
-                </span>
+                <Badge className={`h-8 px-3 inline-flex items-center gap-1.5 rounded-md border ${getStatusColor(item.status)}`}>
+                  {getStatusIcon(item.status)} {item.status.replace("_", " ")}
+                </Badge>
               ) : (
                 // Otherwise show the editable dropdown
                 <Select
                   value={item.status}
                   onValueChange={handleStatusChange}
                 >
-                  <SelectTrigger className={`h-8 w-36 ${getStatusColor(item.status)}`}>
+                  <SelectTrigger className={`h-8 w-36 border ${getStatusColor(item.status)}`}>
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="ARRIVED">
                       <div className="flex items-center gap-2">
-                        <span>🚶</span> Arrived
+                        <UserIcon className="h-4 w-4 text-yellow-600 dark:text-yellow-400" /> Arrived
                       </div>
                     </SelectItem>
                     <SelectItem value="CHECKED_IN">
                       <div className="flex items-center gap-2">
-                        <span>✓</span> Checked In
+                        <CheckCircle2 className="h-4 w-4 text-blue-600 dark:text-blue-400" /> Checked In
                       </div>
                     </SelectItem>
                     <SelectItem value="IN_SERVICE">
                       <div className="flex items-center gap-2">
-                        <span>✂️</span> In Service
+                        <Scissors className="h-4 w-4 text-purple-600 dark:text-purple-400" /> In Service
                       </div>
                     </SelectItem>
                     <SelectItem value="COMPLETED">
                       <div className="flex items-center gap-2">
-                        <span>✅</span> Completed
+                        <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" /> Completed
                       </div>
                     </SelectItem>
                     <SelectItem value="CANCELLED">
                       <div className="flex items-center gap-2">
-                        <span>❌</span> Cancelled
+                        <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" /> Cancelled
                       </div>
                     </SelectItem>
                   </SelectContent>
@@ -504,7 +547,9 @@ function SortableCard({
 
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
-              <p className="text-muted-foreground">Check-in Time</p>
+              <p className="text-muted-foreground flex items-center gap-1.5">
+                <Clock className="h-3.5 w-3.5 text-muted-foreground" /> Check-in Time
+              </p>
               <p className="font-medium">{new Date(item.check_in_time).toLocaleTimeString('en-US', {
                 hour: '2-digit',
                 minute: '2-digit',
@@ -512,11 +557,15 @@ function SortableCard({
               })}</p>
             </div>
             <div>
-              <p className="text-muted-foreground">Party Size</p>
+              <p className="text-muted-foreground flex items-center gap-1.5">
+                <Users className="h-3.5 w-3.5 text-muted-foreground" /> Party Size
+              </p>
               <p className="font-medium">{item.number_of_people} {item.number_of_people === 1 ? 'person' : 'people'}</p>
             </div>
             <div>
-              <p className="text-muted-foreground">Barber</p>
+              <p className="text-muted-foreground flex items-center gap-1.5">
+                <Scissors className="h-3.5 w-3.5 text-muted-foreground" /> Barber
+              </p>
               {isCompleted || barbers.length === 0 ? (
                 <p className="font-medium">
                   {item.barber ? (
@@ -553,7 +602,9 @@ function SortableCard({
               )}
             </div>
             <div>
-              <p className="text-muted-foreground">Service</p>
+              <p className="text-muted-foreground flex items-center gap-1.5">
+                <Scissors className="h-3.5 w-3.5 text-muted-foreground" /> Service
+              </p>
               {isCompleted || !item.barber?.id ? (
                 <p className="font-medium">
                   {item.service ? (
@@ -586,7 +637,7 @@ function SortableCard({
           </div>
         </div>
       </Card>
-    </div>
+    </motion.div>
   );
 }
 
@@ -734,17 +785,25 @@ function QueueSection({
         // Revert the optimistic update on error
         setSortedItems(items);
         // Show error message to user
-        alert('Failed to update queue positions. Please try again.');
+        toast.error('Failed to update queue positions. Please try again.');
       }
     }
   };
 
   return (
-    <div className="space-y-4 relative">
+    <div className="space-y-4 relative min-h-[150px]">
       {isLoading && (
-        <div className="absolute inset-0 bg-white/50 flex items-center justify-center z-50">
-          <div className="animate-pulse text-blue-500 font-medium">Updating positions...</div>
-        </div>
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="absolute inset-0 bg-white/70 dark:bg-black/40 backdrop-blur-[1px] flex items-center justify-center z-50 rounded-md"
+        >
+          <div className="flex items-center space-x-2 text-blue-600 dark:text-blue-400">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            <span className="font-medium">Updating...</span>
+          </div>
+        </motion.div>
       )}
       
       <DndContext
@@ -758,22 +817,33 @@ function QueueSection({
           items={sortedItems.map(item => item.id)}
           strategy={verticalListSortingStrategy}
         >
-          {sortedItems.map((item) => (
-            <SortableCard 
-              key={item.id} 
-              item={item} 
-              updatedPosition={tempPositions[item.id]}
-              refreshQueue={refreshQueue}
-              isCompleted={isCompleted}
-              barbers={barbers}
-              shopId={shopId}
-            />
-          ))}
+          <AnimatePresence mode="popLayout">
+            {sortedItems.map((item) => (
+              <SortableCard 
+                key={item.id} 
+                item={item} 
+                updatedPosition={tempPositions[item.id]}
+                refreshQueue={refreshQueue}
+                isCompleted={isCompleted}
+                barbers={barbers}
+                shopId={shopId}
+              />
+            ))}
+          </AnimatePresence>
         </SortableContext>
       </DndContext>
       
       {items.length === 0 && (
-        <p className="text-muted-foreground text-center py-4">No customers in queue</p>
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="text-muted-foreground text-center py-8 border rounded-md bg-gray-50/50 dark:bg-gray-900/50 border-dashed dark:border-gray-800"
+        >
+          <div className="flex flex-col items-center justify-center space-y-2">
+            <Users className="h-8 w-8 text-muted-foreground/60" />
+            <p>No customers in queue</p>
+          </div>
+        </motion.div>
       )}
     </div>
   );
@@ -781,65 +851,91 @@ function QueueSection({
 
 function AppointmentCard({ appointment }: { appointment: Appointment }) {
   return (
-    <Card className="p-4 hover:shadow-lg transition-shadow">
-      <div className="space-y-3">
-        <div className="flex justify-between items-start border-b pb-2">
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="font-medium text-lg">{appointment.full_name}</h3>
-              <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
-                {appointment.status}
-              </span>
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -10 }}
+      transition={{ duration: 0.2 }}
+      layout
+    >
+      <Card className="p-4 hover:shadow-md transition-all border dark:border-gray-800 hover:border-blue-200 dark:hover:border-blue-700">
+        <div className="space-y-3">
+          <div className="flex justify-between items-start border-b pb-2 dark:border-gray-800">
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-medium text-lg">{appointment.full_name}</h3>
+                <Badge variant="outline" className={cn(
+                  "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300",
+                  appointment.status === "COMPLETED" && "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-300",
+                  appointment.status === "CANCELLED" && "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-300"
+                )}>
+                  {appointment.status === "COMPLETED" ? <CheckCircle2 className="w-3 h-3 mr-1" /> : 
+                   appointment.status === "CANCELLED" ? <XCircle className="w-3 h-3 mr-1" /> : 
+                   <Calendar className="w-3 h-3 mr-1" />}
+                  {appointment.status}
+                </Badge>
+              </div>
+              <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                <UserIcon className="h-3 w-3 text-muted-foreground" /> {appointment.phone_number}
+              </p>
             </div>
-            <p className="text-sm text-muted-foreground">{appointment.phone_number}</p>
+            <div className="text-right">
+              <Badge variant="outline" className="bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800 text-purple-800 dark:text-purple-300 flex items-center gap-1.5">
+                <CalendarClock className="w-3 h-3" />
+                {new Date(appointment.appointment_time).toLocaleString('en-US', {
+                  weekday: 'short', 
+                  month: 'short', 
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: true
+                })}
+              </Badge>
+            </div>
           </div>
-          <div className="text-right">
-            <span className="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded-full">
-              {new Date(appointment.appointment_time).toLocaleString('en-US', {
-                weekday: 'short', 
-                month: 'short', 
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                hour12: true
-              })}
-            </span>
-          </div>
-        </div>
 
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          <div>
-            <p className="text-muted-foreground">Created At</p>
-            <p className="font-medium">{new Date(appointment.created_at).toLocaleDateString()}</p>
-          </div>
-          <div>
-            <p className="text-muted-foreground">Party Size</p>
-            <p className="font-medium">{appointment.number_of_people} {appointment.number_of_people === 1 ? 'person' : 'people'}</p>
-          </div>
-          <div>
-            <p className="text-muted-foreground">Barber</p>
-            <p className="font-medium">
-              {appointment.barber ? (
-                <span className="flex items-center gap-1">
-                  {appointment.barber.full_name}
-                  <span className={`w-2 h-2 rounded-full ${
-                    appointment.barber.status === 'available' ? 'bg-green-500' : 'bg-yellow-500'
-                  }`} />
-                </span>
-              ) : 'Not assigned'}
-            </p>
-          </div>
-          <div>
-            <p className="text-muted-foreground">Service</p>
-            <p className="font-medium">
-              {appointment.service ? (
-                <span>{appointment.service.name} ({appointment.service.duration} min - ${appointment.service.price})</span>
-              ) : 'Not selected'}
-            </p>
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <p className="text-muted-foreground flex items-center gap-1.5">
+                <Clock className="h-3.5 w-3.5 text-muted-foreground" /> Created At
+              </p>
+              <p className="font-medium">{new Date(appointment.created_at).toLocaleDateString()}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground flex items-center gap-1.5">
+                <Users className="h-3.5 w-3.5 text-muted-foreground" /> Party Size
+              </p>
+              <p className="font-medium">{appointment.number_of_people} {appointment.number_of_people === 1 ? 'person' : 'people'}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground flex items-center gap-1.5">
+                <Scissors className="h-3.5 w-3.5 text-muted-foreground" /> Barber
+              </p>
+              <p className="font-medium">
+                {appointment.barber ? (
+                  <span className="flex items-center gap-1">
+                    {appointment.barber.full_name}
+                    <span className={`w-2 h-2 rounded-full ${
+                      appointment.barber.status === 'available' ? 'bg-green-500' : 'bg-yellow-500'
+                    }`} />
+                  </span>
+                ) : 'Not assigned'}
+              </p>
+            </div>
+            <div>
+              <p className="text-muted-foreground flex items-center gap-1.5">
+                <Scissors className="h-3.5 w-3.5 text-muted-foreground" /> Service
+              </p>
+              <p className="font-medium">
+                {appointment.service ? (
+                  <span>{appointment.service.name} ({appointment.service.duration} min - ${appointment.service.price})</span>
+                ) : 'Not selected'}
+              </p>
+            </div>
           </div>
         </div>
-      </div>
-    </Card>
+      </Card>
+    </motion.div>
   );
 }
 
@@ -871,14 +967,26 @@ function AppointmentSection({ appointments, shopId, parentRefresh }: {
   }, [shopId, parentRefresh]);
 
   return (
-    <div className="space-y-4">      
-      {sortedAppointments.length > 0 ? (
-        sortedAppointments.map((appointment) => (
-          <AppointmentCard key={appointment.id} appointment={appointment} />
-        ))
-      ) : (
-        <p className="text-muted-foreground text-center py-4">No appointments scheduled</p>
-      )}
+    <div className="space-y-4 min-h-[150px]">      
+      <AnimatePresence mode="popLayout">
+        {sortedAppointments.length > 0 ? (
+          sortedAppointments.map((appointment) => (
+            <AppointmentCard key={appointment.id} appointment={appointment} />
+          ))
+        ) : (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-muted-foreground text-center py-8 border rounded-md bg-gray-50/50 dark:bg-gray-900/50 border-dashed dark:border-gray-800"
+            key="empty-appointments"
+          >
+            <div className="flex flex-col items-center justify-center space-y-2">
+              <Calendar className="h-8 w-8 text-muted-foreground/60" />
+              <p>No appointments scheduled</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -891,14 +999,10 @@ function NoShopsState() {
       transition={{ duration: 0.5 }}
       className="container py-10 flex flex-col items-center justify-center text-center"
     >
-      <div className="mb-8">
-        <img 
-          src="/empty-shop.svg" 
-          alt="No Shops" 
-          className="w-64 h-64 mx-auto opacity-80"
-          onError={(e) => {
-            e.currentTarget.src = "https://api.iconify.design/solar:shop-2-outline.svg?color=%23888";
-          }}
+      <div className="mb-8 bg-gray-50 dark:bg-gray-900 p-8 rounded-full">
+        <Store
+          className="w-24 h-24 text-blue-500/60 dark:text-blue-400/60"
+          strokeWidth={1.5}
         />
       </div>
       <h2 className="text-2xl font-bold mb-3">No Shops Found</h2>
@@ -906,8 +1010,8 @@ function NoShopsState() {
         You haven't created any shops yet. Create a shop first to manage queue.
       </p>
       <Link href="/shop/shops/create">
-        <Button>
-          <PlusCircle className="mr-2 h-4 w-4" />
+        <Button className="gap-2">
+          <PlusCircle className="h-4 w-4" />
           Create Your First Shop
         </Button>
       </Link>
@@ -917,7 +1021,11 @@ function NoShopsState() {
 
 function LoadingState() {
   return (
-    <div className="container mx-auto py-10">
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="container mx-auto py-10 space-y-6"
+    >
       <Skeleton className="mb-6 h-8 w-48" />
       <Card className="p-6">
         <div className="space-y-4">
@@ -925,20 +1033,30 @@ function LoadingState() {
             <Skeleton className="h-4 w-24" />
             <Skeleton className="h-10 w-full" />
           </div>
+          <div className="flex items-center justify-center h-16">
+            <div className="flex items-center space-x-2">
+              <Loader2 className="h-6 w-6 animate-spin text-blue-500 dark:text-blue-400" />
+              <span className="text-muted-foreground font-medium">Loading queue data...</span>
+            </div>
+          </div>
           <div className="mt-6">
             <Skeleton className="h-10 w-full mb-6" />
             <div className="space-y-4">
               {[1, 2, 3].map((i) => (
-                <Card key={i}>
+                <Card key={i} className="overflow-hidden">
                   <CardContent className="p-4">
                     <div className="flex justify-between">
                       <div className="space-y-2">
+                        <Skeleton className="h-5 w-32" />
                         <Skeleton className="h-4 w-24" />
-                        <Skeleton className="h-4 w-32" />
                       </div>
-                      <Skeleton className="h-8 w-8 rounded-full" />
+                      <Skeleton className="h-8 w-24 rounded-full" />
                     </div>
-                    <div className="grid grid-cols-3 gap-4 mt-4">
+                    <div className="grid grid-cols-2 gap-4 mt-4">
+                      <div>
+                        <Skeleton className="h-3 w-16 mb-2" />
+                        <Skeleton className="h-4 w-24" />
+                      </div>
                       <div>
                         <Skeleton className="h-3 w-16 mb-2" />
                         <Skeleton className="h-4 w-24" />
@@ -959,7 +1077,7 @@ function LoadingState() {
           </div>
         </div>
       </Card>
-    </div>
+    </motion.div>
   );
 }
 
@@ -1280,7 +1398,24 @@ export default function QueuePage() {
   }
 
   if (error) {
-    return <div className="container py-8 text-red-500">{error}</div>;
+    return (
+      <div className="container py-8 flex items-center justify-center">
+        <div className="p-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 max-w-md">
+          <div className="flex items-center gap-2 mb-2">
+            <XCircle className="h-5 w-5" />
+            <h3 className="font-medium">Error</h3>
+          </div>
+          <p>{error}</p>
+          <Button 
+            variant="outline" 
+            className="mt-4 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/30"
+            onClick={() => window.location.reload()}
+          >
+            <RefreshCcw className="h-4 w-4 mr-2" /> Retry
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   // Show NoShopsState when there are no shops
@@ -1296,12 +1431,16 @@ export default function QueuePage() {
       className="container py-8"
     >
       <div className="flex flex-col space-y-6">
-        <h1 className="text-2xl font-bold">Queue Management</h1>
+        <h1 className="text-2xl font-bold flex items-center gap-2">
+          <Building2 className="h-6 w-6 text-blue-500 dark:text-blue-400" />
+          Walk-In and Appointment Management
+        </h1>
         
-        <Card className="p-6">
+        <Card className="p-6 shadow-sm border-[#f5f5f5] dark:border-gray-800">
           <div className="space-y-4">
             <div className="flex flex-col space-y-2">
-              <label htmlFor="shop-select" className="text-sm font-medium">
+              <label htmlFor="shop-select" className="text-sm font-medium flex items-center gap-1.5">
+                <Store className="h-4 w-4 text-muted-foreground" />
                 Select Shop
               </label>
               <Select
@@ -1323,15 +1462,36 @@ export default function QueuePage() {
 
             {selectedShopId && (
               <div className="mt-6">
-                <Tabs defaultValue="main" className="w-full" onValueChange={setActiveTab}>
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="main">Queue & Appointments</TabsTrigger>
-                    <TabsTrigger value="completed">Completed</TabsTrigger>
+                <Tabs 
+                  defaultValue="main" 
+                  className="w-full" 
+                  onValueChange={setActiveTab}
+                >
+                  <TabsList className="grid w-full grid-cols-2 mb-4">
+                    <TabsTrigger value="main" className="flex items-center gap-1">
+                      <Users className="h-4 w-4" />
+                      Queue & Appointments
+                    </TabsTrigger>
+                    <TabsTrigger value="completed" className="flex items-center gap-1">
+                      <CheckCircle2 className="h-4 w-4" />
+                      Completed
+                    </TabsTrigger>
                   </TabsList>
-                  <TabsContent value="main">
+                  <TabsContent value="main" className="mt-0">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div>
-                        <h3 className="text-lg font-medium mb-4">Queue</h3>
+                      <div className="bg-white dark:bg-gray-950 p-4 rounded-lg border dark:border-gray-800">
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-lg font-medium flex items-center gap-1.5">
+                            <Users className="h-5 w-5 text-blue-500 dark:text-blue-400" />
+                            Queue
+                          </h3>
+                          <Link href="/shop/walk-in">
+                            <Button variant="outline" size="sm" className="flex items-center gap-1.5">
+                              <PlusCircle className="h-4 w-4" />
+                              Add Walk-in
+                            </Button>
+                          </Link>
+                        </div>
                         <QueueSection 
                           items={queueData.filter(item => 
                             !item.service_end_time && 
@@ -1345,8 +1505,19 @@ export default function QueuePage() {
                           barbers={shopBarbers}
                         />
                       </div>
-                      <div>
-                        <h3 className="text-lg font-medium mb-4">Appointments</h3>
+                      <div className="bg-white dark:bg-gray-950 p-4 rounded-lg border dark:border-gray-800">
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-lg font-medium flex items-center gap-1.5">
+                            <Calendar className="h-5 w-5 text-blue-500 dark:text-blue-400" />
+                            Appointments
+                          </h3>
+                          <Link href="/shop/appointment/create">
+                            <Button variant="outline" size="sm" className="flex items-center gap-1.5">
+                              <PlusCircle className="h-4 w-4" />
+                              Create
+                            </Button>
+                          </Link>
+                        </div>
                         <AppointmentSection 
                           appointments={scheduledAppointments}
                           shopId={selectedShopId}
@@ -1356,29 +1527,31 @@ export default function QueuePage() {
                       </div>
                     </div>
                   </TabsContent>
-                  <TabsContent value="completed">
+                  <TabsContent value="completed" className="mt-0">
                     <div className="space-y-6">
-                      <div>
+                      <div className="bg-white dark:bg-gray-950 p-4 rounded-lg border dark:border-gray-800">
                         <div className="flex justify-between items-center mb-4">
-                          <h3 className="text-lg font-medium">Completed Queue</h3>
+                          <h3 className="text-lg font-medium flex items-center gap-1.5">
+                            <CheckCircle2 className="h-5 w-5 text-green-500 dark:text-green-400" />
+                            Completed Queue
+                          </h3>
                           <Button 
                             variant="outline" 
                             size="sm" 
                             onClick={fetchQueueHistoryData}
                             disabled={isHistoryLoading}
+                            className="flex items-center gap-1.5"
                           >
                             {isHistoryLoading ? (
                               <>
-                                <span className="mr-2">
-                                  <svg className="animate-spin h-4 w-4 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                  </svg>
-                                </span>
+                                <Loader2 className="h-4 w-4 animate-spin" />
                                 Refreshing...
                               </>
                             ) : (
-                              'Refresh History'
+                              <>
+                                <RefreshCcw className="h-4 w-4" />
+                                Refresh History
+                              </>
                             )}
                           </Button>
                         </div>
@@ -1391,8 +1564,11 @@ export default function QueuePage() {
                           barbers={shopBarbers}
                         />
                       </div>
-                      <div>
-                        <h3 className="text-lg font-medium mb-4">Completed Appointments</h3>
+                      <div className="bg-white dark:bg-gray-950 p-4 rounded-lg border dark:border-gray-800">
+                        <h3 className="text-lg font-medium mb-4 flex items-center gap-1.5">
+                          <CheckCircle2 className="h-5 w-5 text-green-500 dark:text-green-400" />
+                          Completed Appointments
+                        </h3>
                         <AppointmentSection 
                           appointments={completedAppointments}
                           shopId={selectedShopId}
