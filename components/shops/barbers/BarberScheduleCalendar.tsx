@@ -27,6 +27,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { format } from "date-fns"
+import { useTheme } from "next-themes"
 
 interface BarberScheduleCalendarProps {
   barbers: Barber[]
@@ -55,10 +56,13 @@ const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frida
 const eventColors = {
   appointment: '#4285F4', // Google Calendar blue
   reminder: '#F4B400', // Google Calendar yellow
-  schedule: '#34A853' // Google Calendar green
+  schedule: '#1a73e8', // Google Calendar primary blue
+  tentative: '#EA4335', // Google Calendar red
+  busy: '#34A853' // Google Calendar green
 }
 
 export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberScheduleCalendarProps) {
+  const { theme } = useTheme()
   const [selectedBarber, setSelectedBarber] = useState<Barber | null>(null)
   const [events, setEvents] = useState<any[]>([])
   const [isCreateEventModalOpen, setIsCreateEventModalOpen] = useState(false)
@@ -81,94 +85,121 @@ export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberS
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [appointmentToDelete, setAppointmentToDelete] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
 
-  useEffect(() => {
-    if (selectedBarber) {
-      const fetchEvents = async () => {
-        setIsLoading(true)
-        try {
-          // Fetch appointments
-          const appointmentsResponse = await fetch(
-            `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/appointments/?barber_id=${selectedBarber.id}`,
-            {
-              headers: {
-                'Authorization': `Bearer ${accessToken}`,
-                'Content-Type': 'application/json',
-              },
-            }
-          )
-          if (!appointmentsResponse.ok) {
-            const errorData = await appointmentsResponse.json()
-            console.error('Appointment fetch error:', errorData)
-            throw new Error(errorData.detail || 'Failed to fetch appointments')
+  const fetchEvents = async () => {
+    if (!selectedBarber) return;
+    
+    setIsLoading(true)
+    try {
+      const appointmentsResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/appointments/?barber_id=${selectedBarber.id}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
           }
-          const appointments = await appointmentsResponse.json()
-          
-          // Get current date to create proper date strings
-          const now = new Date()
-          const currentYear = now.getFullYear()
-          const currentMonth = now.getMonth()
-          const currentDate = now.getDate()
-          
-          // Convert schedules to calendar events
-          const scheduleEvents = selectedBarber.schedules.map(schedule => {
-            const eventDate = new Date(currentYear, currentMonth, currentDate)
-            eventDate.setDate(currentDate + (schedule.day_of_week - now.getDay()))
-            
-            const startDateTime = new Date(eventDate)
-            const [startHours, startMinutes] = schedule.start_time.split(':')
-            startDateTime.setHours(parseInt(startHours), parseInt(startMinutes))
-            
-            const endDateTime = new Date(eventDate)
-            const [endHours, endMinutes] = schedule.end_time.split(':')
-            endDateTime.setHours(parseInt(endHours), parseInt(endMinutes))
-            
-            return {
-              id: `schedule-${schedule.id}`,
-              title: `${selectedBarber.full_name} - ${dayNames[schedule.day_of_week]}`,
-              start: startDateTime.toISOString(),
-              end: endDateTime.toISOString(),
-              backgroundColor: eventColors.schedule,
-              borderColor: eventColors.schedule,
-              extendedProps: {
-                type: 'schedule',
-                barberName: selectedBarber.full_name
-              }
-            }
-          })
-
-          // Convert appointments to calendar events
-          const appointmentEvents = appointments.map((appointment: any) => ({
-            id: appointment.id,
-            title: `${appointment.full_name} - ${appointment.phone_number}`,
-            start: appointment.appointment_time,
-            end: new Date(new Date(appointment.appointment_time).getTime() + 30 * 60000).toISOString(), // 30 min duration
-            backgroundColor: eventColors.appointment,
-            borderColor: eventColors.appointment,
-            extendedProps: {
-              type: 'appointment',
-              description: appointment.description || '',
-              clientName: appointment.full_name,
-              clientPhone: appointment.phone_number,
-              clientEmail: appointment.email || '',
-              barberName: selectedBarber.full_name
-            }
-          }))
-          
-          setEvents([...scheduleEvents, ...appointmentEvents])
-        } catch (error) {
-          console.error('Error fetching events:', error)
-          toast.error(error instanceof Error ? error.message : 'Failed to fetch events')
-        } finally {
-          setIsLoading(false)
         }
+      )
+      
+      if (!appointmentsResponse.ok) {
+        let errorMessage = 'Failed to fetch appointments'
+        try {
+          const errorData = await appointmentsResponse.json()
+          errorMessage = errorData.detail || errorMessage
+          console.error('Appointment fetch error:', errorData)
+        } catch (e) {
+          console.error('Error parsing error response:', e)
+        }
+        throw new Error(errorMessage)
       }
 
-      fetchEvents()
-    } else {
-      setEvents([])
+      const appointments = await appointmentsResponse.json()
+      
+      // Get current date to create proper date strings
+      const now = new Date()
+      const currentYear = now.getFullYear()
+      const currentMonth = now.getMonth()
+      const currentDate = now.getDate()
+      
+      // Convert schedules to calendar events
+      const scheduleEvents = selectedBarber.schedules.map(schedule => {
+        const eventDate = new Date(currentYear, currentMonth, currentDate)
+        eventDate.setDate(currentDate + (schedule.day_of_week - now.getDay()))
+        
+        const startDateTime = new Date(eventDate)
+        const [startHours, startMinutes] = schedule.start_time.split(':')
+        startDateTime.setHours(parseInt(startHours), parseInt(startMinutes))
+        
+        const endDateTime = new Date(eventDate)
+        const [endHours, endMinutes] = schedule.end_time.split(':')
+        endDateTime.setHours(parseInt(endHours), parseInt(endMinutes))
+        
+        return {
+          id: `schedule-${schedule.id}`,
+          title: `${selectedBarber.full_name} - ${dayNames[schedule.day_of_week]}`,
+          start: startDateTime.toISOString(),
+          end: endDateTime.toISOString(),
+          backgroundColor: eventColors.schedule,
+          borderColor: eventColors.schedule,
+          extendedProps: {
+            type: 'schedule',
+            barberName: selectedBarber.full_name
+          }
+        }
+      })
+
+      // Convert appointments to calendar events
+      const appointmentEvents = appointments.map((appointment: any) => ({
+        id: appointment.id,
+        title: `${appointment.full_name} - ${appointment.phone_number}`,
+        start: appointment.appointment_time,
+        end: new Date(new Date(appointment.appointment_time).getTime() + 30 * 60000).toISOString(), // 30 min duration
+        backgroundColor: eventColors.appointment,
+        borderColor: eventColors.appointment,
+        extendedProps: {
+          type: 'appointment',
+          description: appointment.description || '',
+          clientName: appointment.full_name,
+          clientPhone: appointment.phone_number,
+          clientEmail: appointment.email || '',
+          barberName: selectedBarber.full_name
+        }
+      }))
+      
+      setEvents([...scheduleEvents, ...appointmentEvents])
+    } catch (error) {
+      console.error('Error fetching events:', error)
+      toast.error(error instanceof Error ? error.message : 'Failed to fetch events')
+    } finally {
+      setIsLoading(false)
     }
-  }, [selectedBarber, shopId, accessToken])
+  }
+
+  useEffect(() => {
+    fetchEvents()
+  }, [selectedBarber, shopId, accessToken, refreshKey])
+
+  const isWithinBusinessHours = (date: Date) => {
+    if (!selectedBarber) return false
+
+    return selectedBarber.schedules.some(schedule => {
+      const day = date.getDay()
+      if (schedule.day_of_week !== day) return false
+
+      const [startHour, startMinute] = schedule.start_time.split(':').map(Number)
+      const [endHour, endMinute] = schedule.end_time.split(':').map(Number)
+      
+      const timeHour = date.getHours()
+      const timeMinute = date.getMinutes()
+      
+      const startTime = startHour * 60 + startMinute
+      const endTime = endHour * 60 + endMinute
+      const time = timeHour * 60 + timeMinute
+      
+      return time >= startTime && time < endTime
+    })
+  }
 
   const handleDateSelect = (selectInfo: any) => {
     if (!selectedBarber) {
@@ -176,22 +207,26 @@ export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberS
       return
     }
 
-    // Format the dates to match the datetime-local input format
-    const formatDate = (date: Date) => {
-      const year = date.getFullYear()
-      const month = String(date.getMonth() + 1).padStart(2, '0')
-      const day = String(date.getDate()).padStart(2, '0')
-      const hours = String(date.getHours()).padStart(2, '0')
-      const minutes = String(date.getMinutes()).padStart(2, '0')
-      return `${year}-${month}-${day}T${hours}:${minutes}`
+    // Check if the selected time is within business hours
+    if (!isWithinBusinessHours(selectInfo.start)) {
+      toast.error('Please select a time within business hours')
+      return
     }
 
     setSelectedDate(selectInfo.start)
     setFormData({
       ...formData,
-      start: formatDate(selectInfo.start),
-      end: formatDate(selectInfo.end),
+      start: selectInfo.startStr,
+      end: new Date(selectInfo.start.getTime() + 30 * 60000).toISOString(),
+      type: 'appointment',
+      isAllDay: false,
+      color: eventColors.appointment,
+      clientName: '',
+      clientPhone: '',
+      clientEmail: '',
+      description: ''
     })
+    setIsEditing(false)
     setIsCreateEventModalOpen(true)
   }
 
@@ -199,11 +234,6 @@ export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberS
     try {
       if (!selectedBarber) {
         toast.error('Please select a barber first')
-        return
-      }
-
-      if (!formData.title.trim()) {
-        toast.error('Please enter a title')
         return
       }
 
@@ -217,22 +247,22 @@ export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberS
         return
       }
 
-      if (!formData.start || !formData.end) {
-        toast.error('Please select start and end times')
+      if (!formData.start) {
+        toast.error('Please select appointment time')
         return
       }
 
       const startDate = new Date(formData.start)
-      const endDate = new Date(formData.end)
 
-      if (startDate >= endDate) {
-        toast.error('End time must be after start time')
+      // Check if the appointment time is within business hours
+      if (!isWithinBusinessHours(startDate)) {
+        toast.error('Selected time is outside business hours')
         return
       }
 
-      // Check for overlapping appointments (excluding the current appointment when editing)
+      // Check for overlapping appointments
       const hasOverlap = events.some(event => {
-        if (event.extendedProps.type !== 'appointment') return false
+        if (event.extendedProps?.type !== 'appointment') return false
         if (isEditing && event.id === formData.id) return false
 
         const eventStart = new Date(event.start)
@@ -240,8 +270,7 @@ export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberS
         
         return (
           (startDate >= eventStart && startDate < eventEnd) ||
-          (endDate > eventStart && endDate <= eventEnd) ||
-          (startDate <= eventStart && endDate >= eventEnd)
+          (startDate <= eventStart && startDate >= eventEnd)
         )
       })
 
@@ -250,89 +279,93 @@ export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberS
         return
       }
 
-      // Format the appointment time to match the expected format
-      const formattedStartTime = startDate.toISOString()
-      const formattedEndTime = endDate.toISOString()
-
+      // Map the request body to match the backend API format exactly
       const requestBody = {
         shop_id: shopId,
         barber_id: selectedBarber.id,
         service_id: 0,
-        appointment_time: formattedStartTime,
+        appointment_time: startDate.toISOString(),
         number_of_people: 1,
         user_id: 0,
         full_name: formData.clientName,
         phone_number: formData.clientPhone
       }
 
+      // Update the endpoint to match the working fetch endpoint structure
       const endpoint = `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/appointments/`
       const method = isEditing ? 'PUT' : 'POST'
       const url = isEditing ? `${endpoint}${formData.id}/` : endpoint
 
       console.log('Making request to:', url)
       console.log('Request body:', requestBody)
+      console.log('Selected barber schedules:', selectedBarber.schedules)
+      console.log('Appointment time:', startDate.toLocaleString(), 'Day:', startDate.getDay())
 
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify(requestBody),
-      })
+      setIsLoading(true)
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.detail || 'Failed to handle appointment')
-      }
+      try {
+        const response = await fetch(url, {
+          method,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify(requestBody)
+        })
 
-      const savedAppointment = await response.json()
-
-      const newEvent = {
-        id: savedAppointment.id,
-        title: `${formData.clientName} - ${formData.clientPhone}`,
-        start: new Date(formattedStartTime),
-        end: new Date(formattedEndTime),
-        backgroundColor: eventColors.appointment,
-        borderColor: eventColors.appointment,
-        extendedProps: {
-          description: formData.description,
-          clientName: formData.clientName,
-          clientPhone: formData.clientPhone,
-          clientEmail: formData.clientEmail,
-          hasReminder: formData.hasReminder,
-          reminderTime: formData.reminderTime
+        if (!response.ok) {
+          let errorMessage = 'Failed to create appointment'
+          try {
+            const errorData = await response.json()
+            errorMessage = errorData.detail || errorMessage
+            console.error('Server error response:', errorData)
+          } catch (e) {
+            console.error('Error parsing error response:', e)
+          }
+          throw new Error(errorMessage)
         }
-      }
 
-      if (isEditing) {
-        setEvents(events.map(event => 
-          event.id === formData.id ? newEvent : event
-        ))
-      } else {
-        setEvents([...events, newEvent])
-      }
+        const savedAppointment = await response.json()
 
-      toast.success(`Appointment ${isEditing ? 'updated' : 'created'} successfully`)
-      setIsCreateEventModalOpen(false)
-      setIsEditing(false)
-      setFormData({
-        title: '',
-        start: '',
-        end: '',
-        description: '',
-        type: 'appointment',
-        isAllDay: false,
-        clientName: '',
-        clientPhone: '',
-        clientEmail: '',
-        color: eventColors.appointment,
-        hasReminder: false,
-        reminderTime: ''
-      })
+        // Update events list with the new appointment
+        const newEvent = {
+          id: savedAppointment.id,
+          title: `${formData.clientName} - ${formData.clientPhone}`,
+          start: startDate.toISOString(),
+          end: new Date(startDate.getTime() + 30 * 60000).toISOString(), // 30 minutes duration
+          backgroundColor: eventColors.appointment,
+          borderColor: eventColors.appointment,
+          extendedProps: {
+            type: 'appointment',
+            description: formData.description || '',
+            clientName: formData.clientName,
+            clientPhone: formData.clientPhone,
+            barberName: selectedBarber.full_name
+          }
+        }
+
+        if (isEditing) {
+          setEvents(events.map(event => 
+            event.id === formData.id ? newEvent : event
+          ))
+        } else {
+          setEvents([...events, newEvent])
+        }
+
+        toast.success(`Appointment ${isEditing ? 'updated' : 'created'} successfully`)
+        setIsCreateEventModalOpen(false)
+        resetFormData()
+        setRefreshKey(prev => prev + 1)
+      } catch (error) {
+        console.error('Network or parsing error:', error)
+        throw error
+      }
     } catch (error) {
-      console.error('Error handling appointment:', error)
-      toast.error(error instanceof Error ? error.message : 'Failed to handle appointment')
+      console.error('Error creating appointment:', error)
+      toast.error(error instanceof Error ? error.message : 'Failed to create appointment')
+    } finally {
+      setIsLoading(false)
+      setIsEditing(false)
     }
   }
 
@@ -405,7 +438,7 @@ export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberS
         return
       }
 
-      const endpoint = `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/appointments/${appointmentToDelete.id}/`
+      const endpoint = `${process.env.NEXT_PUBLIC_API_URL}/appointments/${appointmentToDelete.id}/`
       
       const response = await fetch(endpoint, {
         method: 'DELETE',
@@ -425,6 +458,7 @@ export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberS
       toast.success('Appointment deleted successfully')
       setIsDeleteDialogOpen(false)
       setAppointmentToDelete(null)
+      setRefreshKey(prev => prev + 1)
     } catch (error) {
       console.error('Error deleting appointment:', error)
       toast.error(error instanceof Error ? error.message : 'Failed to delete appointment')
@@ -539,12 +573,28 @@ export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberS
     if (!selectedBarber) return []
 
     return selectedBarber.schedules
-      .filter(schedule => schedule.is_active)
       .map(schedule => ({
         daysOfWeek: [schedule.day_of_week],
         startTime: schedule.start_time,
         endTime: schedule.end_time,
       }))
+  }
+
+  const resetFormData = () => {
+    setFormData({
+      title: '',
+      start: '',
+      end: '',
+      description: '',
+      type: 'appointment',
+      isAllDay: false,
+      clientName: '',
+      clientPhone: '',
+      clientEmail: '',
+      color: eventColors.appointment,
+      hasReminder: false,
+      reminderTime: ''
+    })
   }
 
   return (
@@ -560,7 +610,7 @@ export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberS
                 setSelectedBarber(barber || null)
               }}
             >
-              <SelectTrigger className="w-[200px] bg-white">
+              <SelectTrigger className="w-[200px]">
                 <SelectValue placeholder="Select a barber" />
               </SelectTrigger>
               <SelectContent>
@@ -575,9 +625,98 @@ export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberS
         </div>
       </CardHeader>
       <CardContent>
-        <div className="h-[700px] bg-white relative">
+        <style>
+          {`
+            .fc {
+              --fc-event-bg-color: ${eventColors.appointment};
+              --fc-event-border-color: ${eventColors.appointment};
+              --fc-today-bg-color: rgba(66, 133, 244, 0.1);
+              --fc-now-indicator-color: ${eventColors.tentative};
+              --fc-highlight-color: rgba(66, 133, 244, 0.2);
+            }
+            .dark .fc {
+              --fc-border-color: rgba(255, 255, 255, 0.2);
+              --fc-page-bg-color: rgb(17, 24, 39);
+              --fc-neutral-bg-color: rgb(31, 41, 55);
+              --fc-list-event-hover-bg-color: rgb(55, 65, 81);
+              --fc-today-bg-color: rgba(66, 133, 244, 0.1);
+            }
+            .dark .fc-theme-standard td, 
+            .dark .fc-theme-standard th {
+              border-color: var(--fc-border-color);
+            }
+            .dark .fc-timegrid-slot-label,
+            .dark .fc-timegrid-axis-cushion,
+            .dark .fc-col-header-cell-cushion,
+            .dark .fc-toolbar-title,
+            .dark .fc-event-title,
+            .dark .fc-event-time {
+              color: rgb(229, 231, 235);
+            }
+            .dark .fc-button {
+              background-color: rgb(31, 41, 55);
+              border-color: rgba(255, 255, 255, 0.2);
+              color: rgb(229, 231, 235);
+            }
+            .dark .fc-button:hover {
+              background-color: rgb(55, 65, 81);
+            }
+            .dark .fc-button-active {
+              background-color: ${eventColors.schedule} !important;
+              border-color: ${eventColors.schedule} !important;
+            }
+            .dark .fc-timegrid-col-bg .fc-non-business {
+              background: rgba(0, 0, 0, 0.2);
+            }
+            .dark .fc-highlight {
+              background: rgba(66, 133, 244, 0.2);
+            }
+            .dark .fc-event {
+              border-color: transparent;
+            }
+            .dark .fc-event:hover {
+              filter: brightness(1.1);
+            }
+            .fc-event {
+              cursor: pointer;
+              transition: all 0.2s ease;
+            }
+            .fc-event:hover {
+              box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+              transform: translateY(-1px);
+            }
+            .fc-toolbar-chunk {
+              display: flex;
+              gap: 0.5rem;
+              align-items: center;
+            }
+            .fc-button {
+              text-transform: capitalize !important;
+              font-weight: 500 !important;
+            }
+            .fc-button-primary {
+              background-color: ${eventColors.schedule} !important;
+              border-color: ${eventColors.schedule} !important;
+            }
+            .fc-button-primary:not(.fc-button-active):hover {
+              background-color: ${eventColors.schedule} !important;
+              filter: brightness(1.1);
+            }
+            .fc-timegrid-slot {
+              height: 48px !important;
+            }
+            .fc-timegrid-slot-label {
+              font-size: 0.875rem;
+            }
+            .fc-col-header-cell {
+              padding: 8px 0;
+              font-weight: 500;
+            }
+          `}
+        </style>
+        <div className="h-[700px] relative dark:bg-gray-900">
           {isLoading && (
-            <div className="absolute inset-0 bg-white/50 flex items-center justify-center z-50">
+            <div className="absolute inset-0 bg-white/50 dark:bg-gray-900/50 flex items-center justify-center z-50">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
             </div>
           )}
@@ -592,7 +731,8 @@ export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberS
             events={events}
             allDaySlot={false}
             height="100%"
-            selectable={false}
+            selectable={true}
+            select={handleDateSelect}
             eventClick={handleEventClick}
             eventContent={renderEventContent}
             eventTimeFormat={{
@@ -605,10 +745,10 @@ export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberS
               minute: '2-digit',
               meridiem: true
             }}
-            slotMinTime="06:00:00"
-            slotMaxTime="21:00:00"
+            slotMinTime="00:00:00"
+            slotMaxTime="24:00:00"
             slotDuration="00:30:00"
-            slotLabelClassNames="text-sm font-medium text-gray-500"
+            slotLabelClassNames="text-sm font-medium"
             dayHeaderClassNames="text-sm font-medium"
             nowIndicator={true}
             eventDisplay="block"
@@ -622,9 +762,94 @@ export function BarberScheduleCalendar({ barbers, shopId, accessToken }: BarberS
             selectConstraint="businessHours"
             eventConstraint="businessHours"
             slotLabelInterval="01:00"
+            weekends={true}
+            firstDay={1}
+            scrollTime="08:00:00"
+            snapDuration="00:15:00"
           />
         </div>
       </CardContent>
+
+      {/* Create/Edit Event Modal */}
+      <Dialog open={isCreateEventModalOpen} onOpenChange={setIsCreateEventModalOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>{isEditing ? 'Edit Appointment' : 'New Appointment'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="clientName">Client Name</Label>
+              <Input
+                id="clientName"
+                placeholder="Enter client name"
+                value={formData.clientName}
+                onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="clientPhone">Phone Number</Label>
+              <Input
+                id="clientPhone"
+                placeholder="Enter phone number"
+                value={formData.clientPhone}
+                onChange={(e) => setFormData({ ...formData, clientPhone: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Appointment Time</Label>
+              <p className="text-sm text-muted-foreground">
+                {selectedDate?.toLocaleString('en-US', {
+                  weekday: 'long',
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="description">Notes (Optional)</Label>
+              <Textarea
+                id="description"
+                placeholder="Add any notes about the appointment"
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                className="h-20"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setIsCreateEventModalOpen(false)
+              resetFormData()
+            }}>
+              Cancel
+            </Button>
+            <Button onClick={handleEventSubmit} disabled={isLoading}>
+              {isLoading ? 'Saving...' : isEditing ? 'Save' : 'Create'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Appointment</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this appointment? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteAppointment} className="bg-red-600 hover:bg-red-700">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   )
 }
