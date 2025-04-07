@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
-import { Store, Building2, AlertTriangle, Clock, Users, Scissors, ChevronDown } from "lucide-react";
+import { Store, Building2, AlertTriangle, Clock, Users, Scissors, ChevronDown, Wifi, WifiOff } from "lucide-react";
 import { getShops } from "@/lib/services/shopService";
 import { Shop } from "@/types/shop";
 import { getApiEndpoint } from "@/lib/utils/api-config";
+import { toast } from "sonner";
 
 // Interface for the queue item data
 interface QueueItem {
@@ -42,6 +43,8 @@ const WalkInsPage = () => {
   const [queueData, setQueueData] = useState<QueueDisplayData | null>(null);
   const [isQueueLoading, setIsQueueLoading] = useState<boolean>(false);
   const [queueError, setQueueError] = useState<string | null>(null);
+  const [isWebSocketConnected, setIsWebSocketConnected] = useState<boolean>(false);
+  const webSocketRef = useRef<WebSocket | null>(null);
 
   // Fetch shops data using shopService
   useEffect(() => {
@@ -69,6 +72,77 @@ const WalkInsPage = () => {
     fetchShopsData();
   }, []);
 
+  // WebSocket connection management
+  useEffect(() => {
+    // Only attempt to connect if we have a selected shop
+    if (!selectedShopId) return;
+
+    // Get the websocket URL from the backend server
+    // Note: WebSocket URLs use ws:// or wss:// protocols instead of http:// or https://
+    const apiUrl = getApiEndpoint("");
+    const wsUrl = apiUrl.replace(/^http/, 'ws') + `ws/queue/${selectedShopId}`;
+    
+    // Create a new WebSocket connection
+    const ws = new WebSocket(wsUrl);
+    webSocketRef.current = ws;
+    
+    // Connection opened
+    ws.addEventListener('open', (event) => {
+      console.log('WebSocket connection opened:', event);
+      setIsWebSocketConnected(true);
+      // Initial data fetch to display something immediately
+      fetchQueueDataForShop(selectedShopId);
+    });
+    
+    // Listen for messages from the server
+    ws.addEventListener('message', (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        console.log('WebSocket message received:', data);
+        setQueueData(data);
+        setQueueError(null);
+      } catch (error) {
+        console.error('Error parsing WebSocket message:', error);
+        setQueueError('Failed to parse WebSocket message');
+      }
+    });
+    
+    // Connection closed
+    ws.addEventListener('close', (event) => {
+      console.log('WebSocket connection closed:', event);
+      setIsWebSocketConnected(false);
+      
+      // If the connection was closed unexpectedly, attempt to reconnect after a delay
+      if (!event.wasClean) {
+        toast.error("Queue connection lost. Trying to reconnect...");
+        setTimeout(() => {
+          if (selectedShopId) {
+            // Fall back to HTTP polling if websocket fails
+            fetchQueueDataForShop(selectedShopId);
+          }
+        }, 5000);
+      }
+    });
+    
+    // Connection error
+    ws.addEventListener('error', (error) => {
+      console.error('WebSocket error:', error);
+      setIsWebSocketConnected(false);
+      setQueueError('WebSocket connection error. Falling back to HTTP polling.');
+      
+      // Fall back to HTTP polling on error
+      fetchQueueDataForShop(selectedShopId);
+    });
+    
+    // Clean up the connection when the component unmounts or when the shop changes
+    return () => {
+      if (ws && ws.readyState !== WebSocket.CLOSED) {
+        ws.close();
+      }
+      webSocketRef.current = null;
+    };
+  }, [selectedShopId]);
+
   // Update date and time
   useEffect(() => {
     function updateDateTime() {
@@ -93,7 +167,7 @@ const WalkInsPage = () => {
     return () => clearInterval(intervalId);
   }, []);
 
-  // Function to fetch queue data for the selected shop
+  // Function to fetch queue data for the selected shop (fallback for WebSocket)
   const fetchQueueDataForShop = async (shopId: string) => {
     try {
       setIsQueueLoading(true);
@@ -109,7 +183,7 @@ const WalkInsPage = () => {
       
       const data = await response.json();
       setQueueData(data);
-      console.log('Queue data fetched:', data);
+      console.log('Queue data fetched via HTTP:', data);
     } catch (err) {
       setQueueError(err instanceof Error ? err.message : 'An unknown error occurred');
       console.error('Error fetching queue data:', err);
@@ -118,28 +192,24 @@ const WalkInsPage = () => {
     }
   };
 
-  // When selectedShopId changes, fetch the queue data for that shop
-  useEffect(() => {
-    if (selectedShopId) {
-      fetchQueueDataForShop(selectedShopId);
-    }
-  }, [selectedShopId]);
-
-  // Function to refresh queue data
+  // Manual refresh function (fallback if WebSocket fails)
   const refreshQueueData = () => {
     if (selectedShopId) {
       fetchQueueDataForShop(selectedShopId);
     }
   };
 
-  // Set up automatic refresh every 30 seconds
+  // Fallback polling mechanism if WebSocket is not connected
   useEffect(() => {
+    // Only set up polling if WebSocket is not connected and we have a shop selected
+    if (isWebSocketConnected || !selectedShopId) return;
+    
     const intervalId = setInterval(() => {
       refreshQueueData();
     }, 30000); // 30 seconds
     
     return () => clearInterval(intervalId);
-  }, [selectedShopId]);
+  }, [isWebSocketConnected, selectedShopId]);
 
   return (
     <div className="flex flex-col items-center justify-between min-h-screen bg-black text-white p-6">
@@ -192,21 +262,36 @@ const WalkInsPage = () => {
               </svg>
               Current Queue
             </h2>
-            {queueData?.current_time && (
-              <div className="flex items-center text-white">
-                <Clock className="h-5 w-5 mr-2" />
-                <span>{queueData.current_time}</span>
-              </div>
-            )}
+            <div className="flex items-center gap-3">
+              {/* WebSocket connection indicator */}
+              {isWebSocketConnected ? (
+                <div className="flex items-center text-green-300">
+                  <Wifi className="h-4 w-4 mr-1" />
+                  <span className="text-xs">LIVE</span>
+                </div>
+              ) : (
+                <div className="flex items-center text-gray-400">
+                  <WifiOff className="h-4 w-4 mr-1" />
+                  <span className="text-xs">Polling</span>
+                </div>
+              )}
+              
+              {queueData?.current_time && (
+                <div className="flex items-center text-white">
+                  <Clock className="h-5 w-5 mr-2" />
+                  <span>{queueData.current_time}</span>
+                </div>
+              )}
+            </div>
           </div>
           
           <div>
-            {isQueueLoading ? (
+            {isQueueLoading && !queueData ? (
               <div className="p-10 text-center">
                 <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
                 <p className="text-xl text-gray-400">Loading queue data...</p>
               </div>
-            ) : queueError ? (
+            ) : queueError && !queueData ? (
               <div className="p-6 text-center text-red-400">
                 <AlertTriangle className="h-12 w-12 mx-auto mb-3" />
                 <p className="text-xl font-medium mb-2">Failed to load queue</p>
