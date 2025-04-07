@@ -3,9 +3,31 @@
 import { useEffect, useState } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
-import { Store, Building2, AlertTriangle } from "lucide-react";
+import { Store, Building2, AlertTriangle, Clock, Users, Scissors } from "lucide-react";
 import { getShops } from "@/lib/services/shopService";
 import { Shop } from "@/types/shop";
+import { getApiEndpoint } from "@/lib/utils/api-config";
+
+// Interface for the queue item data
+interface QueueItem {
+  name: string;
+  type: string;
+  service: string;
+  position: number;
+  estimated_duration: number;
+  number_of_people: number;
+  calculated_position: number;
+  appointment_time?: string;
+  appointment_date?: string;
+}
+
+// Interface for the queue display data
+interface QueueDisplayData {
+  shop_id: number;
+  shop_name: string;
+  current_time: string;
+  queue: QueueItem[];
+}
 
 const WalkInsPage = () => {
   // State for date and time
@@ -17,19 +39,9 @@ const WalkInsPage = () => {
   const [selectedShopId, setSelectedShopId] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-
-  // Dummy data for queue with both walk-ins and appointments
-  const queueItems = [
-    { id: 1, name: "Asa C.", type: "walk-in" },
-    { id: 2, name: "Ignacio R.", type: "walk-in" },
-    { id: 3, name: "Emily S.", type: "appointment" },
-    { id: 4, name: "Michael J.", type: "walk-in" },
-    { id: 5, name: "Sarah P.", type: "appointment" },
-    { id: 6, name: "David W.", type: "walk-in" },
-    { id: 7, name: "Jennifer K.", type: "appointment" },
-    { id: 8, name: "Carlos M.", type: "walk-in" },
-    // You can add more dummy entries as needed
-  ];
+  const [queueData, setQueueData] = useState<QueueDisplayData | null>(null);
+  const [isQueueLoading, setIsQueueLoading] = useState<boolean>(false);
+  const [queueError, setQueueError] = useState<string | null>(null);
 
   // Fetch shops data using shopService
   useEffect(() => {
@@ -81,11 +93,29 @@ const WalkInsPage = () => {
     return () => clearInterval(intervalId);
   }, []);
 
-  // Function to fetch queue data for the selected shop (will be implemented later)
+  // Function to fetch queue data for the selected shop
   const fetchQueueDataForShop = async (shopId: string) => {
-    // This will be implemented to fetch real data from the API
-    console.log(`Fetching queue data for shop ID: ${shopId}`);
-    // For now, we're using dummy data
+    try {
+      setIsQueueLoading(true);
+      setQueueError(null);
+      
+      const response = await fetch(getApiEndpoint(`queue/display/${shopId}`), {
+        credentials: 'include',
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch queue data: ${response.status} ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      setQueueData(data);
+      console.log('Queue data fetched:', data);
+    } catch (err) {
+      setQueueError(err instanceof Error ? err.message : 'An unknown error occurred');
+      console.error('Error fetching queue data:', err);
+    } finally {
+      setIsQueueLoading(false);
+    }
   };
 
   // When selectedShopId changes, fetch the queue data for that shop
@@ -95,11 +125,29 @@ const WalkInsPage = () => {
     }
   }, [selectedShopId]);
 
+  // Function to refresh queue data
+  const refreshQueueData = () => {
+    if (selectedShopId) {
+      fetchQueueDataForShop(selectedShopId);
+    }
+  };
+
+  // Set up automatic refresh every 30 seconds
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      refreshQueueData();
+    }, 30000); // 30 seconds
+    
+    return () => clearInterval(intervalId);
+  }, [selectedShopId]);
+
   return (
     <div className="flex flex-col items-center justify-between min-h-screen bg-black text-white p-6">
       {/* Shop name header */}
       <div className="w-full text-center mb-6">
-        <h1 className="text-4xl font-bold mb-2">Supreme Cuts Barber Shop</h1>
+        <h1 className="text-4xl font-bold mb-2">
+          {queueData?.shop_name || "Barber Shop"}
+        </h1>
         <p className="text-xl text-blue-400 font-semibold">Customer Queue</p>
       </div>
       
@@ -142,44 +190,82 @@ const WalkInsPage = () => {
       {/* Enhanced queue display */}
       <div className="w-full max-w-4xl mb-auto">
         <div className="bg-gray-900 rounded-xl overflow-hidden shadow-2xl border border-gray-800">
-          <div className="bg-gradient-to-r from-blue-900 to-blue-700 p-4">
+          <div className="bg-gradient-to-r from-blue-900 to-blue-700 p-4 flex justify-between items-center">
             <h2 className="text-2xl font-bold text-white flex items-center">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
               Current Queue
             </h2>
+            {queueData?.current_time && (
+              <div className="flex items-center text-white">
+                <Clock className="h-5 w-5 mr-2" />
+                <span>{queueData.current_time}</span>
+              </div>
+            )}
           </div>
           
           <div>
-            {queueItems.length > 0 ? (
+            {isQueueLoading ? (
+              <div className="p-10 text-center">
+                <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                <p className="text-xl text-gray-400">Loading queue data...</p>
+              </div>
+            ) : queueError ? (
+              <div className="p-6 text-center text-red-400">
+                <AlertTriangle className="h-12 w-12 mx-auto mb-3" />
+                <p className="text-xl font-medium mb-2">Failed to load queue</p>
+                <p className="text-gray-400">{queueError}</p>
+              </div>
+            ) : queueData?.queue && queueData.queue.length > 0 ? (
               <div className="divide-y divide-gray-800">
-                {queueItems.map((customer) => (
+                {queueData.queue.map((item) => (
                   <div 
-                    key={customer.id} 
+                    key={item.calculated_position} 
                     className={`p-4 flex items-center justify-between transition-colors duration-300 ${
-                      customer.type === "appointment" 
+                      item.type.toLowerCase() === "appointment" 
                         ? "bg-blue-900/30 hover:bg-blue-900/50" 
                         : "bg-gray-800 hover:bg-gray-700"
                     }`}
                   >
                     <div className="flex items-center">
                       <div className="text-2xl font-bold mr-4 text-blue-500 w-8 text-center">
-                        {customer.id}.
+                        {item.calculated_position}.
                       </div>
                       <div className="text-xl font-medium text-white">
-                        {customer.name}
+                        {item.name}
+                        <div className="flex items-center gap-3 mt-1 text-sm text-gray-400">
+                          <div className="flex items-center gap-1">
+                            <Scissors className="h-3.5 w-3.5" />
+                            <span>{item.service}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Clock className="h-3.5 w-3.5" />
+                            <span>{item.estimated_duration} min</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Users className="h-3.5 w-3.5" />
+                            <span>{item.number_of_people}</span>
+                          </div>
+                        </div>
                       </div>
                     </div>
                     
-                    <div 
-                      className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                        customer.type === "appointment" 
-                          ? "bg-blue-600 text-blue-100" 
-                          : "bg-green-600 text-green-100"
-                      }`}
-                    >
-                      {customer.type === "appointment" ? "Appointment" : "Walk-in"}
+                    <div className="flex flex-col items-end">
+                      <div 
+                        className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                          item.type.toLowerCase() === "appointment" 
+                            ? "bg-blue-600 text-blue-100" 
+                            : "bg-green-600 text-green-100"
+                        }`}
+                      >
+                        {item.type}
+                      </div>
+                      {item.appointment_time && (
+                        <div className="mt-1 text-sm text-gray-300">
+                          {item.appointment_time}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
