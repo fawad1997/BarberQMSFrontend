@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
-import { Store, Building2, AlertTriangle, Clock, Users, Scissors } from "lucide-react";
+import { Store, Building2, AlertTriangle, Clock, Users, Scissors, ChevronDown } from "lucide-react";
 import { getShops } from "@/lib/services/shopService";
 import { Shop } from "@/types/shop";
 import { getApiEndpoint } from "@/lib/utils/api-config";
@@ -143,18 +143,10 @@ const WalkInsPage = () => {
 
   return (
     <div className="flex flex-col items-center justify-between min-h-screen bg-black text-white p-6">
-      {/* Shop name header */}
-      <div className="w-full text-center mb-6">
-        <h1 className="text-4xl font-bold mb-2">
-          {queueData?.shop_name || "Barber Shop"}
-        </h1>
-        <p className="text-xl text-blue-400 font-semibold">Customer Queue</p>
-      </div>
-      
-      {/* Shop selector */}
-      <Card className="w-full max-w-4xl p-4 bg-gray-900 border-gray-800 mb-6">
+      {/* Integrated shop selector header */}
+      <div className="w-full text-center mb-10">
         {error ? (
-          <div className="p-4 bg-red-900/30 border border-red-800 rounded-md text-red-200 flex items-start gap-3">
+          <div className="max-w-4xl mx-auto p-4 bg-red-900/30 border border-red-800 rounded-md text-red-200 flex items-start gap-3">
             <AlertTriangle className="h-5 w-5 mt-0.5 text-red-400 flex-shrink-0" />
             <div>
               <p className="font-medium mb-1">Error loading shops</p>
@@ -162,18 +154,20 @@ const WalkInsPage = () => {
             </div>
           </div>
         ) : (
-          <div className="flex flex-col space-y-2">
-            <label htmlFor="shop-select" className="text-sm font-medium flex items-center gap-1.5 text-gray-300">
-              <Store className="h-4 w-4 text-gray-400" />
-              Select Shop
-            </label>
+          <div className="relative inline-block">
             <Select
               value={selectedShopId}
               onValueChange={(value) => setSelectedShopId(value)}
               disabled={isLoading || shops.length === 0}
             >
-              <SelectTrigger className="w-full bg-gray-800 border-gray-700 text-white">
-                <SelectValue placeholder={isLoading ? "Loading shops..." : shops.length === 0 ? "No shops available" : "Select a shop"} />
+              <SelectTrigger className="bg-transparent border-0 px-0 text-center flex flex-col items-center mt-4 text-4xl font-bold w-auto">
+                <div className="flex items-center gap-2">
+                  <Building2 className="h-8 w-8 text-blue-400" />
+                  <SelectValue placeholder={isLoading ? "Loading shops..." : shops.length === 0 ? "No shops available" : "Select a shop"}>
+                    <span>{queueData?.shop_name || shops.find(s => s.id.toString() === selectedShopId)?.name || "Barber Shop"}</span>
+                  </SelectValue>
+                  <ChevronDown className="h-5 w-5 text-blue-400" />
+                </div>
               </SelectTrigger>
               <SelectContent className="bg-gray-800 border-gray-700 text-white">
                 {shops.map((shop) => (
@@ -183,9 +177,10 @@ const WalkInsPage = () => {
                 ))}
               </SelectContent>
             </Select>
+            <p className="text-xl text-blue-400 font-semibold mt-2">Customer Queue</p>
           </div>
         )}
-      </Card>
+      </div>
       
       {/* Enhanced queue display */}
       <div className="w-full max-w-4xl mb-auto">
