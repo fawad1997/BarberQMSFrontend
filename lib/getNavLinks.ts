@@ -12,21 +12,42 @@ export const getNavLinks = (role?: string) => {
         route: "Shops",
         path: "/shop/shops",
         icon: "bi bi-shop",
-      },
-      {
-        route: "Barbers",
-        path: "/shop/barbers",
-        icon: "fas fa-cut", 
+        dropdown: true,
+        items: [
+          {
+            route: "Manage Shops",
+            path: "/shop/shops",
+            icon: "bi bi-shop",
+          },
+          {
+            route: "Barbers",
+            path: "/shop/barbers",
+            icon: "fas fa-cut",
+          },
+          {
+            route: "Shop Services",
+            path: "/shop/services",
+            icon: "fas fa-scissors",
+          }
+        ]
       },
       {
         route: "Queue",
         path: "/shop/queue",
-        icon: "bi bi-shop",
-      },
-      {
-        route: "Services",
-        path: "/shop/services",
-        icon: "fas fa-scissors", 
+        icon: "bi bi-people-fill",
+        dropdown: true,
+        items: [
+          {
+            route: "Queue Dashboard",
+            path: "/shop/queue",
+            icon: "bi bi-list-ul",
+          },
+          {
+            route: "Walk-Ins",
+            path: "/shop/walkins",
+            icon: "bi bi-person-walking",
+          }
+        ]
       },
     ];
   }
