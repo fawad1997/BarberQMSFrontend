@@ -1,6 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Card } from "@/components/ui/card";
+import { Store, Building2, AlertTriangle } from "lucide-react";
+import { getShops } from "@/lib/services/shopService";
+import { Shop } from "@/types/shop";
 
 const WalkInsPage = () => {
   // State for date and time
@@ -8,6 +13,10 @@ const WalkInsPage = () => {
     date: "",
     time: ""
   });
+  const [shops, setShops] = useState<Shop[]>([]);
+  const [selectedShopId, setSelectedShopId] = useState<string>("");
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Dummy data for queue with both walk-ins and appointments
   const queueItems = [
@@ -21,6 +30,32 @@ const WalkInsPage = () => {
     { id: 8, name: "Carlos M.", type: "walk-in" },
     // You can add more dummy entries as needed
   ];
+
+  // Fetch shops data using shopService
+  useEffect(() => {
+    const fetchShopsData = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        
+        // Use the shopService getShops function
+        const shopsData = await getShops();
+        setShops(shopsData);
+        
+        // Auto-select the first shop if available
+        if (shopsData.length > 0 && !selectedShopId) {
+          setSelectedShopId(shopsData[0].id.toString());
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'An unknown error occurred');
+        console.error('Error fetching shops:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchShopsData();
+  }, []);
 
   // Update date and time
   useEffect(() => {
@@ -46,6 +81,20 @@ const WalkInsPage = () => {
     return () => clearInterval(intervalId);
   }, []);
 
+  // Function to fetch queue data for the selected shop (will be implemented later)
+  const fetchQueueDataForShop = async (shopId: string) => {
+    // This will be implemented to fetch real data from the API
+    console.log(`Fetching queue data for shop ID: ${shopId}`);
+    // For now, we're using dummy data
+  };
+
+  // When selectedShopId changes, fetch the queue data for that shop
+  useEffect(() => {
+    if (selectedShopId) {
+      fetchQueueDataForShop(selectedShopId);
+    }
+  }, [selectedShopId]);
+
   return (
     <div className="flex flex-col items-center justify-between min-h-screen bg-black text-white p-6">
       {/* Shop name header */}
@@ -53,6 +102,42 @@ const WalkInsPage = () => {
         <h1 className="text-4xl font-bold mb-2">Supreme Cuts Barber Shop</h1>
         <p className="text-xl text-blue-400 font-semibold">Customer Queue</p>
       </div>
+      
+      {/* Shop selector */}
+      <Card className="w-full max-w-4xl p-4 bg-gray-900 border-gray-800 mb-6">
+        {error ? (
+          <div className="p-4 bg-red-900/30 border border-red-800 rounded-md text-red-200 flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 mt-0.5 text-red-400 flex-shrink-0" />
+            <div>
+              <p className="font-medium mb-1">Error loading shops</p>
+              <p className="text-sm opacity-90">{error}</p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col space-y-2">
+            <label htmlFor="shop-select" className="text-sm font-medium flex items-center gap-1.5 text-gray-300">
+              <Store className="h-4 w-4 text-gray-400" />
+              Select Shop
+            </label>
+            <Select
+              value={selectedShopId}
+              onValueChange={(value) => setSelectedShopId(value)}
+              disabled={isLoading || shops.length === 0}
+            >
+              <SelectTrigger className="w-full bg-gray-800 border-gray-700 text-white">
+                <SelectValue placeholder={isLoading ? "Loading shops..." : shops.length === 0 ? "No shops available" : "Select a shop"} />
+              </SelectTrigger>
+              <SelectContent className="bg-gray-800 border-gray-700 text-white">
+                {shops.map((shop) => (
+                  <SelectItem key={shop.id} value={shop.id.toString()} className="text-white hover:bg-gray-700">
+                    {shop.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+      </Card>
       
       {/* Enhanced queue display */}
       <div className="w-full max-w-4xl mb-auto">
