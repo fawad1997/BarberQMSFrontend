@@ -5,6 +5,8 @@ import dynamic from 'next/dynamic'
 import "./globals.css"
 import { Toaster } from 'sonner';
 import AuthProvider from "@/components/providers/auth-provider"
+import 'bootstrap-icons/font/bootstrap-icons.css'
+import '@fortawesome/fontawesome-free/css/all.min.css'
 
 // Dynamically import the navigation events component
 const NavigationEvents = dynamic(() => import('@/components/providers/navigation-events'), { ssr: false })

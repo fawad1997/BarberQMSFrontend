@@ -1,23 +1,43 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { ModeToggle } from "@/components/mode-toggle"
 import { siteConfig } from "@/config/site"
 import { navLinks } from "@/lib/links"
 import { settings } from "@/config/settings"
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faUser, faSignInAlt, faSignOutAlt } from '@fortawesome/free-solid-svg-icons'
+import { faUser, faSignInAlt, faSignOutAlt, faChevronDown } from '@fortawesome/free-solid-svg-icons'
 import { useSession, signOut } from "next-auth/react"
 import { getNavLinks } from "@/lib/getNavLinks"
 
 export default function Navbar() {
+  const router = useRouter()
   const { data: session, status } = useSession()
   const [navbar, setNavbar] = useState(false)
   const navigationLinks = getNavLinks(session?.user?.role)
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null)
+  const dropdownRefs = useRef<{[key: string]: HTMLDivElement | null}>({})
 
   const handleClick = async () => {
     setNavbar(false)
+    setOpenDropdown(null)
+  }
+
+  const handleDropdownItemClick = (path: string) => {
+    // Navigate immediately
+    router.push(path)
+    
+    // Set a timeout to close the dropdown after navigation starts
+    setTimeout(() => {
+      setOpenDropdown(null)
+      setNavbar(false)
+    }, 100)
+  }
+
+  const toggleDropdown = (route: string) => {
+    setOpenDropdown(openDropdown === route ? null : route)
   }
 
   useEffect(() => {
@@ -27,6 +47,25 @@ export default function Navbar() {
       document.body.style.overflow = "auto"
     }
   }, [navbar])
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      // Don't close if we're clicking inside any of our dropdown refs
+      const isInsideAnyDropdown = Object.values(dropdownRefs.current).some(
+        (ref) => ref && ref.contains(event.target as Node)
+      )
+      
+      if (!isInsideAnyDropdown) {
+        setOpenDropdown(null)
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+    }
+  }, [])
 
   const handleSignOut = async () => {
     await signOut({ redirect: true, callbackUrl: "/" })
@@ -91,15 +130,49 @@ export default function Navbar() {
           >
             <ul className="flex flex-col items-center space-y-4 text-primary opacity-60 md:flex-row md:space-x-6 md:space-y-0">
               {navigationLinks.map((link) => (
-                <li key={link.route}>
-                  <Link
-                    className="hover:underline flex items-center gap-2"
-                    href={link.path}
-                    onClick={handleClick}
-                  >
-                    <i className={link.icon}></i>
-                    {link.route}
-                  </Link>
+                <li key={link.route} className="relative">
+                  {link.dropdown ? (
+                    <div 
+                      className="flex flex-col md:flex-row" 
+                      ref={(el) => dropdownRefs.current[link.route] = el}
+                    >
+                      <button
+                        className="flex items-center gap-2 hover:underline"
+                        onClick={() => toggleDropdown(link.route)}
+                      >
+                        <i className={link.icon}></i>
+                        {link.route}
+                        <FontAwesomeIcon icon={faChevronDown} className={`h-3 w-3 transition-transform ${openDropdown === link.route ? 'rotate-180' : ''}`} />
+                      </button>
+                      
+                      {openDropdown === link.route && (
+                        <div className="md:absolute mt-2 md:mt-0 md:top-full left-0 bg-background border rounded-md shadow-md z-20 w-48 md:w-auto origin-top-left transition-all duration-200 animate-in fade-in-50 slide-in-from-top-5">
+                          <ul className="py-1">
+                            {link.items.map((item) => (
+                              <li key={item.route} className="px-4 py-2 hover:bg-muted transition-colors duration-150">
+                                <button
+                                  onClick={() => handleDropdownItemClick(item.path)}
+                                  className="flex items-center gap-2 whitespace-nowrap w-full text-left"
+                                >
+                                  <i className={item.icon}></i>
+                                  {item.route}
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <Link
+                      className="hover:underline flex items-center gap-2"
+                      href={link.path}
+                      onClick={handleClick}
+                    >
+                      <i className={link.icon}></i>
+                      {link.route}
+                    </Link>
+                  )}
                 </li>
               ))}
             </ul>
