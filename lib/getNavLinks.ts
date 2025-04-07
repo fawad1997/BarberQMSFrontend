@@ -43,7 +43,7 @@ export const getNavLinks = (role?: string) => {
             icon: "bi bi-list-ul",
           },
           {
-            route: "Walk-Ins",
+            route: "Walk-Ins (Screen)",
             path: "/shop/walkins",
             icon: "bi bi-person-walking",
           }

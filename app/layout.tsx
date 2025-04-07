@@ -10,6 +10,7 @@ import '@fortawesome/fontawesome-free/css/all.min.css'
 
 // Dynamically import the navigation events component
 const NavigationEvents = dynamic(() => import('@/components/providers/navigation-events'), { ssr: false })
+const HideNavigation = dynamic(() => import('@/components/providers/hide-navigation'), { ssr: false })
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -70,6 +71,7 @@ export default function RootLayout({
       <body className={inter.className}>
         <AuthProvider>
           <NavigationEvents />
+          <HideNavigation />
           <Suspense fallback={<div>Loading...</div>}>
             <div className="flex min-h-screen flex-col">
               <Navbar />
