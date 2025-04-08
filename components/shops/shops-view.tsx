@@ -175,7 +175,15 @@ export default function ShopsView() {
     <div className="container mx-auto py-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">My Shops</h1>
-        <Button onClick={() => router.push("/shop/shops/create")}>
+        <Button 
+          onClick={() => router.push("/shop/shops/create")}
+          className="bg-primary hover:bg-primary/90 shadow-md hover:shadow-lg transition-all duration-300 flex items-center gap-2 px-4 py-2 rounded-md"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-plus-circle">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="16" />
+            <line x1="8" y1="12" x2="16" y2="12" />
+          </svg>
           Create New Shop
         </Button>
       </div>
