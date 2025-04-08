@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
+import { Shop } from "@/types/shop";
 
 // Define validation schema using Zod
 const shopFormSchema = z.object({
@@ -41,22 +42,49 @@ interface EditShopProps {
   isOpen: boolean;
   onClose: () => void;
   shopId: string;
-  initialData: z.infer<typeof shopFormSchema>;
-  onEditComplete: (updatedShop: z.infer<typeof shopFormSchema>) => void;
+  initialData: Shop;
+  onEditComplete: (updatedShop: Shop) => void;
 }
 
 export function EditShop({ isOpen, onClose, shopId, initialData, onEditComplete }: EditShopProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
 
+  // Convert Shop object to form-compatible object
+  const formInitialData = {
+    name: initialData.name,
+    address: initialData.address,
+    city: initialData.city,
+    state: initialData.state,
+    zip_code: initialData.zip_code,
+    phone_number: initialData.phone_number,
+    email: initialData.email,
+    opening_time: initialData.opening_time,
+    closing_time: initialData.closing_time,
+    average_wait_time: initialData.average_wait_time.toString(),
+    has_advertisement: initialData.has_advertisement
+  };
+
   const form = useForm<z.infer<typeof shopFormSchema>>({
     resolver: zodResolver(shopFormSchema),
-    defaultValues: initialData,
+    defaultValues: formInitialData,
   });
 
   // Reset the form when shop data changes
   useEffect(() => {
-    form.reset(initialData);
+    form.reset({
+      name: initialData.name,
+      address: initialData.address,
+      city: initialData.city,
+      state: initialData.state,
+      zip_code: initialData.zip_code,
+      phone_number: initialData.phone_number,
+      email: initialData.email,
+      opening_time: initialData.opening_time,
+      closing_time: initialData.closing_time,
+      average_wait_time: initialData.average_wait_time.toString(),
+      has_advertisement: initialData.has_advertisement
+    });
   }, [initialData, form]);
 
   // Handle form submission
@@ -76,7 +104,10 @@ export function EditShop({ isOpen, onClose, shopId, initialData, onEditComplete 
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.user.accessToken}`,
         },
-        body: JSON.stringify(values),
+        body: JSON.stringify({
+          ...values,
+          average_wait_time: parseInt(values.average_wait_time)
+        }),
       });
 
       if (!response.ok) {
@@ -84,8 +115,14 @@ export function EditShop({ isOpen, onClose, shopId, initialData, onEditComplete 
         throw new Error(errorData?.detail || "Failed to update shop details.");
       }
 
-      const updatedShop = await response.json();
+      const updatedShopData = await response.json();
       toast.success("Shop details updated successfully!");
+
+      // Preserve original shop properties not in the form
+      const updatedShop: Shop = {
+        ...initialData,
+        ...updatedShopData
+      };
 
       onEditComplete(updatedShop);
       onClose();

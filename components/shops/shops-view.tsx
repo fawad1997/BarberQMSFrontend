@@ -195,50 +195,68 @@ export default function ShopsView() {
             </div>
           ) : (
             shops.map((shop) => (
-              <Card key={shop.id}>
-                <CardHeader className="relative">
-                  {/* Delete Button */}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-8 top-4 text-gray-500 hover:text-red-600"
-                    onClick={() => handleDeleteClick(shop)}
-                  >
-                    <Trash2 className="h-5 w-5" />
-                  </Button>
-
-                  {/* Edit Button */}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-20 top-4 text-gray-500 hover:text-blue-600"
-                    onClick={() => handleEditClick(shop)}
-                  >
-                    <Edit className="h-5 w-5" />
-                  </Button>
-
-                  <CardTitle>{shop.name}</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4" />
-                    <span className="text-sm">
-                      {shop.address}, {shop.city}, {shop.state} {shop.zip_code}
+              <Card key={shop.id} className="overflow-hidden border-2 hover:border-primary/50 transition-all duration-300">
+                <div className="bg-gradient-to-r from-primary/10 to-primary/5 p-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <h3 className="text-xl font-bold text-primary">{shop.name}</h3>
+                    <div className="flex space-x-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-gray-500 hover:text-blue-600 hover:bg-blue-50"
+                        onClick={() => handleEditClick(shop)}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-gray-500 hover:text-red-600 hover:bg-red-50"
+                        onClick={() => handleDeleteClick(shop)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className={`text-xs px-2 py-1 rounded-full ${shop.is_open ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                      {shop.is_open ? 'Open Now' : 'Closed'}
                     </span>
+                    <span className="text-xs text-muted-foreground">{shop.formatted_hours}</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Phone className="h-4 w-4" />
-                    <span className="text-sm">{shop.phone_number}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Mail className="h-4 w-4" />
-                    <span className="text-sm">{shop.email}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Clock className="h-4 w-4" />
-                    <span className="text-sm">
-                      Average Wait Time: {String(shop.average_wait_time || 0)} minutes
-                    </span>
+                </div>
+                
+                <CardContent className="pt-4">
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-2">
+                      <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                      <span className="text-sm">
+                        {shop.address}, {shop.city}, {shop.state} {shop.zip_code}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                      <span className="text-sm">{shop.phone_number}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Mail className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                      <span className="text-sm">{shop.email}</span>
+                    </div>
+                    
+                    <div className="mt-4 pt-3 border-t flex justify-between items-center">
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm font-medium">Wait Time:</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <span className="text-sm bg-primary/10 px-2 py-1 rounded">
+                          Current: {shop.estimated_wait_time} min
+                        </span>
+                        <span className="text-sm bg-secondary/10 px-2 py-1 rounded">
+                          Avg: {shop.average_wait_time} min
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -270,7 +288,7 @@ export default function ShopsView() {
       setSelectedShop(null);
     }}
     shopId={selectedShop.id.toString()}
-    initialData={selectedShop} // Pre-fills form with existing data
+    initialData={selectedShop}
     onEditComplete={handleEditComplete}
   />
 )}
