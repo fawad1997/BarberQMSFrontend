@@ -147,13 +147,13 @@ export default function LoginForm() {
           </Button>
         </form>
       </Form>
-
-      <p className="text-center text-sm text-muted-foreground">
+          {/* Will hide register for now */}
+      {/* <p className="text-center text-sm text-muted-foreground">
         Don&apos;t have an account?{" "}
         <Link href="/register" className="text-primary hover:underline">
           Register
         </Link>
-      </p>
+      </p> */}
     </motion.div>
   );
 } 

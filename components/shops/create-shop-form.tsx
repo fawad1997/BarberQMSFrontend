@@ -339,8 +339,8 @@ export default function CreateShopForm() {
             </FormItem>
           )}
         />
-
-        <FormField
+{/* Will hide advertisement for now */}
+        {/* <FormField
           control={form.control}
           name="has_advertisement"
           render={({ field }) => (
@@ -447,7 +447,7 @@ export default function CreateShopForm() {
               )}
             />
           </>
-        )}
+        )} */}
 
         <Button type="submit" disabled={isLoading}>
           {isLoading ? "Creating..." : "Create Shop"}

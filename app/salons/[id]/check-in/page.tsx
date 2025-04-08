@@ -405,7 +405,7 @@ export default function CheckInPage({ params }: { params: { id: string } }) {
               <div className="flex gap-4 w-full">
                 <Link 
                   href={`/salons/${params.id}/queue`}
-                  className="flex-1"
+                  className="w-full"
                 >
                   <Button
                     variant="outline"
@@ -413,18 +413,6 @@ export default function CheckInPage({ params }: { params: { id: string } }) {
                     size="lg"
                   >
                     View Current Queue
-                  </Button>
-                </Link>
-                <Link 
-                  href={`/salons/${params.id}/appointment`}
-                  className="flex-1"
-                >
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    size="lg"
-                  >
-                    Book Appointment
                   </Button>
                 </Link>
               </div>

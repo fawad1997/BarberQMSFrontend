@@ -227,13 +227,14 @@ export default function Navbar() {
             </>
           ) : (
             <>
+              {/* WIll hide register for now
               <Link 
                 href="/register" 
                 className="flex items-center gap-2 hover:underline"
               >
                 <FontAwesomeIcon icon={faUser} />
                 Register
-              </Link>
+              </Link> */}
               <Link 
                 href="/login" 
                 className="flex items-center gap-2 hover:underline"
