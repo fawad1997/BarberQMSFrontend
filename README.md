@@ -119,6 +119,24 @@ The application uses **NextAuth.js** for authentication. Available roles:
 - **Customer**
 - **Barber**
 
+### Single Sign-On (SSO)
+
+The application now supports Google SSO for authentication. To set up SSO:
+
+1. Create a `.env.local` file using the provided `.env.local.example` template
+2. Obtain Google OAuth credentials from the [Google Cloud Console](https://console.cloud.google.com/):
+   - Create a new project
+   - Set up OAuth consent screen
+   - Create OAuth 2.0 credentials
+   - Add authorized redirect URIs: `http://localhost:8000/sso/google/callback`
+3. Update your `.env.local` with the Google Client ID and Secret:
+   ```
+   GOOGLE_CLIENT_ID=your-google-client-id
+   GOOGLE_CLIENT_SECRET=your-google-client-secret
+   ```
+4. Ensure both frontend and backend environment variables are properly configured
+5. Users can now log in with their Google accounts through the "Continue with Google" button on the login page
+
 ## Configuration
 
 You can customize the website by modifying the following files:
