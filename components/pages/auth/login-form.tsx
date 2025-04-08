@@ -21,6 +21,8 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
+import SSOButton from "./sso-button";
 
 const formSchema = z.object({
   username: z.string().min(1, {
@@ -105,6 +107,16 @@ export default function LoginForm() {
       transition={{ duration: 0.5 }}
       className="w-full max-w-md space-y-6"
     >
+      <div className="space-y-4">
+        <SSOButton provider="google" />
+        
+        <div className="relative flex items-center justify-center">
+          <Separator className="flex-1" />
+          <span className="mx-2 text-xs text-muted-foreground">OR</span>
+          <Separator className="flex-1" />
+        </div>
+      </div>
+
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <FormField

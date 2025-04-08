@@ -48,6 +48,46 @@ export const authOptions: NextAuthOptions = {
           return null
         }
       }
+    }),
+    // Add SSO provider for handling Google SSO tokens
+    CredentialsProvider({
+      id: "sso",
+      name: "SSO Login",
+      credentials: {
+        accessToken: { label: "Access Token", type: "text" },
+      },
+      async authorize(credentials) {
+        try {
+          if (!credentials?.accessToken) {
+            return null;
+          }
+
+          // Validate the token with the backend
+          const response = await fetch(getApiEndpoint("auth/validate-token"), {
+            method: "GET",
+            headers: {
+              "Authorization": `Bearer ${credentials.accessToken}`
+            }
+          });
+
+          if (!response.ok) {
+            throw new Error("Failed to validate SSO token");
+          }
+
+          const data = await response.json();
+          
+          return {
+            id: data.user_id.toString(),
+            name: data.full_name,
+            email: data.email,
+            role: data.role,
+            accessToken: credentials.accessToken
+          };
+        } catch (error) {
+          console.error("SSO auth error:", error);
+          return null;
+        }
+      }
     })
   ],
   pages: {
