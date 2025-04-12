@@ -107,10 +107,12 @@ export default function LoginForm() {
       transition={{ duration: 0.5 }}
       className="w-full max-w-md space-y-6"
     >
-      <div className="space-y-4">
+      <div className="space-y-3">
         <SSOButton provider="google" />
+        <SSOButton provider="facebook" />
+        <SSOButton provider="microsoft" />
         
-        <div className="relative flex items-center justify-center">
+        <div className="relative flex items-center justify-center mt-2">
           <Separator className="flex-1" />
           <span className="mx-2 text-xs text-muted-foreground">OR</span>
           <Separator className="flex-1" />

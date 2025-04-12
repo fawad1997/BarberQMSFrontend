@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { siteConfig } from "@/config/site"
-import { navLinks } from "@/lib/links"
+import { navLinks, footerLinks } from "@/lib/links"
 
 export default function Footer() {
   return (
@@ -22,6 +22,16 @@ export default function Footer() {
             ))}
           </ul>
         </div>
+        
+        {/* Legal Links */}
+        <div className="mt-4 flex flex-wrap justify-center gap-4 text-sm text-muted-foreground">
+          {footerLinks.map((link) => (
+            <Link key={link.route} href={link.path} className="hover:text-primary hover:underline">
+              {link.route}
+            </Link>
+          ))}
+        </div>
+        
         <hr className="my-6 text-muted-foreground sm:mx-auto lg:my-8" />
         <span className="block text-sm text-muted-foreground sm:text-center">
           © {new Date().getFullYear()}{" "}

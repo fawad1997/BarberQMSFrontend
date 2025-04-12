@@ -121,21 +121,44 @@ The application uses **NextAuth.js** for authentication. Available roles:
 
 ### Single Sign-On (SSO)
 
-The application now supports Google SSO for authentication. To set up SSO:
+The application supports multiple SSO providers for authentication:
 
-1. Create a `.env.local` file using the provided `.env.local.example` template
-2. Obtain Google OAuth credentials from the [Google Cloud Console](https://console.cloud.google.com/):
+#### Google SSO
+1. Obtain Google OAuth credentials from the [Google Cloud Console](https://console.cloud.google.com/):
    - Create a new project
    - Set up OAuth consent screen
    - Create OAuth 2.0 credentials
    - Add authorized redirect URIs: `http://localhost:8000/sso/google/callback`
-3. Update your `.env.local` with the Google Client ID and Secret:
-   ```
-   GOOGLE_CLIENT_ID=your-google-client-id
-   GOOGLE_CLIENT_SECRET=your-google-client-secret
-   ```
-4. Ensure both frontend and backend environment variables are properly configured
-5. Users can now log in with their Google accounts through the "Continue with Google" button on the login page
+2. Update your `.env.local` with the Google Client ID and Secret
+
+#### Facebook SSO
+1. Obtain Facebook OAuth credentials from the [Facebook Developer Portal](https://developers.facebook.com/):
+   - Create a new app
+   - Set up the Facebook Login product
+   - Configure OAuth settings
+   - Add authorized redirect URIs: `http://localhost:8000/sso/facebook/callback`
+2. Update your `.env.local` with the Facebook Client ID and Secret
+
+#### Microsoft SSO
+1. Obtain Microsoft OAuth credentials from the [Microsoft Azure Portal](https://portal.azure.com/):
+   - Register a new application in Azure Active Directory
+   - Configure platform settings for web
+   - Add redirect URIs: `http://localhost:8000/sso/microsoft/callback`
+2. Update your `.env.local` with the Microsoft Client ID and Secret
+
+#### Environment Setup
+Update your `.env.local` with all provider credentials using the provided template:
+```
+# SSO Provider Credentials
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+FACEBOOK_CLIENT_ID=your-facebook-client-id
+FACEBOOK_CLIENT_SECRET=your-facebook-client-secret
+MICROSOFT_CLIENT_ID=your-microsoft-client-id
+MICROSOFT_CLIENT_SECRET=your-microsoft-client-secret
+```
+
+Users can now log in through any of the supported SSO providers using the corresponding buttons on the login page.
 
 ## Configuration
 
