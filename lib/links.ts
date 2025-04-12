@@ -20,3 +20,22 @@ export const navLinks = [
     icon: "fa-solid fa-comments"
   }
 ]
+
+export const footerLinks = [
+  {
+    route: "Privacy Policy",
+    path: "/legal/privacy-policy"
+  },
+  {
+    route: "Terms of Service",
+    path: "/legal/terms-of-service"
+  },
+  {
+    route: "Data Deletion",
+    path: "/legal/data-deletion"
+  },
+  {
+    route: "Legal",
+    path: "/legal"
+  }
+]
