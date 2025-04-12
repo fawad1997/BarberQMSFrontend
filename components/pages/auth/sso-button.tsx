@@ -10,7 +10,10 @@ interface SSOButtonProps {
 }
 
 export default function SSOButton({ provider, className }: SSOButtonProps) {
+  const [isLoading, setIsLoading] = React.useState(false);
+
   const handleSSOLogin = () => {
+    setIsLoading(true);
     // Redirect to the backend SSO endpoint
     window.location.href = getApiEndpoint(`sso/${provider}/login`);
   };
@@ -39,13 +42,14 @@ export default function SSOButton({ provider, className }: SSOButtonProps) {
         );
       case "microsoft":
         return (
-          <svg viewBox="0 0 23 23" width="20" height="20" xmlns="http://www.w3.org/2000/svg">
-            <path fill="#f3f3f3" d="M0 0h23v23H0z" />
-            <path fill="#f35325" d="M1 1h10v10H1z" />
-            <path fill="#81bc06" d="M12 1h10v10H12z" />
-            <path fill="#05a6f0" d="M1 12h10v10H1z" />
-            <path fill="#ffba08" d="M12 12h10v10H12z" />
-          </svg>
+          <div className="relative h-5 w-5">
+            <svg viewBox="0 0 23 23" width="20" height="20" xmlns="http://www.w3.org/2000/svg">
+              <path fill="#f35325" d="M1 1h10v10H1z" />
+              <path fill="#81bc06" d="M12 1h10v10H12z" />
+              <path fill="#05a6f0" d="M1 12h10v10H1z" />
+              <path fill="#ffba08" d="M12 12h10v10H12z" />
+            </svg>
+          </div>
         );
       default:
         return null;
@@ -70,10 +74,18 @@ export default function SSOButton({ provider, className }: SSOButtonProps) {
       type="button"
       variant="outline"
       onClick={handleSSOLogin}
-      className={`flex items-center justify-center gap-2 w-full ${className || ""}`}
+      disabled={isLoading}
+      className={`relative flex h-11 items-center justify-center gap-3 overflow-hidden transition-all duration-300 hover:shadow-md ${className || ""}`}
     >
-      {renderProviderIcon()}
-      {getProviderText()}
+      <span className="flex items-center justify-center">
+        {renderProviderIcon()}
+      </span>
+      <span className="font-medium">{getProviderText()}</span>
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-background/80">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent"></div>
+        </div>
+      )}
     </Button>
   );
 } 

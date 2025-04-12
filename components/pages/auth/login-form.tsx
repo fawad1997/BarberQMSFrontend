@@ -10,6 +10,7 @@ import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { signIn } from "next-auth/react";
 import { getApiEndpoint } from "@/lib/utils/api-config";
+import { Eye, EyeOff, Mail, Lock } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -37,6 +38,7 @@ export default function LoginForm() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -100,6 +102,10 @@ export default function LoginForm() {
     }
   }
 
+  const togglePasswordVisibility = () => {
+    setShowPassword(!showPassword);
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -107,30 +113,49 @@ export default function LoginForm() {
       transition={{ duration: 0.5 }}
       className="w-full max-w-md space-y-6"
     >
-      <div className="space-y-3">
-        <SSOButton provider="google" />
-        <SSOButton provider="facebook" />
-        <SSOButton provider="microsoft" />
-        
-        <div className="relative flex items-center justify-center mt-2">
-          <Separator className="flex-1" />
-          <span className="mx-2 text-xs text-muted-foreground">OR</span>
-          <Separator className="flex-1" />
-        </div>
+      <div className="grid grid-cols-1 gap-3">
+        <SSOButton 
+          provider="google" 
+          className="border-gray-300 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-900" 
+        />
+        <SSOButton 
+          provider="facebook" 
+          className="bg-[#1877F2]/10 border-[#1877F2]/30 hover:bg-[#1877F2]/20 dark:border-[#1877F2]/20 text-[#1877F2] dark:text-[#1877F2]" 
+        />
+        <SSOButton 
+          provider="microsoft" 
+          className="border-gray-300 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-900" 
+        />
+      </div>
+      
+      <div className="relative flex items-center justify-center">
+        <Separator className="flex-1" />
+        <span className="mx-4 text-xs font-medium text-muted-foreground">OR CONTINUE WITH EMAIL</span>
+        <Separator className="flex-1" />
       </div>
 
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
           <FormField
             control={form.control}
             name="username"
             render={({ field }) => (
-              <FormItem>
-                <FormLabel>Email or Phone Number</FormLabel>
-                <FormControl>
-                  <Input placeholder="john@example.com" type="text" {...field} />
-                </FormControl>
-                <FormMessage />
+              <FormItem className="space-y-2">
+                <FormLabel className="font-medium">Email or Phone Number</FormLabel>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-muted-foreground">
+                    <Mail size={18} />
+                  </div>
+                  <FormControl>
+                    <Input 
+                      placeholder="john@example.com" 
+                      type="text" 
+                      className="pl-10" 
+                      {...field} 
+                    />
+                  </FormControl>
+                </div>
+                <FormMessage className="text-xs" />
               </FormItem>
             )}
           />
@@ -138,33 +163,59 @@ export default function LoginForm() {
             control={form.control}
             name="password"
             render={({ field }) => (
-              <FormItem>
-                <FormLabel>Password</FormLabel>
-                <FormControl>
-                  <Input placeholder="********" type="password" {...field} />
-                </FormControl>
-                <FormMessage />
+              <FormItem className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <FormLabel className="font-medium">Password</FormLabel>
+                  <Link 
+                    href="/forgot-password" 
+                    className="text-xs text-primary hover:underline"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-muted-foreground">
+                    <Lock size={18} />
+                  </div>
+                  <FormControl>
+                    <Input 
+                      placeholder="********" 
+                      type={showPassword ? "text" : "password"} 
+                      className="pl-10 pr-10" 
+                      {...field} 
+                    />
+                  </FormControl>
+                  <div 
+                    className="absolute inset-y-0 right-0 flex items-center pr-3 cursor-pointer text-muted-foreground hover:text-foreground"
+                    onClick={togglePasswordVisibility}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </div>
+                </div>
+                <FormMessage className="text-xs" />
               </FormItem>
             )}
           />
 
           {error && (
-            <div className="text-sm text-red-500 text-center">{error}</div>
+            <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive text-center">
+              {error}
+            </div>
           )}
 
           <Button
             type="submit"
-            className="w-full"
+            className="w-full py-6"
             disabled={isLoading}
           >
             {isLoading ? "Logging in..." : "Login"}
           </Button>
         </form>
       </Form>
-          {/* Will hide register for now */}
-      {/* <p className="text-center text-sm text-muted-foreground">
+      {/* Will hide register for now */}
+      {/* <p className="text-center text-sm text-muted-foreground pt-4">
         Don&apos;t have an account?{" "}
-        <Link href="/register" className="text-primary hover:underline">
+        <Link href="/register" className="text-primary hover:underline font-medium">
           Register
         </Link>
       </p> */}
