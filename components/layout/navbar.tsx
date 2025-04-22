@@ -8,17 +8,26 @@ import { siteConfig } from "@/config/site"
 import { navLinks } from "@/lib/links"
 import { settings } from "@/config/settings"
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faUser, faSignInAlt, faSignOutAlt, faChevronDown } from '@fortawesome/free-solid-svg-icons'
-import { useSession, signOut } from "next-auth/react"
+import { faUser, faSignInAlt, faSignOutAlt, faChevronDown, faUserEdit } from '@fortawesome/free-solid-svg-icons'
+import { signOut } from "next-auth/react"
 import { getNavLinks } from "@/lib/getNavLinks"
+import { EditProfileDialog } from "@/components/pages/auth/edit-profile-dialog"
+import { useSessionUpdate } from "@/lib/hooks/useSessionUpdate"
 
 export default function Navbar() {
   const router = useRouter()
-  const { data: session, status } = useSession()
+  const { session, sessionKey, status } = useSessionUpdate()
   const [navbar, setNavbar] = useState(false)
   const navigationLinks = getNavLinks(session?.user?.role)
   const [openDropdown, setOpenDropdown] = useState<string | null>(null)
   const dropdownRefs = useRef<{[key: string]: HTMLDivElement | null}>({})
+  const [showProfileDialog, setShowProfileDialog] = useState(false)
+  const userMenuRef = useRef<HTMLDivElement | null>(null)
+  
+  // Debug log for session updates in navbar
+  useEffect(() => {
+    console.log("Navbar rendering with session:", session?.user?.name, "Key:", sessionKey);
+  }, [session, sessionKey]);
 
   const handleClick = async () => {
     setNavbar(false)
@@ -51,6 +60,10 @@ export default function Navbar() {
     setOpenDropdown(openDropdown === route ? null : route)
   }
 
+  const toggleUserMenu = () => {
+    setOpenDropdown(openDropdown === "userMenu" ? null : "userMenu")
+  }
+
   useEffect(() => {
     if (navbar) {
       document.body.style.overflow = "hidden"
@@ -63,7 +76,10 @@ export default function Navbar() {
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       // Don't close if we're clicking inside any of our dropdown refs
-      const isInsideAnyDropdown = Object.values(dropdownRefs.current).some(
+      const isInsideAnyDropdown = Object.values({
+        ...dropdownRefs.current, 
+        userMenu: userMenuRef.current
+      }).some(
         (ref) => ref && ref.contains(event.target as Node)
       )
       
@@ -80,6 +96,24 @@ export default function Navbar() {
 
   const handleSignOut = async () => {
     await signOut({ redirect: true, callbackUrl: "/" })
+  }
+
+  const handleEditProfile = () => {
+    setShowProfileDialog(true)
+    setOpenDropdown(null)
+  }
+
+  const handleProfileDialogClose = () => {
+    // Force a re-render of the navbar after profile dialog closes
+    console.log("Profile dialog closed, forcing navbar update");
+    setShowProfileDialog(false);
+    // Use setTimeout to ensure dialog is fully closed before re-render
+    setTimeout(() => {
+      setOpenDropdown(null);
+      // Force a re-render by toggling navbar state
+      setNavbar(prev => !prev);
+      setNavbar(prev => !prev);
+    }, 100);
   }
 
   return (
@@ -208,23 +242,74 @@ export default function Navbar() {
                   )}
                 </li>
               ))}
+
+              {/* Mobile User Menu */}
+              {session && navbar && (
+                <li className="md:hidden w-full">
+                  <div className="border-t pt-2 mt-2 w-full">
+                    <div className="text-sm text-muted-foreground mb-2 text-center" data-profile-name key={`mobile-name-${sessionKey}`}>
+                      {session?.user?.name || "User"}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={handleEditProfile}
+                        className="flex items-center justify-center gap-2 p-2 rounded-md hover:bg-muted transition-colors"
+                      >
+                        <FontAwesomeIcon icon={faUserEdit} className="text-primary/80" />
+                        <span>Edit Profile</span>
+                      </button>
+                      <button
+                        onClick={handleSignOut}
+                        className="flex items-center justify-center gap-2 p-2 rounded-md hover:bg-muted transition-colors text-red-500 dark:text-red-400"
+                      >
+                        <FontAwesomeIcon icon={faSignOutAlt} />
+                        <span>Logout</span>
+                      </button>
+                    </div>
+                  </div>
+                </li>
+              )}
             </ul>
           </div>
         </div>
         <div className="hidden md:flex items-center gap-4">
-          {status === "authenticated" ? (
-            <>
-              <span className="text-sm text-muted-foreground">
-                {session.user?.name}
-              </span>
+          {session ? (
+            <div className="relative" ref={userMenuRef}>
               <button
-                onClick={handleSignOut}
+                onClick={toggleUserMenu}
                 className="flex items-center gap-2 hover:underline"
               >
-                <FontAwesomeIcon icon={faSignOutAlt} />
-                Logout
+                <span className="text-sm text-muted-foreground" data-profile-name key={`desktop-name-${sessionKey}`}>
+                  {session?.user?.name || "User"}
+                </span>
+                <FontAwesomeIcon icon={faChevronDown} className={`h-3 w-3 transition-transform ${openDropdown === "userMenu" ? 'rotate-180' : ''}`} />
               </button>
-            </>
+              
+              {openDropdown === "userMenu" && (
+                <div className="absolute right-0 top-full mt-1 bg-background border rounded-md shadow-md z-20 w-48 origin-top-right transition-all duration-200 animate-in fade-in-50 slide-in-from-top-5">
+                  <ul className="py-1">
+                    <li className="px-4 py-2 hover:bg-muted transition-colors duration-150">
+                      <button
+                        onClick={handleEditProfile}
+                        className="flex items-center gap-2 w-full text-left"
+                      >
+                        <FontAwesomeIcon icon={faUserEdit} className="w-4 h-4 text-primary/80" />
+                        <span>Edit Profile</span>
+                      </button>
+                    </li>
+                    <li className="border-t mt-1 pt-1 px-4 py-2 hover:bg-muted transition-colors duration-150">
+                      <button
+                        onClick={handleSignOut}
+                        className="flex items-center gap-2 w-full text-left text-red-500 dark:text-red-400"
+                      >
+                        <FontAwesomeIcon icon={faSignOutAlt} className="w-4 h-4" />
+                        <span>Logout</span>
+                      </button>
+                    </li>
+                  </ul>
+                </div>
+              )}
+            </div>
           ) : (
             <>
               {/* WIll hide register for now
@@ -247,6 +332,12 @@ export default function Navbar() {
           {settings.themeToggleEnabled && <ModeToggle />}
         </div>
       </nav>
+      
+      {/* Edit Profile Dialog */}
+      <EditProfileDialog 
+        isOpen={showProfileDialog} 
+        onClose={handleProfileDialogClose}
+      />
     </header>
   )
 }
