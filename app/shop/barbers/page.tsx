@@ -42,7 +42,7 @@ import Link from "next/link"
 import { PlusCircle } from "lucide-react"
 import { Session } from "next-auth"
 import { AlertCircle, X } from "lucide-react"
-import { BarberScheduleCalendar } from "@/components/shops/barbers/BarberScheduleCalendar"
+import { BarberBigCalendar } from "@/components/shops/barbers/BarberBigCalendar"
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import { Label } from "@/components/ui/label"
@@ -710,7 +710,7 @@ export default function BarbersPage() {
                       </Card>
                     ))}
                   </div>
-                  <BarberScheduleCalendar 
+                  <BarberBigCalendar 
                     barbers={shop.barbers}
                     shopId={shop.id}
                     accessToken={accessToken}
