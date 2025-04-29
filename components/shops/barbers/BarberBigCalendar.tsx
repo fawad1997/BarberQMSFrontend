@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Calendar, dateFnsLocalizer, View, Event } from 'react-big-calendar'
+import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop'
+import 'react-big-calendar/lib/addons/dragAndDrop/styles.css'
 import { format, parse, startOfWeek, getDay, addDays, addHours } from 'date-fns'
 import { enUS } from 'date-fns/locale'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
@@ -14,6 +16,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
 import { Trash2, Edit, Clock, User, Phone, Calendar as CalendarIcon } from 'lucide-react'
 import { formatInTimeZone } from 'date-fns-tz'
+import { Switch } from '@/components/ui/switch'
 
 // Set up the localizer
 const locales = {
@@ -27,6 +30,9 @@ const localizer = dateFnsLocalizer({
   getDay,
   locales,
 })
+
+// Create DnD Calendar
+const DnDCalendar = withDragAndDrop<EventWithAppointment>(Calendar as any)
 
 interface BarberBigCalendarProps {
   barbers: Barber[]
@@ -67,6 +73,7 @@ interface EventWithAppointment extends Event {
   }
   start: Date
   end: Date
+  barber_id?: number
 }
 
 interface BarberSchedule {
@@ -105,6 +112,16 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
   })
   const [availableServices, setAvailableServices] = useState<Service[]>([])
   const [isLoadingServices, setIsLoadingServices] = useState(false)
+  const [calendarViewMode, setCalendarViewMode] = useState<'work_schedules' | 'appointments'>('appointments')
+  const [isAddScheduleModalOpen, setIsAddScheduleModalOpen] = useState(false)
+  const [scheduleFormData, setScheduleFormData] = useState({
+    date: format(new Date(), 'yyyy-MM-dd'),
+    start_time: '09:00',
+    end_time: '17:00',
+    barber_id: '',
+  })
+  const [selectedSchedule, setSelectedSchedule] = useState<EventWithAppointment | null>(null)
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false)
 
   // Fetch events from the backend
   const fetchEvents = useCallback(async () => {
@@ -129,36 +146,38 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
       }
 
       const data = await response.json()
-      console.log('Fetched appointments:', data)
+      console.log('Raw appointments data from backend:', data)
       
       // Transform the data to match the calendar format
-      const transformedEvents = data.map((appointment: Appointment) => {
-        const startTime = new Date(appointment.appointment_time)
-        const endTime = appointment.end_time 
-          ? new Date(appointment.end_time)
-          : addHours(startTime, 1) // Default to 1 hour if no end time
+      const transformedEvents = data
+        .filter((appointment: Appointment) => appointment.status !== 'cancelled') // Only include non-cancelled appointments
+        .map((appointment: Appointment) => {
+          const startTime = new Date(appointment.appointment_time)
+          const endTime = appointment.end_time 
+            ? new Date(appointment.end_time)
+            : addHours(startTime, 1) // Default to 1 hour if no end time
 
-        return {
-          id: appointment.id,
-          title: appointment.full_name,
-          start: startTime,
-          end: endTime,
-          appointment_time: appointment.appointment_time,
-          status: appointment.status,
-          created_at: appointment.created_at,
-          number_of_people: appointment.number_of_people,
-          shop_id: appointment.shop_id,
-          barber_id: appointment.barber_id,
-          service_id: appointment.service_id,
-          full_name: appointment.full_name,
-          phone_number: appointment.phone_number,
-          barber: appointment.barber,
-          service: appointment.service,
-          appointment,
-        }
-      })
+          return {
+            id: appointment.id,
+            title: appointment.full_name,
+            start: startTime,
+            end: endTime,
+            appointment_time: appointment.appointment_time,
+            status: appointment.status,
+            created_at: appointment.created_at,
+            number_of_people: appointment.number_of_people,
+            shop_id: appointment.shop_id,
+            barber_id: appointment.barber_id,
+            service_id: appointment.service_id,
+            full_name: appointment.full_name,
+            phone_number: appointment.phone_number,
+            barber: appointment.barber,
+            service: appointment.service,
+            appointment,
+          }
+        })
 
-      console.log('Transformed events:', transformedEvents)
+      console.log('Transformed events for calendar:', transformedEvents)
       setEvents(transformedEvents)
     } catch (error) {
       console.error('Error fetching appointments:', error)
@@ -172,23 +191,29 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
 
     try {
       console.log('Fetching barber schedules...')
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/barbers/${barberId}/schedules/`,
-        {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
+      // Fetch schedules for all barbers
+      const schedulePromises = barbers.map(async (barber) => {
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/barbers/${barber.id}/schedules/`,
+          {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            }
           }
+        )
+
+        if (!response.ok) {
+          const errorData = await response.json()
+          console.error(`Error fetching schedules for barber ${barber.id}:`, errorData)
+          return []
         }
-      )
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        console.error('Error fetching barber schedules:', errorData)
-        throw new Error('Failed to fetch barber schedules')
-      }
+        return response.json()
+      })
 
-      const schedules: BarberSchedule[] = await response.json()
+      const allSchedules = await Promise.all(schedulePromises)
+      const schedules = allSchedules.flat()
       console.log('Received barber schedules:', schedules)
       
       // Transform schedules into recurring events
@@ -198,13 +223,10 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
       // Create events for the next 3 months
       for (let i = 0; i < 90; i++) {
         const date = addDays(currentDate, i)
-        const dayOfWeek = getDay(date)
+        const dayOfWeek = getDay(date) // Already in 0-6 format
 
         schedules.forEach(schedule => {
-          // Backend uses 1-7 (Monday-Sunday), convert to 0-6 (Sunday-Saturday)
-          const scheduleDayOfWeek = schedule.day_of_week === 7 ? 0 : schedule.day_of_week - 1
-
-          if (scheduleDayOfWeek === dayOfWeek) {
+          if (schedule.day_of_week === dayOfWeek) {
             const barber = barbers.find(b => b.id === schedule.barber_id)
             if (!barber) {
               console.log(`Barber not found for ID: ${schedule.barber_id}`)
@@ -224,7 +246,7 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
 
             scheduleEvents.push({
               id: `schedule-${schedule.id}-${i}`,
-              title: `${barber.full_name} - Available`,
+              title: `${barber.full_name} - Work Hours`,
               start,
               end,
               resource: {
@@ -410,6 +432,23 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
     }
   }
 
+  // Filter events based on selected barber and view mode
+  const filteredEvents = useCallback(() => {
+    if (calendarViewMode === 'work_schedules') {
+      // Only show schedule events
+      return scheduleEvents.filter(event => 
+        event.resource?.type === 'schedule' && 
+        (!selectedBarber || event.resource.barber_id === selectedBarber)
+      )
+    } else {
+      // Only show appointment events
+      return events.filter(event => 
+        event.appointment && 
+        (!selectedBarber || event.appointment.barber_id === selectedBarber)
+      )
+    }
+  }, [events, scheduleEvents, selectedBarber, calendarViewMode])
+
   // Handle appointment deletion
   const handleDeleteAppointment = async () => {
     if (!selectedEvent?.id || !selectedEvent.appointment?.phone_number) {
@@ -438,10 +477,30 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
         throw new Error(Array.isArray(errorData.detail) ? errorData.detail.join(', ') : errorData.detail || 'Failed to delete appointment')
       }
 
-      // Only update UI after successful deletion
-      await fetchEvents() // Refresh events from backend
-      setIsDeleteModalOpen(false)
+      // Update local state to mark the appointment as cancelled
+      setEvents(prevEvents => {
+        return prevEvents.map(event => {
+          if (event.appointment?.id === selectedEvent.id) {
+            return {
+              ...event,
+              appointment: {
+                ...event.appointment,
+                status: 'cancelled'
+              }
+            }
+          }
+          return event
+        })
+      })
+
+      // Clear selection and close modal
       setSelectedEvent(null)
+      setIsDeleteModalOpen(false)
+
+      // Force a refresh of the events
+      console.log('Refreshing events from backend...')
+      await fetchEvents()
+
       toast.success('Appointment deleted successfully')
     } catch (error) {
       console.error('Error deleting appointment:', error)
@@ -525,6 +584,14 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
           >
             next
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsAddScheduleModalOpen(true)}
+            className="rbc-btn"
+          >
+            Add Work Schedule
+          </Button>
         </div>
         <span className="rbc-toolbar-label">{toolbar.label}</span>
         <div className="rbc-btn-group">
@@ -575,21 +642,6 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
     )
   }
 
-  // Filter events based on selected barber
-  const filteredEvents = useCallback(() => {
-    const allEvents = [...events, ...scheduleEvents]
-    if (!selectedBarber) return allEvents
-
-    const filtered = allEvents.filter(event => {
-      if (event.resource?.type === 'schedule') {
-        return event.resource.barber_id === selectedBarber
-      }
-      return event.appointment?.barber_id === selectedBarber
-    })
-    console.log('Filtered events:', filtered)
-    return filtered
-  }, [events, scheduleEvents, selectedBarber])
-
   // Update the barber selection handler
   const handleBarberChange = useCallback((value: string) => {
     setFormData(prev => ({ ...prev, barber_id: value, service_id: '' }))
@@ -602,13 +654,412 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
     }
   }, [fetchBarberServices])
 
+  // Handle event drop for both appointments and schedules
+  const handleEventDrop = async ({ event, start, end }: { event: EventWithAppointment, start: Date, end: Date }) => {
+    // Handle schedule drag and drop
+    if (event.resource?.type === 'schedule') {
+      try {
+        const scheduleId = event.id.toString().split('-')[1]
+        const dayOfWeek = getDay(start) // Get the new day of week (0-6)
+
+        const scheduleData = {
+          barber_id: event.resource.barber_id,
+          day_of_week: dayOfWeek,
+          start_time: format(start, 'HH:mm'),
+          end_time: format(end, 'HH:mm'),
+        }
+
+        console.log('Updating schedule:', {
+          scheduleId,
+          data: scheduleData
+        })
+
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/barbers/${event.resource.barber_id}/schedules/${scheduleId}`,
+          {
+            method: 'PUT',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(scheduleData),
+          }
+        )
+
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.detail || 'Failed to update schedule')
+        }
+
+        await fetchBarberSchedules()
+        toast.success('Schedule updated successfully')
+        return
+      } catch (err) {
+        console.error('Error updating schedule:', err)
+        toast.error(err instanceof Error ? err.message : 'Failed to update schedule')
+        await fetchBarberSchedules() // Refresh to revert changes
+        return
+      }
+    }
+
+    // Handle appointment drag and drop (existing code)
+    if (!event.appointment) {
+      toast.error('Cannot reschedule this event')
+      return
+    }
+
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/appointments/${event.id}?phone_number=${encodeURIComponent(event.appointment.phone_number)}`,
+        {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            shop_id: shopId,
+            barber_id: event.appointment.barber_id,
+            service_id: event.appointment.service_id || 0,
+            appointment_time: format(start, "yyyy-MM-dd'T'HH:mm:ss"),
+            end_time: format(end, "yyyy-MM-dd'T'HH:mm:ss"),
+            number_of_people: event.appointment.number_of_people,
+            user_id: 0,
+            full_name: event.appointment.full_name,
+            phone_number: event.appointment.phone_number,
+          }),
+        }
+      )
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Failed to reschedule appointment')
+      }
+
+      // Update local state
+      setEvents(prevEvents => 
+        prevEvents.map(prevEvent => {
+          if (prevEvent.id === event.id) {
+            return {
+              ...prevEvent,
+              start,
+              end,
+              appointment: {
+                ...prevEvent.appointment!,
+                appointment_time: format(start, "yyyy-MM-dd'T'HH:mm:ss"),
+                end_time: format(end, "yyyy-MM-dd'T'HH:mm:ss")
+              }
+            }
+          }
+          return prevEvent
+        })
+      )
+
+      toast.success('Appointment rescheduled successfully')
+    } catch (err) {
+      console.error('Error rescheduling appointment:', err)
+      toast.error(err instanceof Error ? err.message : 'Failed to reschedule appointment')
+      await fetchEvents()
+    }
+  }
+
+  // Handle event resize for both appointments and schedules
+  const handleEventResize = async ({ event, start, end }: { event: EventWithAppointment, start: Date, end: Date }) => {
+    // Handle schedule resize
+    if (event.resource?.type === 'schedule') {
+      try {
+        const scheduleId = event.id.toString().split('-')[1]
+        const scheduleData = {
+          barber_id: event.resource.barber_id,
+          day_of_week: getDay(start),
+          start_time: format(start, 'HH:mm'),
+          end_time: format(end, 'HH:mm'),
+        }
+
+        console.log('Updating schedule duration:', {
+          scheduleId,
+          data: scheduleData
+        })
+
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/barbers/${event.resource.barber_id}/schedules/${scheduleId}`,
+          {
+            method: 'PUT',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(scheduleData),
+          }
+        )
+
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.detail || 'Failed to update schedule')
+        }
+
+        await fetchBarberSchedules()
+        toast.success('Schedule updated successfully')
+        return
+      } catch (err) {
+        console.error('Error updating schedule:', err)
+        toast.error(err instanceof Error ? err.message : 'Failed to update schedule')
+        await fetchBarberSchedules() // Refresh to revert changes
+        return
+      }
+    }
+
+    // Handle appointment resize (existing code)
+    if (!event.appointment) {
+      toast.error('Cannot resize this event')
+      return
+    }
+
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/appointments/${event.id}?phone_number=${encodeURIComponent(event.appointment.phone_number)}`,
+        {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            shop_id: shopId,
+            barber_id: event.appointment.barber_id,
+            service_id: event.appointment.service_id || 0,
+            appointment_time: format(start, "yyyy-MM-dd'T'HH:mm:ss"),
+            end_time: format(end, "yyyy-MM-dd'T'HH:mm:ss"),
+            number_of_people: event.appointment.number_of_people,
+            user_id: 0,
+            full_name: event.appointment.full_name,
+            phone_number: event.appointment.phone_number,
+          }),
+        }
+      )
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Failed to update appointment duration')
+      }
+
+      // Update local state
+      setEvents(prevEvents => 
+        prevEvents.map(prevEvent => {
+          if (prevEvent.id === event.id) {
+            return {
+              ...prevEvent,
+              start,
+              end,
+              appointment: {
+                ...prevEvent.appointment!,
+                appointment_time: format(start, "yyyy-MM-dd'T'HH:mm:ss"),
+                end_time: format(end, "yyyy-MM-dd'T'HH:mm:ss")
+              }
+            }
+          }
+          return prevEvent
+        })
+      )
+
+      toast.success('Appointment duration updated successfully')
+    } catch (err) {
+      console.error('Error updating appointment duration:', err)
+      toast.error(err instanceof Error ? err.message : 'Failed to update appointment duration')
+      await fetchEvents()
+    }
+  }
+
+  // Add schedule event component
+  const ScheduleEventComponent = ({ event }: { event: EventWithAppointment }) => {
+    if (!event.resource?.type || event.resource.type !== 'schedule') return null
+
+    const handleEdit = (e: React.MouseEvent) => {
+      e.stopPropagation()
+      if (!event.resource?.barber_id) return
+
+      const scheduleId = event.id.toString().split('-')[1]
+      const scheduleDate = event.start
+      setScheduleFormData({
+        date: format(scheduleDate, 'yyyy-MM-dd'),
+        start_time: format(event.start, 'HH:mm'),
+        end_time: format(event.end, 'HH:mm'),
+        barber_id: event.resource.barber_id.toString(),
+      })
+      setSelectedSchedule(event)
+      setIsAddScheduleModalOpen(true)
+    }
+
+    const handleDelete = (e: React.MouseEvent) => {
+      e.stopPropagation()
+      setSelectedSchedule(event)
+      setIsDeleteConfirmOpen(true)
+    }
+
+    return (
+      <div className="p-1 h-full overflow-hidden bg-gray-200 border border-gray-300 rounded group relative">
+        <div className="font-medium text-gray-700 truncate">{event.title}</div>
+        {event.start && event.end && (
+          <div className="text-xs text-gray-600 truncate">
+            {format(event.start, 'HH:mm')} - {format(event.end, 'HH:mm')}
+          </div>
+        )}
+        <div className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity bg-white rounded shadow p-1">
+          <button
+            onClick={handleEdit}
+            className="text-blue-600 hover:text-blue-800 p-1"
+            title="Edit Schedule"
+          >
+            <Edit className="h-4 w-4" />
+          </button>
+          <button
+            onClick={handleDelete}
+            className="text-red-600 hover:text-red-800 p-1"
+            title="Delete Schedule"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Add delete schedule handler
+  const handleDeleteSchedule = async () => {
+    if (!selectedSchedule?.id || !selectedSchedule.resource?.barber_id) return
+
+    try {
+      const scheduleId = selectedSchedule.id.toString().split('-')[1]
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/barbers/${selectedSchedule.resource.barber_id}/schedules/${scheduleId}`,
+        {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      )
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Failed to delete schedule')
+      }
+
+      await fetchBarberSchedules()
+      setIsDeleteConfirmOpen(false)
+      setSelectedSchedule(null)
+      toast.success('Schedule deleted successfully')
+    } catch (err) {
+      console.error('Error deleting schedule:', err)
+      toast.error(err instanceof Error ? err.message : 'Failed to delete schedule')
+    }
+  }
+
+  // Update schedule submit handler to handle both create and update
+  const handleScheduleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!scheduleFormData.barber_id) {
+      toast.error('Please select a barber')
+      return
+    }
+
+    const startDateTime = new Date(`${scheduleFormData.date}T${scheduleFormData.start_time}`)
+    const endDateTime = new Date(`${scheduleFormData.date}T${scheduleFormData.end_time}`)
+
+    if (endDateTime <= startDateTime) {
+      toast.error('End time must be after start time')
+      return
+    }
+
+    try {
+      const dayOfWeek = getDay(startDateTime)
+      const scheduleData = {
+        barber_id: parseInt(scheduleFormData.barber_id),
+        day_of_week: dayOfWeek,
+        start_time: format(startDateTime, 'HH:mm'),
+        end_time: format(endDateTime, 'HH:mm'),
+      }
+
+      const isEditing = selectedSchedule !== null
+      const scheduleId = isEditing ? selectedSchedule.id.toString().split('-')[1] : ''
+      
+      const url = `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/barbers/${scheduleFormData.barber_id}/schedules/${isEditing ? scheduleId : ''}`
+      
+      console.log(`${isEditing ? 'Updating' : 'Creating'} schedule:`, {
+        url,
+        data: scheduleData
+      })
+
+      const response = await fetch(url, {
+        method: isEditing ? 'PUT' : 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(scheduleData),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        console.error('Server error response:', errorData)
+        
+        if (errorData.detail) {
+          if (typeof errorData.detail === 'string') {
+            throw new Error(errorData.detail)
+          } else if (Array.isArray(errorData.detail)) {
+            throw new Error(errorData.detail.join(', '))
+          } else {
+            throw new Error(JSON.stringify(errorData.detail))
+          }
+        }
+        throw new Error(`Failed to ${isEditing ? 'update' : 'create'} schedule`)
+      }
+
+      const result = await response.json()
+      console.log('Schedule operation successful:', result)
+
+      await fetchBarberSchedules()
+      setIsAddScheduleModalOpen(false)
+      setSelectedSchedule(null)
+      
+      setScheduleFormData({
+        date: format(new Date(), 'yyyy-MM-dd'),
+        start_time: '09:00',
+        end_time: '17:00',
+        barber_id: '',
+      })
+      
+      toast.success(`Work hours ${isEditing ? 'updated' : 'created'} successfully`)
+    } catch (error) {
+      console.error('Error handling schedule:', error)
+      toast.error(error instanceof Error ? error.message : `Failed to ${selectedSchedule ? 'update' : 'create'} work hours`)
+    }
+  }
+
   return (
     <div className="h-[700px]">
-      <Calendar
+      <div className="flex items-center gap-4 mb-2">
+        <span>View:</span>
+        <button
+          className={`px-3 py-1 rounded ${calendarViewMode === 'appointments' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+          onClick={() => setCalendarViewMode('appointments')}
+        >
+          Appointments
+        </button>
+        <button
+          className={`px-3 py-1 rounded ${calendarViewMode === 'work_schedules' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+          onClick={() => setCalendarViewMode('work_schedules')}
+        >
+          Work Schedules
+        </button>
+      </div>
+      <DnDCalendar
         localizer={localizer}
         events={filteredEvents()}
-        startAccessor="start"
-        endAccessor="end"
+        startAccessor={(event: EventWithAppointment) => event.start}
+        endAccessor={(event: EventWithAppointment) => event.end}
         view={view}
         onView={(newView: View) => setView(newView)}
         date={date}
@@ -619,14 +1070,32 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
           day: true
         }}
         selectable
+        resizable
+        onEventDrop={({ event, start, end }: any) => handleEventDrop({ 
+          event: event as EventWithAppointment, 
+          start: start as Date, 
+          end: end as Date 
+        })}
+        onEventResize={({ event, start, end }: any) => handleEventResize({ 
+          event: event as EventWithAppointment,
+          start: start as Date, 
+          end: end as Date 
+        })}
         onSelectSlot={handleSelectSlot}
-        onSelectEvent={(event: EventWithAppointment) => {
-          if (!event.resource?.type) {
-            handleSelectEvent(event)
+        onSelectEvent={(event: any) => {
+          const typedEvent = event as EventWithAppointment
+          if (!typedEvent.resource?.type) {
+            handleSelectEvent(typedEvent)
           }
         }}
         components={{
-          event: EventComponent,
+          event: (props: any) => {
+            const typedEvent = props.event as EventWithAppointment
+            if (typedEvent.resource?.type === 'schedule') {
+              return <ScheduleEventComponent event={typedEvent} />
+            }
+            return <EventComponent event={typedEvent} />
+          },
           toolbar: ToolbarComponent,
         }}
         min={new Date(0, 0, 0, 0, 0, 0)}
@@ -814,6 +1283,134 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
               type="button"
               variant="destructive"
               onClick={handleDeleteAppointment}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Schedule Modal */}
+      <Dialog open={isAddScheduleModalOpen} onOpenChange={(open) => {
+        if (!open) {
+          setSelectedSchedule(null)
+          setScheduleFormData({
+            date: format(new Date(), 'yyyy-MM-dd'),
+            start_time: '09:00',
+            end_time: '17:00',
+            barber_id: '',
+          })
+        }
+        setIsAddScheduleModalOpen(open)
+      }}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>{selectedSchedule ? 'Edit Work Hours' : 'Add Work Hours'}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleScheduleSubmit}>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="barber_id" className="text-right">
+                  Barber
+                </Label>
+                <Select
+                  value={scheduleFormData.barber_id}
+                  onValueChange={(value) => setScheduleFormData(prev => ({ ...prev, barber_id: value }))}
+                >
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue placeholder="Select Barber" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {barbers.map((barber) => (
+                      <SelectItem key={barber.id} value={barber.id.toString()}>
+                        {barber.full_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="date" className="text-right">
+                  Date
+                </Label>
+                <Input
+                  id="date"
+                  type="date"
+                  value={scheduleFormData.date}
+                  onChange={(e) => setScheduleFormData(prev => ({ ...prev, date: e.target.value }))}
+                  className="col-span-3"
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="start_time" className="text-right">
+                  Start Time
+                </Label>
+                <Input
+                  id="start_time"
+                  type="time"
+                  value={scheduleFormData.start_time}
+                  onChange={(e) => setScheduleFormData(prev => ({ ...prev, start_time: e.target.value }))}
+                  className="col-span-3"
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="end_time" className="text-right">
+                  End Time
+                </Label>
+                <Input
+                  id="end_time"
+                  type="time"
+                  value={scheduleFormData.end_time}
+                  onChange={(e) => setScheduleFormData(prev => ({ ...prev, end_time: e.target.value }))}
+                  className="col-span-3"
+                  required
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              {selectedSchedule && (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={() => {
+                    setIsAddScheduleModalOpen(false)
+                    setIsDeleteConfirmOpen(true)
+                  }}
+                >
+                  Delete
+                </Button>
+              )}
+              <Button type="submit">
+                {selectedSchedule ? 'Update' : 'Create'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Delete Work Hours</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p>Are you sure you want to delete these work hours? This action cannot be undone.</p>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsDeleteConfirmOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleDeleteSchedule}
             >
               Delete
             </Button>
