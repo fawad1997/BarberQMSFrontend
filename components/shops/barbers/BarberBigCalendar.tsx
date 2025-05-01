@@ -92,6 +92,13 @@ interface Service {
   price: number
 }
 
+interface BarberScheduleCreate {
+  barber_id: number;
+  start_date: string; // ISO format datetime string
+  end_date: string;   // ISO format datetime string
+  repeat_frequency: "none" | "daily" | "weekly" | "monthly" | "yearly";
+}
+
 export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCalendarProps) {
   const [events, setEvents] = useState<EventWithAppointment[]>([])
   const [scheduleEvents, setScheduleEvents] = useState<EventWithAppointment[]>([])
@@ -115,10 +122,10 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
   const [calendarViewMode, setCalendarViewMode] = useState<'work_schedules' | 'appointments'>('appointments')
   const [isAddScheduleModalOpen, setIsAddScheduleModalOpen] = useState(false)
   const [scheduleFormData, setScheduleFormData] = useState({
-    date: format(new Date(), 'yyyy-MM-dd'),
-    start_time: '09:00',
-    end_time: '17:00',
     barber_id: '',
+    start_date: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
+    end_date: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
+    repeat_frequency: 'none'
   })
   const [selectedSchedule, setSelectedSchedule] = useState<EventWithAppointment | null>(null)
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false)
@@ -515,7 +522,7 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
     if (isSchedule) {
       return (
         <div className="p-1 h-full overflow-hidden bg-gray-200 border border-gray-300 rounded">
-          <div className="font-medium text-gray-700 truncate">{event.title}</div>
+          <div className="font-medium text-gray-700 truncate">{event.title.replace('Barber', 'Artist')}</div>
           {event.start && event.end && (
             <div className="text-xs text-gray-600 truncate">
               {format(event.start, 'HH:mm')} - {format(event.end, 'HH:mm')}
@@ -626,10 +633,10 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
             onValueChange={(value) => setSelectedBarber(value === 'all' ? null : Number(value))}
           >
             <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Select Barber" />
+              <SelectValue placeholder="Select Artist" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Barbers</SelectItem>
+              <SelectItem value="all">All Artists</SelectItem>
               {barbers.map((barber) => (
                 <SelectItem key={barber.id} value={barber.id.toString()}>
                   {barber.full_name}
@@ -881,10 +888,10 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
       const scheduleId = event.id.toString().split('-')[1]
       const scheduleDate = event.start
       setScheduleFormData({
-        date: format(scheduleDate, 'yyyy-MM-dd'),
-        start_time: format(event.start, 'HH:mm'),
-        end_time: format(event.end, 'HH:mm'),
         barber_id: event.resource.barber_id.toString(),
+        start_date: format(scheduleDate, "yyyy-MM-dd'T'HH:mm"),
+        end_date: format(event.end, "yyyy-MM-dd'T'HH:mm"),
+        repeat_frequency: 'none'
       })
       setSelectedSchedule(event)
       setIsAddScheduleModalOpen(true)
@@ -898,7 +905,7 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
 
     return (
       <div className="p-1 h-full overflow-hidden bg-gray-200 border border-gray-300 rounded group relative">
-        <div className="font-medium text-gray-700 truncate">{event.title}</div>
+        <div className="font-medium text-gray-700 truncate">{event.title.replace('Barber', 'Artist')}</div>
         {event.start && event.end && (
           <div className="text-xs text-gray-600 truncate">
             {format(event.start, 'HH:mm')} - {format(event.end, 'HH:mm')}
@@ -965,8 +972,8 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
       return
     }
 
-    const startDateTime = new Date(`${scheduleFormData.date}T${scheduleFormData.start_time}`)
-    const endDateTime = new Date(`${scheduleFormData.date}T${scheduleFormData.end_time}`)
+    const startDateTime = new Date(scheduleFormData.start_date)
+    const endDateTime = new Date(scheduleFormData.end_date)
 
     if (endDateTime <= startDateTime) {
       toast.error('End time must be after start time')
@@ -974,12 +981,11 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
     }
 
     try {
-      const dayOfWeek = getDay(startDateTime)
       const scheduleData = {
         barber_id: parseInt(scheduleFormData.barber_id),
-        day_of_week: dayOfWeek,
-        start_time: format(startDateTime, 'HH:mm'),
-        end_time: format(endDateTime, 'HH:mm'),
+        start_date: format(startDateTime, "yyyy-MM-dd'T'HH:mm:ss"),
+        end_date: format(endDateTime, "yyyy-MM-dd'T'HH:mm:ss"),
+        repeat_frequency: scheduleFormData.repeat_frequency
       }
 
       const isEditing = selectedSchedule !== null
@@ -1025,10 +1031,10 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
       setSelectedSchedule(null)
       
       setScheduleFormData({
-        date: format(new Date(), 'yyyy-MM-dd'),
-        start_time: '09:00',
-        end_time: '17:00',
         barber_id: '',
+        start_date: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
+        end_date: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
+        repeat_frequency: 'none'
       })
       
       toast.success(`Work hours ${isEditing ? 'updated' : 'created'} successfully`)
@@ -1037,6 +1043,120 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
       toast.error(error instanceof Error ? error.message : `Failed to ${selectedSchedule ? 'update' : 'create'} work hours`)
     }
   }
+
+  // Update the schedule modal form
+  const ScheduleModalContent = () => (
+    <form onSubmit={handleScheduleSubmit}>
+      <div className="grid gap-4 py-4">
+        <div className="grid grid-cols-4 items-center gap-4">
+          <Label htmlFor="barber_id" className="text-right">
+            Artist
+          </Label>
+          <Select
+            value={scheduleFormData.barber_id}
+            onValueChange={(value) => setScheduleFormData(prev => ({ ...prev, barber_id: value }))}
+          >
+            <SelectTrigger className="col-span-3">
+              <SelectValue placeholder="Select Artist" />
+            </SelectTrigger>
+            <SelectContent>
+              {barbers.map((barber) => (
+                <SelectItem key={barber.id} value={barber.id.toString()}>
+                  {barber.full_name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="grid grid-cols-4 items-center gap-4">
+          <Label htmlFor="start_date" className="text-right">
+            Start Date/Time
+          </Label>
+          <Input
+            id="start_date"
+            type="datetime-local"
+            value={scheduleFormData.start_date}
+            onChange={(e) => setScheduleFormData(prev => ({ ...prev, start_date: e.target.value }))}
+            className="col-span-3"
+            required
+          />
+        </div>
+        <div className="grid grid-cols-4 items-center gap-4">
+          <Label htmlFor="end_date" className="text-right">
+            End Date/Time
+          </Label>
+          <Input
+            id="end_date"
+            type="datetime-local"
+            value={scheduleFormData.end_date}
+            onChange={(e) => setScheduleFormData(prev => ({ ...prev, end_date: e.target.value }))}
+            className="col-span-3"
+            required
+          />
+        </div>
+        <div className="grid grid-cols-4 items-center gap-4">
+          <Label htmlFor="repeat_frequency" className="text-right">
+            Repeat
+          </Label>
+          <Select
+            value={scheduleFormData.repeat_frequency}
+            onValueChange={(value) => setScheduleFormData(prev => ({ ...prev, repeat_frequency: value }))}
+          >
+            <SelectTrigger className="col-span-3">
+              <SelectValue placeholder="Select Repeat Option" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">None</SelectItem>
+              <SelectItem value="daily">Daily</SelectItem>
+              <SelectItem value="weekly">Weekly</SelectItem>
+              <SelectItem value="monthly">Monthly</SelectItem>
+              <SelectItem value="yearly">Yearly</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <DialogFooter>
+        {selectedSchedule && (
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={() => {
+              setIsAddScheduleModalOpen(false)
+              setIsDeleteConfirmOpen(true)
+            }}
+          >
+            Delete
+          </Button>
+        )}
+        <Button type="submit">
+          {selectedSchedule ? 'Update' : 'Create'}
+        </Button>
+      </DialogFooter>
+    </form>
+  )
+
+  // Update the Add Schedule Modal to use the new content
+  const AddScheduleModal = () => (
+    <Dialog open={isAddScheduleModalOpen} onOpenChange={(open) => {
+      if (!open) {
+        setSelectedSchedule(null)
+        setScheduleFormData({
+          barber_id: '',
+          start_date: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
+          end_date: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
+          repeat_frequency: 'none'
+        })
+      }
+      setIsAddScheduleModalOpen(open)
+    }}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>{selectedSchedule ? 'Edit Work Hours' : 'Add Work Hours'}</DialogTitle>
+        </DialogHeader>
+        <ScheduleModalContent />
+      </DialogContent>
+    </Dialog>
+  )
 
   return (
     <div className="h-[700px]">
@@ -1196,14 +1316,14 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="barber_id" className="text-right">
                   <User className="h-4 w-4 inline mr-1" />
-                  Barber
+                  Artist
                 </Label>
                 <Select
                   value={formData.barber_id}
                   onValueChange={handleBarberChange}
                 >
                   <SelectTrigger className="col-span-3">
-                    <SelectValue placeholder="Select Barber" />
+                    <SelectValue placeholder="Select Artist" />
                   </SelectTrigger>
                   <SelectContent>
                     {barbers.map((barber) => (
@@ -1290,105 +1410,7 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
         </DialogContent>
       </Dialog>
 
-      {/* Add Schedule Modal */}
-      <Dialog open={isAddScheduleModalOpen} onOpenChange={(open) => {
-        if (!open) {
-          setSelectedSchedule(null)
-          setScheduleFormData({
-            date: format(new Date(), 'yyyy-MM-dd'),
-            start_time: '09:00',
-            end_time: '17:00',
-            barber_id: '',
-          })
-        }
-        setIsAddScheduleModalOpen(open)
-      }}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>{selectedSchedule ? 'Edit Work Hours' : 'Add Work Hours'}</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleScheduleSubmit}>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="barber_id" className="text-right">
-                  Barber
-                </Label>
-                <Select
-                  value={scheduleFormData.barber_id}
-                  onValueChange={(value) => setScheduleFormData(prev => ({ ...prev, barber_id: value }))}
-                >
-                  <SelectTrigger className="col-span-3">
-                    <SelectValue placeholder="Select Barber" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {barbers.map((barber) => (
-                      <SelectItem key={barber.id} value={barber.id.toString()}>
-                        {barber.full_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="date" className="text-right">
-                  Date
-                </Label>
-                <Input
-                  id="date"
-                  type="date"
-                  value={scheduleFormData.date}
-                  onChange={(e) => setScheduleFormData(prev => ({ ...prev, date: e.target.value }))}
-                  className="col-span-3"
-                  required
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="start_time" className="text-right">
-                  Start Time
-                </Label>
-                <Input
-                  id="start_time"
-                  type="time"
-                  value={scheduleFormData.start_time}
-                  onChange={(e) => setScheduleFormData(prev => ({ ...prev, start_time: e.target.value }))}
-                  className="col-span-3"
-                  required
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="end_time" className="text-right">
-                  End Time
-                </Label>
-                <Input
-                  id="end_time"
-                  type="time"
-                  value={scheduleFormData.end_time}
-                  onChange={(e) => setScheduleFormData(prev => ({ ...prev, end_time: e.target.value }))}
-                  className="col-span-3"
-                  required
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              {selectedSchedule && (
-                <Button
-                  type="button"
-                  variant="destructive"
-                  onClick={() => {
-                    setIsAddScheduleModalOpen(false)
-                    setIsDeleteConfirmOpen(true)
-                  }}
-                >
-                  Delete
-                </Button>
-              )}
-              <Button type="submit">
-                {selectedSchedule ? 'Update' : 'Create'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <AddScheduleModal />
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>

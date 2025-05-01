@@ -148,10 +148,10 @@ export default async function DashboardPage() {
                       </div>
                     </div>
 
-                    {/* Barber Management */}
+                    {/* Artist Management */}
                     <div className="mt-4">
                       <h4 className="mb-2 text-base font-semibold">
-                        Barbers Performance
+                        Artists Performance
                       </h4>
                       <div className="space-y-2">
                         {shop.barber_management.map((barber) => (
