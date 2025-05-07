@@ -267,74 +267,42 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
               break
 
             case 'daily':
-              // Create daily events for the next 30 days
-              for (let i = 0; i < 30; i++) {
-                const eventStart = addDays(startDate, i)
-                const eventEnd = addDays(endDate, i)
+              // Create daily events between start and end dates
+              let currentDate = startDate
+              while (currentDate <= endDate) {
                 scheduleEvents.push({
-                  id: `schedule-${schedule.id}-${i}`,
+                  id: `schedule-${schedule.id}-${currentDate.toISOString()}`,
                   title: `${barber.full_name} - Work Hours`,
-                  start: eventStart,
-                  end: eventEnd,
+                  start: new Date(currentDate),
+                  end: new Date(currentDate.setHours(endDate.getHours(), endDate.getMinutes())),
                   resource: {
                     barber_id: schedule.barber_id,
                     type: 'schedule'
                   }
                 } as EventWithAppointment)
+                currentDate = addDays(currentDate, 1)
               }
               break
 
             case 'weekly':
-              // Create weekly events for the next 12 weeks
-              for (let i = 0; i < 12; i++) {
-                const eventStart = addDays(startDate, i * 7)
-                const eventEnd = addDays(endDate, i * 7)
-                scheduleEvents.push({
-                  id: `schedule-${schedule.id}-${i}`,
-                  title: `${barber.full_name} - Work Hours`,
-                  start: eventStart,
-                  end: eventEnd,
-                  resource: {
-                    barber_id: schedule.barber_id,
-                    type: 'schedule'
-                  }
-                } as EventWithAppointment)
-              }
-              break
-
-            case 'monthly':
-              // Create monthly events for the next 6 months
-              for (let i = 0; i < 6; i++) {
-                const eventStart = addDays(startDate, i * 30)
-                const eventEnd = addDays(endDate, i * 30)
-                scheduleEvents.push({
-                  id: `schedule-${schedule.id}-${i}`,
-                  title: `${barber.full_name} - Work Hours`,
-                  start: eventStart,
-                  end: eventEnd,
-                  resource: {
-                    barber_id: schedule.barber_id,
-                    type: 'schedule'
-                  }
-                } as EventWithAppointment)
-              }
-              break
-
-            case 'yearly':
-              // Create yearly events for the next 2 years
-              for (let i = 0; i < 2; i++) {
-                const eventStart = addDays(startDate, i * 365)
-                const eventEnd = addDays(endDate, i * 365)
-                scheduleEvents.push({
-                  id: `schedule-${schedule.id}-${i}`,
-                  title: `${barber.full_name} - Work Hours`,
-                  start: eventStart,
-                  end: eventEnd,
-                  resource: {
-                    barber_id: schedule.barber_id,
-                    type: 'schedule'
-                  }
-                } as EventWithAppointment)
+              // Create weekly events on the same day of week between start and end dates
+              let weekDate = startDate
+              const dayOfWeek = startDate.getDay()
+              
+              while (weekDate <= endDate) {
+                if (weekDate.getDay() === dayOfWeek) {
+                  scheduleEvents.push({
+                    id: `schedule-${schedule.id}-${weekDate.toISOString()}`,
+                    title: `${barber.full_name} - Work Hours`,
+                    start: new Date(weekDate),
+                    end: new Date(weekDate.setHours(endDate.getHours(), endDate.getMinutes())),
+                    resource: {
+                      barber_id: schedule.barber_id,
+                      type: 'schedule'
+                    }
+                  } as EventWithAppointment)
+                }
+                weekDate = addDays(weekDate, 1)
               }
               break
           }
@@ -1225,8 +1193,6 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
               <SelectItem value="none">None</SelectItem>
               <SelectItem value="daily">Daily</SelectItem>
               <SelectItem value="weekly">Weekly</SelectItem>
-              <SelectItem value="monthly">Monthly</SelectItem>
-              <SelectItem value="yearly">Yearly</SelectItem>
             </SelectContent>
           </Select>
         </div>
