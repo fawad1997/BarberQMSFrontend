@@ -194,21 +194,24 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
 
   // Fetch barber schedules
   const fetchBarberSchedules = useCallback(async () => {
-    if (!accessToken) return
+    if (!accessToken) {
+      console.log('No access token available')
+      return
+    }
 
     try {
-      console.log('Fetching barber schedules...')
+      console.log('Starting to fetch barber schedules...')
       // Fetch schedules for all barbers
       const schedulePromises = barbers.map(async (barber) => {
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/barbers/${barber.id}/schedules/`,
-          {
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-              'Content-Type': 'application/json',
-            }
+        const url = `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/barbers/${barber.id}/schedules/`
+        console.log(`Fetching schedules for barber ${barber.id} from:`, url)
+        
+        const response = await fetch(url, {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
           }
-        )
+        })
 
         if (!response.ok) {
           const errorData = await response.json()
@@ -216,56 +219,131 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
           return []
         }
 
-        return response.json()
+        const data = await response.json()
+        console.log(`Received schedules for barber ${barber.id}:`, data)
+        return data
       })
 
       const allSchedules = await Promise.all(schedulePromises)
       const schedules = allSchedules.flat()
-      console.log('Received barber schedules:', schedules)
+      console.log('All received schedules:', schedules)
       
-      // Transform schedules into recurring events
-      const currentDate = new Date()
+      // Transform schedules into events
       const scheduleEvents: EventWithAppointment[] = []
 
-      // Create events for the next 3 months
-      for (let i = 0; i < 90; i++) {
-        const date = addDays(currentDate, i)
-        const dayOfWeek = getDay(date) // Already in 0-6 format
+      schedules.forEach(schedule => {
+        console.log('Processing schedule:', schedule)
+        const barber = barbers.find(b => b.id === schedule.barber_id)
+        if (!barber) {
+          console.log(`Barber not found for ID: ${schedule.barber_id}`)
+          return
+        }
 
-        schedules.forEach(schedule => {
-          if (schedule.day_of_week === dayOfWeek) {
-            const barber = barbers.find(b => b.id === schedule.barber_id)
-            if (!barber) {
-              console.log(`Barber not found for ID: ${schedule.barber_id}`)
-              return
-            }
+        try {
+          const startDate = new Date(schedule.start_date)
+          const endDate = new Date(schedule.end_date)
+          
+          console.log(`Creating events for schedule ${schedule.id}:`, {
+            barber: barber.full_name,
+            startDate: startDate.toISOString(),
+            endDate: endDate.toISOString(),
+            repeat_frequency: schedule.repeat_frequency
+          })
 
-            const [startHour, startMinute] = schedule.start_time.split(':')
-            const [endHour, endMinute] = schedule.end_time.split(':')
+          // Create events based on repeat_frequency
+          switch (schedule.repeat_frequency.toLowerCase()) {
+            case 'none':
+              // Single event
+              scheduleEvents.push({
+                id: `schedule-${schedule.id}`,
+                title: `${barber.full_name} - Work Hours`,
+                start: startDate,
+                end: endDate,
+                resource: {
+                  barber_id: schedule.barber_id,
+                  type: 'schedule'
+                }
+              } as EventWithAppointment)
+              break
 
-            const start = new Date(date)
-            start.setHours(parseInt(startHour), parseInt(startMinute), 0)
-            
-            const end = new Date(date)
-            end.setHours(parseInt(endHour), parseInt(endMinute), 0)
-
-            console.log(`Creating schedule event for ${barber.full_name} on ${format(date, 'yyyy-MM-dd')} from ${schedule.start_time} to ${schedule.end_time}`)
-
-            scheduleEvents.push({
-              id: `schedule-${schedule.id}-${i}`,
-              title: `${barber.full_name} - Work Hours`,
-              start,
-              end,
-              resource: {
-                barber_id: schedule.barber_id,
-                type: 'schedule'
+            case 'daily':
+              // Create daily events for the next 30 days
+              for (let i = 0; i < 30; i++) {
+                const eventStart = addDays(startDate, i)
+                const eventEnd = addDays(endDate, i)
+                scheduleEvents.push({
+                  id: `schedule-${schedule.id}-${i}`,
+                  title: `${barber.full_name} - Work Hours`,
+                  start: eventStart,
+                  end: eventEnd,
+                  resource: {
+                    barber_id: schedule.barber_id,
+                    type: 'schedule'
+                  }
+                } as EventWithAppointment)
               }
-            } as EventWithAppointment)
-          }
-        })
-      }
+              break
 
-      console.log('Created schedule events:', scheduleEvents)
+            case 'weekly':
+              // Create weekly events for the next 12 weeks
+              for (let i = 0; i < 12; i++) {
+                const eventStart = addDays(startDate, i * 7)
+                const eventEnd = addDays(endDate, i * 7)
+                scheduleEvents.push({
+                  id: `schedule-${schedule.id}-${i}`,
+                  title: `${barber.full_name} - Work Hours`,
+                  start: eventStart,
+                  end: eventEnd,
+                  resource: {
+                    barber_id: schedule.barber_id,
+                    type: 'schedule'
+                  }
+                } as EventWithAppointment)
+              }
+              break
+
+            case 'monthly':
+              // Create monthly events for the next 6 months
+              for (let i = 0; i < 6; i++) {
+                const eventStart = addDays(startDate, i * 30)
+                const eventEnd = addDays(endDate, i * 30)
+                scheduleEvents.push({
+                  id: `schedule-${schedule.id}-${i}`,
+                  title: `${barber.full_name} - Work Hours`,
+                  start: eventStart,
+                  end: eventEnd,
+                  resource: {
+                    barber_id: schedule.barber_id,
+                    type: 'schedule'
+                  }
+                } as EventWithAppointment)
+              }
+              break
+
+            case 'yearly':
+              // Create yearly events for the next 2 years
+              for (let i = 0; i < 2; i++) {
+                const eventStart = addDays(startDate, i * 365)
+                const eventEnd = addDays(endDate, i * 365)
+                scheduleEvents.push({
+                  id: `schedule-${schedule.id}-${i}`,
+                  title: `${barber.full_name} - Work Hours`,
+                  start: eventStart,
+                  end: eventEnd,
+                  resource: {
+                    barber_id: schedule.barber_id,
+                    type: 'schedule'
+                  }
+                } as EventWithAppointment)
+              }
+              break
+          }
+        } catch (error) {
+          console.error('Error processing schedule:', schedule, error)
+        }
+      })
+
+      console.log('Final schedule events created:', scheduleEvents)
       setScheduleEvents(scheduleEvents)
     } catch (error) {
       console.error('Error fetching barber schedules:', error)
@@ -441,20 +519,54 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
 
   // Filter events based on selected barber and view mode
   const filteredEvents = useCallback(() => {
+    console.log('Filtering events:', {
+      calendarViewMode,
+      selectedBarber,
+      scheduleEventsCount: scheduleEvents.length,
+      eventsCount: events.length,
+      currentDate: date
+    })
+
     if (calendarViewMode === 'work_schedules') {
-      // Only show schedule events
-      return scheduleEvents.filter(event => 
-        event.resource?.type === 'schedule' && 
-        (!selectedBarber || event.resource.barber_id === selectedBarber)
-      )
+      const filtered = scheduleEvents.filter(event => {
+        const isSchedule = event.resource?.type === 'schedule'
+        const matchesBarber = !selectedBarber || event.resource?.barber_id === selectedBarber
+        const isInFuture = event.start >= new Date()
+        
+        console.log('Filtering schedule event:', {
+          eventId: event.id,
+          isSchedule,
+          matchesBarber,
+          isInFuture,
+          start: event.start,
+          end: event.end
+        })
+        
+        return isSchedule && matchesBarber && isInFuture
+      })
+      
+      console.log('Filtered schedule events:', filtered)
+      return filtered
     } else {
-      // Only show appointment events
-      return events.filter(event => 
-        event.appointment && 
-        (!selectedBarber || event.appointment.barber_id === selectedBarber)
-      )
+      const filtered = events.filter(event => {
+        const isAppointment = event.appointment !== undefined
+        const matchesBarber = !selectedBarber || event.appointment?.barber_id === selectedBarber
+        
+        console.log('Filtering appointment event:', {
+          eventId: event.id,
+          isAppointment,
+          matchesBarber,
+          start: event.start,
+          end: event.end
+        })
+        
+        return isAppointment && matchesBarber
+      })
+      
+      console.log('Filtered appointment events:', filtered)
+      return filtered
     }
-  }, [events, scheduleEvents, selectedBarber, calendarViewMode])
+  }, [events, scheduleEvents, selectedBarber, calendarViewMode, date])
 
   // Handle appointment deletion
   const handleDeleteAppointment = async () => {
@@ -522,7 +634,9 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
     if (isSchedule) {
       return (
         <div className="p-1 h-full overflow-hidden bg-gray-200 border border-gray-300 rounded">
-          <div className="font-medium text-gray-700 truncate">{event.title.replace('Barber', 'Artist')}</div>
+          <div className="font-medium text-gray-700 truncate">
+            {typeof event.title === 'string' ? event.title.replace('Barber', 'Artist') : event.title}
+          </div>
           {event.start && event.end && (
             <div className="text-xs text-gray-600 truncate">
               {format(event.start, 'HH:mm')} - {format(event.end, 'HH:mm')}
@@ -905,7 +1019,9 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
 
     return (
       <div className="p-1 h-full overflow-hidden bg-gray-200 border border-gray-300 rounded group relative">
-        <div className="font-medium text-gray-700 truncate">{event.title.replace('Barber', 'Artist')}</div>
+        <div className="font-medium text-gray-700 truncate">
+          {typeof event.title === 'string' ? event.title.replace('Barber', 'Artist') : event.title}
+        </div>
         {event.start && event.end && (
           <div className="text-xs text-gray-600 truncate">
             {format(event.start, 'HH:mm')} - {format(event.end, 'HH:mm')}
@@ -1164,13 +1280,19 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
         <span>View:</span>
         <button
           className={`px-3 py-1 rounded ${calendarViewMode === 'appointments' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
-          onClick={() => setCalendarViewMode('appointments')}
+          onClick={() => {
+            setCalendarViewMode('appointments')
+            console.log('Switched to appointments view')
+          }}
         >
           Appointments
         </button>
         <button
           className={`px-3 py-1 rounded ${calendarViewMode === 'work_schedules' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
-          onClick={() => setCalendarViewMode('work_schedules')}
+          onClick={() => {
+            setCalendarViewMode('work_schedules')
+            console.log('Switched to work schedules view')
+          }}
         >
           Work Schedules
         </button>
@@ -1181,9 +1303,15 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
         startAccessor={(event: EventWithAppointment) => event.start}
         endAccessor={(event: EventWithAppointment) => event.end}
         view={view}
-        onView={(newView: View) => setView(newView)}
+        onView={(newView: View) => {
+          console.log('Calendar view changed to:', newView)
+          setView(newView)
+        }}
         date={date}
-        onNavigate={date => setDate(date)}
+        onNavigate={date => {
+          console.log('Calendar date changed to:', date)
+          setDate(date)
+        }}
         views={{
           month: true,
           week: true,
@@ -1211,6 +1339,7 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
         components={{
           event: (props: any) => {
             const typedEvent = props.event as EventWithAppointment
+            console.log('Rendering event:', typedEvent)
             if (typedEvent.resource?.type === 'schedule') {
               return <ScheduleEventComponent event={typedEvent} />
             }
