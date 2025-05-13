@@ -96,7 +96,7 @@ interface BarberScheduleCreate {
   barber_id: number;
   start_date: string; // ISO format datetime string
   end_date: string;   // ISO format datetime string
-  repeat_frequency: "none" | "daily" | "weekly" | "monthly" | "yearly";
+  repeat_frequency: "none" | "daily" | "weekly" | "weekly_no_weekends";
 }
 
 export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCalendarProps) {
@@ -268,34 +268,46 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
 
             case 'daily':
               // Create daily events between start and end dates
-              let currentDate = startDate
-              while (currentDate <= endDate) {
+              let currentDate = new Date(startDate)
+              const endDateTime = new Date(endDate)
+              
+              while (currentDate <= endDateTime) {
+                const eventStart = new Date(currentDate)
+                const eventEnd = new Date(currentDate)
+                eventEnd.setHours(endDateTime.getHours(), endDateTime.getMinutes())
+                
                 scheduleEvents.push({
-                  id: `schedule-${schedule.id}-${currentDate.toISOString()}`,
+                  id: `schedule-${schedule.id}-${eventStart.toISOString()}`,
                   title: `${barber.full_name} - Work Hours`,
-                  start: new Date(currentDate),
-                  end: new Date(currentDate.setHours(endDate.getHours(), endDate.getMinutes())),
+                  start: eventStart,
+                  end: eventEnd,
                   resource: {
                     barber_id: schedule.barber_id,
                     type: 'schedule'
                   }
                 } as EventWithAppointment)
+                
                 currentDate = addDays(currentDate, 1)
               }
               break
 
             case 'weekly':
               // Create weekly events on the same day of week between start and end dates
-              let weekDate = startDate
+              let weekDate = new Date(startDate)
+              const endWeekDate = new Date(endDate)
               const dayOfWeek = startDate.getDay()
               
-              while (weekDate <= endDate) {
+              while (weekDate <= endWeekDate) {
                 if (weekDate.getDay() === dayOfWeek) {
+                  const eventStart = new Date(weekDate)
+                  const eventEnd = new Date(weekDate)
+                  eventEnd.setHours(endWeekDate.getHours(), endWeekDate.getMinutes())
+                  
                   scheduleEvents.push({
-                    id: `schedule-${schedule.id}-${weekDate.toISOString()}`,
+                    id: `schedule-${schedule.id}-${eventStart.toISOString()}`,
                     title: `${barber.full_name} - Work Hours`,
-                    start: new Date(weekDate),
-                    end: new Date(weekDate.setHours(endDate.getHours(), endDate.getMinutes())),
+                    start: eventStart,
+                    end: eventEnd,
                     resource: {
                       barber_id: schedule.barber_id,
                       type: 'schedule'
@@ -303,6 +315,34 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
                   } as EventWithAppointment)
                 }
                 weekDate = addDays(weekDate, 1)
+              }
+              break
+
+            case 'weekly_no_weekends':
+              // Create events for weekdays between start and end dates
+              let weekdayDate = new Date(startDate)
+              const endWeekdayDate = new Date(endDate)
+              
+              while (weekdayDate <= endWeekdayDate) {
+                const dayOfWeek = weekdayDate.getDay()
+                // Skip Saturday (6) and Sunday (0)
+                if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+                  const eventStart = new Date(weekdayDate)
+                  const eventEnd = new Date(weekdayDate)
+                  eventEnd.setHours(endWeekdayDate.getHours(), endWeekdayDate.getMinutes())
+                  
+                  scheduleEvents.push({
+                    id: `schedule-${schedule.id}-${eventStart.toISOString()}`,
+                    title: `${barber.full_name} - Work Hours`,
+                    start: eventStart,
+                    end: eventEnd,
+                    resource: {
+                      barber_id: schedule.barber_id,
+                      type: 'schedule'
+                    }
+                  } as EventWithAppointment)
+                }
+                weekdayDate = addDays(weekdayDate, 1)
               }
               break
           }
@@ -1193,6 +1233,7 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
               <SelectItem value="none">None</SelectItem>
               <SelectItem value="daily">Daily</SelectItem>
               <SelectItem value="weekly">Weekly</SelectItem>
+              <SelectItem value="weekly_no_weekends">Weekdays Only</SelectItem>
             </SelectContent>
           </Select>
         </div>
