@@ -39,13 +39,15 @@ import { AddScheduleModal } from "@/components/shops/barbers/AddScheduleModal"
 import { EditScheduleModal } from "@/components/shops/barbers/EditScheduleModal"
 import { ScheduleList } from "@/components/shops/barbers/ScheduleList"
 import Link from "next/link"
-import { PlusCircle } from "lucide-react"
+import { PlusCircle, Lock, Unlock, ChevronDown, ChevronUp } from "lucide-react"
 import { Session } from "next-auth"
 import { AlertCircle, X } from "lucide-react"
-import { BarberScheduleCalendar } from "@/components/shops/barbers/BarberScheduleCalendar"
+import { BarberBigCalendar } from "@/components/shops/barbers/BarberBigCalendar"
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
+import { motion, AnimatePresence } from "framer-motion"
 
 interface AddBarberFormData {
   full_name: string
@@ -104,18 +106,18 @@ function AddBarberModal({
         const errorMessage = errorData.detail || 
                             errorData.message || 
                             errorData.error || 
-                            `Failed to add barber (Status: ${response.status})`
+                            `Failed to add artist (Status: ${response.status})`
         throw new Error(errorMessage)
       }
 
-      toast.success("Barber has been added successfully")
+      toast.success("Artist has been added successfully")
       reset()
       onSuccess()
       onClose()
     } catch (error) {
-      console.error("Error adding barber:", error)
+      console.error("Error adding artist:", error)
       // Display the specific error message from the backend
-      toast.error(error instanceof Error ? error.message : "Failed to add barber. Please try again.")
+      toast.error(error instanceof Error ? error.message : "Failed to add artist. Please try again.")
     }
   }
 
@@ -123,7 +125,7 @@ function AddBarberModal({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add New Barber</DialogTitle>
+          <DialogTitle>Add New Artist</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
@@ -180,7 +182,7 @@ function AddBarberModal({
             )}
           </div>
           <Button type="submit" className="w-full">
-            Add Barber
+            Add Artist
           </Button>
         </form>
       </DialogContent>
@@ -246,17 +248,17 @@ function EditBarberModal({
         const errorMessage = errorData.detail || 
                             errorData.message || 
                             errorData.error || 
-                            `Failed to update barber (Status: ${response.status})`
+                            `Failed to update artist (Status: ${response.status})`
         throw new Error(errorMessage)
       }
 
-      toast.success("Barber has been updated successfully")
+      toast.success("Artist has been updated successfully")
       onSuccess()
       onClose()
     } catch (error) {
-      console.error("Error updating barber:", error)
+      console.error("Error updating artist:", error)
       // Display the specific error message from the backend
-      toast.error(error instanceof Error ? error.message : "Failed to update barber. Please try again.")
+      toast.error(error instanceof Error ? error.message : "Failed to update artist. Please try again.")
     }
   }
 
@@ -264,7 +266,7 @@ function EditBarberModal({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Edit Barber</DialogTitle>
+          <DialogTitle>Edit Artist</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
@@ -315,7 +317,7 @@ function EditBarberModal({
             )}
           </div>
           <Button type="submit" className="w-full">
-            Update Barber
+            Update Artist
           </Button>
         </form>
       </DialogContent>
@@ -376,6 +378,7 @@ export default function BarbersPage() {
   const [isAddScheduleModalOpen, setIsAddScheduleModalOpen] = useState(false)
   const [editSchedule, setEditSchedule] = useState<BarberSchedule | null>(null)
   const [isEditScheduleModalOpen, setIsEditScheduleModalOpen] = useState(false)
+  const [expandedShops, setExpandedShops] = useState<Record<number, boolean>>({})
 
   useEffect(() => {
     if (!user || !accessToken) return
@@ -513,10 +516,7 @@ export default function BarbersPage() {
       )
 
       if (!response.ok) {
-        // Parse error response for more specific error message
-        let errorMessage = `Failed to delete barber (Status: ${response.status})`;
-        
-        // Try to parse JSON response if available
+        let errorMessage = `Failed to delete artist (Status: ${response.status})`;
         try {
           const errorData = await response.json();
           errorMessage = errorData.detail || 
@@ -536,11 +536,11 @@ export default function BarbersPage() {
         throw new Error(errorMessage);
       }
 
-      toast.success("Barber has been removed successfully")
+      toast.success("Artist has been removed successfully")
       await refreshBarbers(barberToDelete.shopId)
     } catch (error) {
-      console.error("Error deleting barber:", error)
-      toast.error(error instanceof Error ? error.message : "Failed to delete barber. Please try again.")
+      console.error("Error deleting artist:", error)
+      toast.error(error instanceof Error ? error.message : "Failed to delete artist. Please try again.")
     } finally {
       setIsDeleteDialogOpen(false)
       setBarberToDelete(null)
@@ -570,6 +570,13 @@ export default function BarbersPage() {
     }
   }
 
+  const toggleShopExpansion = (shopId: number) => {
+    setExpandedShops(prev => ({
+      ...prev,
+      [shopId]: !prev[shopId]
+    }))
+  }
+
   if (isAuthLoading || isLoading) {
     return <LoadingState />
   }
@@ -582,147 +589,154 @@ export default function BarbersPage() {
     )
   }
 
-  // Show NoShopsState when there are no shops
   if (shops.length === 0) {
     return <NoShopsState />
   }
 
   return (
     <div className="container mx-auto py-10">
-      <h1 className="mb-6 text-2xl font-bold">Barbers Management</h1>
+      <h1 className="text-2xl font-bold mb-6">Artists Management</h1>
       <div className="space-y-6">
         {shops.map((shop) => (
-          <Card key={shop.id}>
-            <CardHeader>
+          <Card key={shop.id} className="overflow-hidden">
+            <CardHeader className="py-3">
               <div className="flex items-center justify-between">
-                <CardTitle>{shop.name}</CardTitle>
-                <Button
-                  onClick={() => {
-                    setSelectedShopId(shop.id)
-                    setIsAddModalOpen(true)
-                  }}
-                >
-                  Add Barber
-                </Button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => toggleShopExpansion(shop.id)}
+                    className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+                  >
+                    {expandedShops[shop.id] ? (
+                      <Unlock className="h-5 w-5 text-gray-500" />
+                    ) : (
+                      <Lock className="h-5 w-5 text-gray-500" />
+                    )}
+                  </button>
+                  <CardTitle>{shop.name}</CardTitle>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={() => {
+                      setSelectedShopId(shop.id)
+                      setIsAddModalOpen(true)
+                    }}
+                  >
+                    Add Artist
+                  </Button>
+                  <button
+                    onClick={() => toggleShopExpansion(shop.id)}
+                    className="p-1 hover:bg-gray-100 rounded transition-colors"
+                  >
+                    {expandedShops[shop.id] ? (
+                      <ChevronUp className="h-5 w-5 text-gray-500" />
+                    ) : (
+                      <ChevronDown className="h-5 w-5 text-gray-500" />
+                    )}
+                  </button>
+                </div>
               </div>
             </CardHeader>
-            <CardContent>
-              {shop.barbers.length === 0 ? (
-                <p className="text-muted-foreground">
-                  No barbers found for this shop.
-                </p>
-              ) : (
-                <>
-                  <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2">
-                    {shop.barbers.map((barber) => (
-                      <Card key={barber.id}>
-                        <CardContent className="pt-6">
-                          <div className="space-y-2">
-                            <h3 className="font-semibold">{barber.full_name}</h3>
-                            <p className="text-sm text-muted-foreground">
-                              Email: {barber.email}
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                              Phone: {barber.phone_number}
-                            </p>
-                            <span
-                              className={`rounded-full px-2 py-1 text-xs ${
-                                barber.status === "available"
-                                  ? "bg-green-100 text-green-800"
-                                  : barber.status === "in_service"
-                                  ? "bg-blue-100 text-blue-800"
-                                  : barber.status === "on_break"
-                                  ? "bg-yellow-100 text-yellow-800"
-                                  : "bg-red-100 text-red-800"
-                              }`}
-                            >
-                              {barber.status.replace("_", " ")}
-                            </span>
-                            {/* Schedule Management */}
-                            <ScheduleList
-                              schedules={barber.schedules || []}
-                              onEdit={handleScheduleEdit}
-                              onDelete={async (schedule) => {
-                                await refreshBarbers(shop.id)
-                              }}
-                              accessToken={accessToken}
-                              shopId={shop.id}
-                              barberId={barber.id}
-                              onAdd={() => {
-                                setSelectedBarber(barber);
-                                setSelectedShopId(shop.id);
-                                setIsAddScheduleModalOpen(true);
-                              }}
-                            />
-                            <div className="mt-2 flex items-center justify-between">
-                              <div className="space-x-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => {
-                                    setSelectedBarberForServices(barber)
-                                    setSelectedShopId(shop.id)
-                                    setIsServicesModalOpen(true)
-                                  }}
-                                >
-                                  Services
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => {
-                                    setSelectedBarber(barber)
-                                    setSelectedShopId(shop.id)
-                                    setIsEditModalOpen(true)
-                                  }}
-                                >
-                                  Edit
-                                </Button>
-                                <Button
-                                  variant="destructive"
-                                  size="sm"
-                                  onClick={() => {
-                                    setBarberToDelete({
-                                      id: barber.id,
-                                      name: barber.full_name,
-                                      shopId: shop.id,
-                                    })
-                                    setIsDeleteDialogOpen(true)
-                                  }}
-                                >
-                                  Remove
-                                </Button>
-                              </div>
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => {
-                                  setSelectedBarber(barber)
-                                  setSelectedShopId(shop.id)
-                                  setIsAddScheduleModalOpen(true)
-                                }}
-                              >
-                                Add Schedule
-                              </Button>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                  <BarberScheduleCalendar 
-                    barbers={shop.barbers}
-                    shopId={shop.id}
-                    accessToken={accessToken}
-                  />
-                </>
+            <AnimatePresence>
+              {expandedShops[shop.id] && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <CardContent>
+                    {shop.barbers.length === 0 ? (
+                      <p className="text-muted-foreground">
+                        No artists found for this shop.
+                      </p>
+                    ) : (
+                      <>
+                        <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2">
+                          {shop.barbers.map((barber) => (
+                            <Card key={barber.id}>
+                              <CardContent className="pt-6">
+                                <div className="space-y-4">
+                                  <div className="flex justify-between items-start">
+                                    <div>
+                                      <h3 className="font-semibold">{barber.full_name}</h3>
+                                      <span className={`inline-block px-2 py-1 text-xs rounded-full mt-1 ${
+                                        barber.status === 'available'
+                                          ? 'bg-green-100 text-green-800'
+                                          : barber.status === 'in_service'
+                                          ? 'bg-blue-100 text-blue-800'
+                                          : barber.status === 'on_break'
+                                          ? 'bg-yellow-100 text-yellow-800'
+                                          : 'bg-gray-100 text-gray-800'
+                                      }`}>
+                                        {barber.status.replace('_', ' ')}
+                                      </span>
+                                    </div>
+                                    <div className="space-x-2">
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => {
+                                          setSelectedBarberForServices(barber)
+                                          setSelectedShopId(shop.id)
+                                          setIsServicesModalOpen(true)
+                                        }}
+                                      >
+                                        Services
+                                      </Button>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => {
+                                          setSelectedBarber(barber)
+                                          setSelectedShopId(shop.id)
+                                          setIsEditModalOpen(true)
+                                        }}
+                                      >
+                                        Edit
+                                      </Button>
+                                      <Button
+                                        variant="destructive"
+                                        size="sm"
+                                        onClick={() => {
+                                          setBarberToDelete({
+                                            id: barber.id,
+                                            name: barber.full_name,
+                                            shopId: shop.id,
+                                          })
+                                          setIsDeleteDialogOpen(true)
+                                        }}
+                                      >
+                                        Remove
+                                      </Button>
+                                    </div>
+                                  </div>
+                                  <div className="text-sm text-muted-foreground">
+                                    <p>Email: {barber.email}</p>
+                                    <p>Phone: {barber.phone_number}</p>
+                                  </div>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
+                        <div className="mt-6">
+                          <BarberBigCalendar 
+                            barbers={shop.barbers}
+                            shopId={shop.id}
+                            accessToken={accessToken}
+                          />
+                        </div>
+                      </>
+                    )}
+                  </CardContent>
+                </motion.div>
               )}
-            </CardContent>
+            </AnimatePresence>
           </Card>
         ))}
       </div>
 
-      {/* Add Barber Modal */}
+      {/* Add Artist Modal */}
       {selectedShopId && (
         <AddBarberModal
           shopId={selectedShopId}
@@ -736,7 +750,7 @@ export default function BarbersPage() {
         />
       )}
 
-      {/* Edit Barber Modal */}
+      {/* Edit Artist Modal */}
       {selectedShopId && selectedBarber && (
         <EditBarberModal
           shopId={selectedShopId}
@@ -752,7 +766,7 @@ export default function BarbersPage() {
         />
       )}
 
-      {/* Delete Barber Dialog */}
+      {/* Delete Artist Dialog */}
       {barberToDelete && (
         <DeleteBarberDialog
           isOpen={isDeleteDialogOpen}
@@ -872,7 +886,7 @@ function NoShopsState() {
       </div>
       <h2 className="text-2xl font-bold mb-3">No Shops Found</h2>
       <p className="text-muted-foreground mb-8 max-w-md">
-        You haven't created any shops yet. Create a shop first to manage barbers.
+        You haven't created any shops yet. Create a shop first to manage artists.
       </p>
       <Link href="/shop/shops/create">
         <Button>

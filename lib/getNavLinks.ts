@@ -20,7 +20,7 @@ export const getNavLinks = (role?: string) => {
             icon: "bi bi-shop",
           },
           {
-            route: "Barbers",
+            route: "Artists",
             path: "/shop/barbers",
             icon: "fas fa-cut",
           },
