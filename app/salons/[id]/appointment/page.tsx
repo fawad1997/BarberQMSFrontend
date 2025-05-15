@@ -23,19 +23,16 @@ interface Service {
 
 interface Schedule {
   id: number;
-  day_name: string;
-  formatted_time: string;
+  day_of_week: number; // 0=Sunday, 1=Monday, ..., 6=Saturday
+  start_time: string; // "HH:MM"
+  end_time: string; // "HH:MM"
 }
 
 interface Barber {
   id: number;
   full_name: string;
   services: { id: number }[];
-  schedules: {
-    id: number;
-    day_name: string;
-    formatted_time: string;
-  }[];
+  schedules: Schedule[];
 }
 
 interface SalonDetails {
@@ -461,11 +458,14 @@ export default function AppointmentPage({ params }: { params: { id: string } }) 
                                 <div>
                                   <p className="font-medium">{barber.full_name}</p>
                                   <div className="text-sm text-muted-foreground mt-1">
-                                    {barber.schedules.map((schedule) => (
-                                      <p key={schedule.id}>
-                                        {schedule.day_name}: {schedule.formatted_time}
-                                      </p>
-                                    ))}
+                                    {barber.schedules.map((schedule) => {
+                                      const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][schedule.day_of_week];
+                                      return (
+                                        <p key={schedule.id}>
+                                          {dayName}: {schedule.start_time} - {schedule.end_time}
+                                        </p>
+                                      );
+                                    })}
                                   </div>
                                 </div>
                               </div>
