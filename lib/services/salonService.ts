@@ -19,11 +19,61 @@ export async function getSalons({ query }: { query: string; location: string }) 
   }
 }
 
-export async function getSalonDetails(salonId: string) {
+// Helper function to check if a string is a valid numeric ID
+function isNumericId(str: string): boolean {
+  return /^\d+$/.test(str);
+}
+
+// Function to find a salon by ID
+export async function getSalonByIdWithSlug(id: string): Promise<Salon | null> {
   try {
-    const response = await fetch(`${API_URL}/appointments/shop/${salonId}`);
+    // Fetch all salons
+    const salons = await getSalons({ query: '', location: '' });
+    
+    // Find the salon with the matching ID
+    const salon = salons.find((s: Salon) => s.id.toString() === id);
+    return salon || null;
+  } catch (error) {
+    console.error('Error in getSalonByIdWithSlug:', error);
+    return null;
+  }
+}
+
+// Function to find a salon by slug
+export async function getSalonBySlug(slug: string): Promise<Salon | null> {
+  try {
+    // Fetch all salons
+    const salons = await getSalons({ query: '', location: '' });
+    
+    // Find the salon with the matching slug
+    const salon = salons.find((s: Salon) => s.slug === slug);
+    return salon || null;
+  } catch (error) {
+    console.error('Error in getSalonBySlug:', error);
+    return null;
+  }
+}
+
+export async function getSalonDetails(idOrSlug: string) {
+  try {
+    let id: string;
+    
+    // For slug-based URLs, look up the ID
+    if (!isNumericId(idOrSlug)) {
+      const salon = await getSalonBySlug(idOrSlug);
+      if (!salon) {
+        throw new Error(`No salon found with slug: ${idOrSlug}`);
+      }
+      id = salon.id.toString();
+    } else {
+      // It's a numeric ID, which should be redirected via middleware
+      // but we'll handle it here as a fallback
+      id = idOrSlug;
+    }
+    
+    // Fetch the detailed salon data using the ID
+    const response = await fetch(`${API_URL}/appointments/shop/${id}`);
     if (!response.ok) {
-      console.error('Response status:', response.status);
       throw new Error('Failed to fetch salon details');
     }
     const data = await response.json();
