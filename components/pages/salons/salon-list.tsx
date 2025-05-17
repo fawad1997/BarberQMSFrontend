@@ -42,14 +42,14 @@ export default function SalonList({ salons, isLoading }: SalonListProps) {
             </p> */}
             <div className="mt-2">
               <Button 
-                onClick={() => router.push(`/salons/${salon.id}/check-in`)}
+                onClick={() => router.push(`/salons/${salon.slug}/check-in`)}
                 variant="default"
                 className="w-full"
               >
                 Check In
               </Button>
               {/* <Button 
-                onClick={() => router.push(`/salons/${salon.id}/appointment`)}
+                onClick={() => router.push(`/salons/${salon.slug}/appointment`)}
                 variant="outline"
               >
                 Book Appointment
