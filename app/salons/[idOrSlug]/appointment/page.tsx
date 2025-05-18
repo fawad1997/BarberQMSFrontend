@@ -23,19 +23,16 @@ interface Service {
 
 interface Schedule {
   id: number;
-  day_name: string;
-  formatted_time: string;
+  day_of_week: number; // 0=Sunday, 1=Monday, ..., 6=Saturday
+  start_time: string; // "HH:MM"
+  end_time: string; // "HH:MM"
 }
 
 interface Barber {
   id: number;
   full_name: string;
   services: { id: number }[];
-  schedules: {
-    id: number;
-    day_name: string;
-    formatted_time: string;
-  }[];
+  schedules: Schedule[];
 }
 
 interface SalonDetails {
@@ -161,6 +158,11 @@ export default function AppointmentPage({ params }: { params: { idOrSlug: string
   };
 
   const handleBookAppointment = async () => {
+    if (!salon) {
+      toast.error("Salon information not available");
+      return;
+    }
+    
     try {
       setIsBooking(true);
       
@@ -182,9 +184,8 @@ export default function AppointmentPage({ params }: { params: { idOrSlug: string
         },
         body: JSON.stringify(appointmentData),
       });
-      console.log(appointmentData);
+      
       const data = await response.json();
-      console.log(data);
 
       if (!response.ok) {
         // Extract the specific error message from different possible response formats
@@ -219,25 +220,18 @@ export default function AppointmentPage({ params }: { params: { idOrSlug: string
         }
         
         throw new Error(errorMessage);
+      } else {
+        // Success - show confirmation and redirect
+        toast.success("Appointment booked successfully!");
+        
+        // Store the appointment reference in localStorage
+        localStorage.setItem('lastAppointmentId', data.id?.toString() || '');
+        localStorage.setItem('appointmentShopId', salon.id.toString());
+        
+        // Redirect to confirmation or status page using the slug for the URL
+        window.location.href = `/salons/${salon.slug}/appointment-confirmation`;
       }
-
-      // Show success message using sonner toast
-      toast.success("Appointment Booked!", {
-        description: "Your appointment has been successfully scheduled.",
-      });
-      
-      // Reset form fields after successful booking
-      setFullName("");
-      setPhoneNumber("");
-      setNumberOfPeople("1");
-      setAppointmentDate("");
-      setAppointmentTime("");
-      setSelectedService(null);
-      setSelectedBarber(null);
-      setIsAdvanceBooking(false);
-      
     } catch (error) {
-      // Show error message using sonner toast with the exact error detail
       toast.error("Booking Failed", {
         description: error instanceof Error ? error.message : "Failed to book appointment",
       });
@@ -437,13 +431,13 @@ export default function AppointmentPage({ params }: { params: { idOrSlug: string
                                 </div>
                                 <div>
                                   <p className="font-medium">{barber.full_name}</p>
-                                  
-                                  {/* Display schedule if available */}
-                                  {barber.schedules && barber.schedules.length > 0 && (
-                                    <p className="text-sm text-muted-foreground">
-                                      Schedule: {barber.schedules.map(s => s.day_name).join(', ')}
-                                    </p>
-                                  )}
+                                  <div className="text-sm text-muted-foreground mt-1">
+                                    {barber.schedules.map((schedule) => (
+                                      <p key={schedule.id}>
+                                        {schedule.day_name}: {schedule.formatted_time}
+                                      </p>
+                                    ))}
+                                  </div>
                                 </div>
                               </div>
                             </Card>
