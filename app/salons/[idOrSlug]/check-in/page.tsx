@@ -53,6 +53,7 @@ interface Service {
 export default function CheckInPage({ params }: { params: { idOrSlug: string } }) {
   const [salon, setSalon] = useState<SalonDetails | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedBarber, setSelectedBarber] = useState<number | null>(null);
   const [fullName, setFullName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -68,10 +69,21 @@ export default function CheckInPage({ params }: { params: { idOrSlug: string } }
   useEffect(() => {
     const fetchSalonDetails = async () => {
       try {
+        console.log('Fetching salon details for:', params.idOrSlug);
         const data = await getSalonDetails(params.idOrSlug);
+        
+        if (!data) {
+          console.error('No salon data returned');
+          setError('Salon information could not be loaded');
+          return;
+        }
+        
+        console.log('Salon details fetched successfully:', data.name);
         setSalon(data);
+        setError(null);
       } catch (error) {
         console.error('Error fetching salon details:', error);
+        setError(error instanceof Error ? error.message : 'Failed to load salon information');
       } finally {
         setLoading(false);
       }
@@ -169,10 +181,29 @@ export default function CheckInPage({ params }: { params: { idOrSlug: string } }
     );
   }
 
-  if (!salon) {
+  if (error || !salon) {
     return (
-      <div className="container py-8 text-center">
-        <div className="text-red-500">Salon not found</div>
+      <div className="container py-8">
+        <Card className="p-8 max-w-3xl mx-auto shadow-lg rounded-lg">
+          <div className="text-center space-y-4">
+            <div className="text-red-500 text-xl font-semibold">
+              {error || 'Salon not found'}
+            </div>
+            <p className="text-muted-foreground">
+              We couldn't find the salon you're looking for. This might be due to:
+            </p>
+            <ul className="list-disc list-inside text-left max-w-md mx-auto text-muted-foreground">
+              <li>An incorrect URL or salon ID</li>
+              <li>The salon may have been removed or renamed</li>
+              <li>A temporary issue with our server</li>
+            </ul>
+            <div className="pt-4">
+              <Link href="/salons">
+                <Button variant="default">Browse All Salons</Button>
+              </Link>
+            </div>
+          </div>
+        </Card>
       </div>
     );
   }
