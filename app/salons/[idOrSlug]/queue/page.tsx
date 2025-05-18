@@ -41,8 +41,8 @@ export default function QueuePage({ params }: { params: { idOrSlug: string } }) 
         const salonData = await getSalonDetails(params.idOrSlug);
         setSalon(salonData);
 
-        // Fetch queue data
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/queue/${params.idOrSlug}`);
+        // Fetch queue data using the salon's numeric ID
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/queue/${salonData.id}`);
         if (!response.ok) throw new Error('Failed to fetch queue data');
         const queueData = await response.json();
         setQueueItems(queueData);
