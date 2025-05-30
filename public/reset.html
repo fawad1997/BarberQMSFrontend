@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Password Reset - BarberQMS</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+        }
+        h1 { color: #333; margin-bottom: 20px; }
+        .form-group { margin-bottom: 20px; text-align: left; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 16px; }
+        button { 
+            width: 100%; 
+            padding: 12px; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            color: white; 
+            border: none; 
+            border-radius: 5px; 
+            font-size: 16px; 
+            cursor: pointer; 
+        }
+        button:hover { opacity: 0.9; }
+        .message { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .error { background: #fee; color: #c33; border: 1px solid #fcc; }
+        .success { background: #efe; color: #363; border: 1px solid #cfc; }
+        .loading { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Reset Your Password</h1>
+        <div id="message" class="message" style="display:none;"></div>
+        
+        <form id="resetForm" onsubmit="resetPassword(event)">
+            <div class="form-group">
+                <label for="password">New Password (8+ chars, must include uppercase, lowercase, number):</label>
+                <input type="password" id="password" required minlength="8">
+            </div>
+            <div class="form-group">
+                <label for="confirmPassword">Confirm Password:</label>
+                <input type="password" id="confirmPassword" required>
+            </div>
+            <button type="submit" id="submitBtn">Reset Password</button>
+        </form>
+        
+        <p style="margin-top: 20px; font-size: 14px;">
+            <a href="/login" style="color: #667eea;">← Back to Login</a>
+        </p>
+    </div>
+
+    <script>
+        // Get token from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get('token');
+        
+        // Check token on load
+        if (!token) {
+            showMessage('No reset token found. Please use the link from your email.', 'error');
+            document.getElementById('submitBtn').disabled = true;
+        } else {
+            validateToken();
+        }
+        
+        async function validateToken() {
+            try {
+                showMessage('Validating reset token...', 'loading');
+                const response = await fetch('/api/auth/validate-reset-token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.valid) {
+                    showMessage(`Ready to reset password for: ${data.user_email || 'your account'}`, 'success');
+                } else {
+                    showMessage(data.message || 'Invalid or expired reset token', 'error');
+                    document.getElementById('submitBtn').disabled = true;
+                }
+            } catch (error) {
+                showMessage('Error validating token. Please try again.', 'error');
+            }
+        }
+        
+        async function resetPassword(event) {
+            event.preventDefault();
+            
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            
+            // Validate passwords
+            if (password.length < 8) {
+                showMessage('Password must be at least 8 characters long.', 'error');
+                return;
+            }
+            
+            if (password !== confirmPassword) {
+                showMessage('Passwords do not match.', 'error');
+                return;
+            }
+            
+            if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password)) {
+                showMessage('Password must contain uppercase, lowercase, and number.', 'error');
+                return;
+            }
+            
+            try {
+                showMessage('Resetting password...', 'loading');
+                document.getElementById('submitBtn').disabled = true;
+                
+                const response = await fetch('/api/auth/reset-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token, new_password: password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showMessage('Password reset successfully! Redirecting to login...', 'success');
+                    document.getElementById('resetForm').style.display = 'none';
+                    setTimeout(() => window.location.href = '/login', 3000);
+                } else {
+                    showMessage(data.error || 'Failed to reset password', 'error');
+                    document.getElementById('submitBtn').disabled = false;
+                }
+            } catch (error) {
+                showMessage('Something went wrong. Please try again.', 'error');
+                document.getElementById('submitBtn').disabled = false;
+            }
+        }
+        
+        function showMessage(text, type) {
+            const messageDiv = document.getElementById('message');
+            messageDiv.textContent = text;
+            messageDiv.className = `message ${type}`;
+            messageDiv.style.display = 'block';
+        }
+    </script>
+</body>
+</html> 
