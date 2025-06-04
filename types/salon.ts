@@ -14,11 +14,11 @@ export interface Salon {
   advertisement_start_date: string | null;
   advertisement_end_date: string | null;
   is_advertisement_active: boolean;
+  id: number;
+  slug: string;
 }
 
 export interface SalonSearchParams {
-  query?: string;
-  location?: string;
-  page?: number;
-  limit?: number;
+  query: string;
+  location: string;
 } 

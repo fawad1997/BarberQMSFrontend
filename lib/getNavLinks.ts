@@ -32,6 +32,11 @@ export const getNavLinks = (role?: string) => {
         ]
       },
       {
+        route: "Business",
+        path: "/shop/business",
+        icon: "bi bi-shop",
+      },
+      {
         route: "Queue",
         path: "/shop/queue",
         icon: "bi bi-people-fill",

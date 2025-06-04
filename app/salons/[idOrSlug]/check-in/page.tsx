@@ -4,35 +4,26 @@ import { useEffect, useState } from "react";
 import { getSalonDetails } from "@/lib/services/salonService";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Clock, MapPin, Phone, Mail, User, Calendar, AlertCircle } from 'lucide-react';
+import { Clock, MapPin, Phone, Mail, User } from "lucide-react";
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Switch } from "@/components/ui/switch";
+import { AlertCircle } from 'lucide-react';
 import { toast } from "sonner";
-
-interface Service {
-  id: number;
-  name: string;
-  duration: number;
-  price: number;
-}
-
-interface Schedule {
-  id: number;
-  day_of_week: number; // 0=Sunday, 1=Monday, ..., 6=Saturday
-  start_time: string; // "HH:MM"
-  end_time: string; // "HH:MM"
-}
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 
 interface Barber {
   id: number;
   full_name: string;
-  services: { id: number }[];
-  schedules: Schedule[];
+  status: string;
+  services: Array<{
+    name: string;
+    duration: number;
+    price: number;
+  }>;
 }
 
 interface SalonDetails {
@@ -45,26 +36,24 @@ interface SalonDetails {
   phone_number: string;
   email: string;
   formatted_hours: string;
+  estimated_wait_time: number;
   is_open: boolean;
   barbers: Barber[];
   services: Service[];
+  slug: string;
 }
 
-interface AppointmentRequest {
-  shop_id: number;
-  barber_id: number | null;
-  service_id: number | null;
-  appointment_time: string;
-  number_of_people: number;
-  user_id: number | null;
-  full_name: string;
-  phone_number: string;
+interface Service {
+  id: number;
+  name: string;
+  duration: number;
+  price: number;
 }
 
-export default function AppointmentPage({ params }: { params: { id: string } }) {
+export default function CheckInPage({ params }: { params: { idOrSlug: string } }) {
   const [salon, setSalon] = useState<SalonDetails | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedService, setSelectedService] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [selectedBarber, setSelectedBarber] = useState<number | null>(null);
   const [fullName, setFullName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -73,26 +62,35 @@ export default function AppointmentPage({ params }: { params: { id: string } }) 
     fullName: "",
     phoneNumber: "",
   });
-  const [isAdvanceBooking, setIsAdvanceBooking] = useState(false);
-  const [appointmentDate, setAppointmentDate] = useState("");
-  const [appointmentTime, setAppointmentTime] = useState("");
-  const [timeError, setTimeError] = useState("");
-  const [isBooking, setIsBooking] = useState(false);
+  const [isCheckingIn, setIsCheckingIn] = useState(false);
+  const [isAdvancedCheckIn, setIsAdvancedCheckIn] = useState(false);
+  const [selectedService, setSelectedService] = useState<number | null>(null);
 
   useEffect(() => {
     const fetchSalonDetails = async () => {
       try {
-        const data = await getSalonDetails(params.id);
+        console.log('Fetching salon details for:', params.idOrSlug);
+        const data = await getSalonDetails(params.idOrSlug);
+        
+        if (!data) {
+          console.error('No salon data returned');
+          setError('Salon information could not be loaded');
+          return;
+        }
+        
+        console.log('Salon details fetched successfully:', data.name);
         setSalon(data);
+        setError(null);
       } catch (error) {
         console.error('Error fetching salon details:', error);
+        setError(error instanceof Error ? error.message : 'Failed to load salon information');
       } finally {
         setLoading(false);
       }
     };
 
     fetchSalonDetails();
-  }, [params.id]);
+  }, [params.idOrSlug]);
 
   const validateFullName = (name: string) => {
     if (name.length < 3) {
@@ -110,139 +108,58 @@ export default function AppointmentPage({ params }: { params: { id: string } }) 
     }
   };
 
-  const getFormattedDateTime = () => {
-    if (!appointmentDate || !appointmentTime) return "";
-    return new Date(`${appointmentDate}T${appointmentTime}`).toISOString();
-  };
-
-  const getTomorrowDate = () => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    return tomorrow.toISOString().split('T')[0];
-  };
-
-  const parseBusinessHours = (formattedHours: string) => {
-    const [start, end] = formattedHours.split(' - ');
-    return {
-      start: new Date(`1970/01/01 ${start}`).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
-      end: new Date(`1970/01/01 ${end}`).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })
-    };
-  };
-
-  const isWithinBusinessHours = (time: string) => {
-    if (!salon?.formatted_hours || !time) return false;
-    
-    const { start, end } = parseBusinessHours(salon.formatted_hours);
-    
-    // Handle case where end time is earlier than start time (overnight hours)
-    if (end <= start) {
-      // If end is before or equal to start, it means the shop is open overnight
-      // So the time is valid if it's either after the start OR before the end
-      return time >= start || time <= end;
-    }
-    
-    // Normal case: shop opens and closes on the same day
-    return time >= start && time <= end;
-  };
-
-  const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedTime = e.target.value;
-    setAppointmentTime(selectedTime);
-    
-    if (!isWithinBusinessHours(selectedTime)) {
-      setTimeError(`Please select a time between ${salon?.formatted_hours}`);
-    } else {
-      setTimeError("");
-    }
-  };
-
-  const handleBookAppointment = async () => {
+  const handleCheckIn = async () => {
     try {
-      setIsBooking(true);
+      setIsCheckingIn(true);
       
-      const appointmentData: AppointmentRequest = {
-        shop_id: Number(params.id),
-        barber_id: isAdvanceBooking ? selectedBarber : null,
-        service_id: isAdvanceBooking ? selectedService : null,
-        appointment_time: getFormattedDateTime(),
-        number_of_people: Number(numberOfPeople),
-        user_id: null,
+      const checkInData = {
+        shop_id: Number(salon.id),
+        service_id: isAdvancedCheckIn ? selectedService : null,
+        barber_id: isAdvancedCheckIn ? selectedBarber : null,
         full_name: fullName,
         phone_number: phoneNumber,
+        number_of_people: Number(numberOfPeople),
       };
-
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/appointments/`, {
+  
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/queue/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(appointmentData),
+        body: JSON.stringify(checkInData),
       });
-      console.log(appointmentData);
+      console.log(checkInData);
+  
       const data = await response.json();
-      console.log(data);
-
+  
       if (!response.ok) {
-        // Extract the specific error message from different possible response formats
-        let errorMessage = 'Failed to book appointment';
+        // Extract the specific error detail
+        const errorMessage = data.detail || 'Failed to check in';
         
-        // Check if there's a direct message in the response
-        if (typeof data.message === 'string') {
-          errorMessage = data.message;
-        }
-        // Check if there's a direct error in the response
-        else if (typeof data.error === 'string') {
-          errorMessage = data.error;
-        }
-        // Check if we have a detail field with an array of validation errors
-        else if (data.detail && Array.isArray(data.detail)) {
-          // Extract the actual error message from the validation errors
-          const messages = data.detail.map((error: any) => {
-            // If msg property exists, use that
-            if (error.msg) return error.msg;
-            // Sometimes the message might be directly in the error
-            if (typeof error === 'string') return error;
-            return null;
-          }).filter(Boolean);
-          
-          if (messages.length > 0) {
-            errorMessage = messages.join('. ');
-          }
-        }
-        // If there's a string detail field
-        else if (typeof data.detail === 'string') {
-          errorMessage = data.detail;
+        // Handle the "Already in queue" error specifically
+        if (errorMessage === "Already in queue") {
+          throw new Error("You're already in the queue for this salon");
         }
         
         throw new Error(errorMessage);
       }
-
-      // Show success message using sonner toast
-      toast.success("Appointment Booked!", {
-        description: "Your appointment has been successfully scheduled.",
-      });
+  
+      // Store check-in data in localStorage
+      localStorage.setItem('checkInPhone', phoneNumber);
+      localStorage.setItem('checkInShopId', salon.id.toString());
       
-      // Reset form fields after successful booking
-      setFullName("");
-      setPhoneNumber("");
-      setNumberOfPeople("1");
-      setAppointmentDate("");
-      setAppointmentTime("");
-      setSelectedService(null);
-      setSelectedBarber(null);
-      setIsAdvanceBooking(false);
+      // Redirect to status page
+      window.location.href = `/salons/${salon.slug}/my-status`;
       
     } catch (error) {
-      // Show error message using sonner toast with the exact error detail
-      toast.error("Booking Failed", {
-        description: error instanceof Error ? error.message : "Failed to book appointment",
+      toast.error("Check-in Failed", {
+        description: error instanceof Error ? error.message : "Failed to check in",
       });
     } finally {
-      setIsBooking(false);
+      setIsCheckingIn(false);
     }
-  };
+  }
 
-  // Add this helper function to filter barbers based on selected service
   const getBarbersByService = (serviceId: number | null) => {
     if (!serviceId) return salon.barbers;
     
@@ -251,10 +168,9 @@ export default function AppointmentPage({ params }: { params: { id: string } }) 
     );
   };
 
-  // Update the service selection handler to reset barber selection
   const handleServiceSelection = (serviceId: number) => {
     setSelectedService(serviceId);
-    setSelectedBarber(null); // Reset barber selection when service changes
+    setSelectedBarber(null);
   };
 
   if (loading) {
@@ -265,10 +181,29 @@ export default function AppointmentPage({ params }: { params: { id: string } }) 
     );
   }
 
-  if (!salon) {
+  if (error || !salon) {
     return (
-      <div className="container py-8 text-center">
-        <div className="text-red-500">Salon not found</div>
+      <div className="container py-8">
+        <Card className="p-8 max-w-3xl mx-auto shadow-lg rounded-lg">
+          <div className="text-center space-y-4">
+            <div className="text-red-500 text-xl font-semibold">
+              {error || 'Salon not found'}
+            </div>
+            <p className="text-muted-foreground">
+              We couldn't find the salon you're looking for. This might be due to:
+            </p>
+            <ul className="list-disc list-inside text-left max-w-md mx-auto text-muted-foreground">
+              <li>An incorrect URL or salon ID</li>
+              <li>The salon may have been removed or renamed</li>
+              <li>A temporary issue with our server</li>
+            </ul>
+            <div className="pt-4">
+              <Link href="/salons">
+                <Button variant="default">Browse All Salons</Button>
+              </Link>
+            </div>
+          </div>
+        </Card>
       </div>
     );
   }
@@ -278,7 +213,7 @@ export default function AppointmentPage({ params }: { params: { id: string } }) 
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      className="container py-8 min-h-screen"
+      className="container py-8"
     >
       <Card className="p-8 max-w-3xl mx-auto shadow-lg rounded-lg">
         <div className="space-y-6">
@@ -324,6 +259,32 @@ export default function AppointmentPage({ params }: { params: { id: string } }) 
             </div>
           </div>
 
+          {/* Status Badge - Updated Design */}
+          <div className="border-t pt-6">
+            <Card className="p-4 bg-background border-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-full ${salon.is_open ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
+                    <Clock className={`h-5 w-5 ${salon.is_open ? 'text-green-500' : 'text-red-500'}`} />
+                  </div>
+                  <div>
+                    <h3 className={`font-medium ${salon.is_open ? 'text-green-500' : 'text-red-500'}`}>
+                      {salon.is_open ? 'Currently Open' : 'Currently Closed'}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      Business Hours: {salon.formatted_hours}
+                    </p>
+                  </div>
+                </div>
+                {salon.is_open && (
+                  <div className="text-green-500 font-medium">
+                    Est. Wait: {salon.estimated_wait_time} mins
+                  </div>
+                )}
+              </div>
+            </Card>
+          </div>
+
           {/* Customer Information Section - Moved Up */}
           <div className="border-t pt-6">
             <h2 className="text-2xl font-semibold mb-4">Your Information</h2>
@@ -349,10 +310,14 @@ export default function AppointmentPage({ params }: { params: { id: string } }) 
                   placeholder="Enter your phone number"
                   value={phoneNumber}
                   onChange={(e) => {
-                    setPhoneNumber(e.target.value);
-                    validatePhoneNumber(e.target.value);
+                    const numericValue = e.target.value.replace(/\D/g, '');
+                    setPhoneNumber(numericValue);
+                    validatePhoneNumber(numericValue);
                   }}
                   className={errors.phoneNumber ? 'border-red-500' : ''}
+                  type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                 />
                 {errors.phoneNumber && <p className="text-red-500 text-sm mt-1">{errors.phoneNumber}</p>}
               </div>
@@ -371,44 +336,21 @@ export default function AppointmentPage({ params }: { params: { id: string } }) 
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label htmlFor="appointmentDate">Appointment Date</Label>
-                <Input
-                  id="appointmentDate"
-                  type="date"
-                  min={getTomorrowDate()}
-                  value={appointmentDate}
-                  onChange={(e) => setAppointmentDate(e.target.value)}
-                />
-              </div>
-              <div>
-                <Label htmlFor="appointmentTime">Appointment Time</Label>
-                <Input
-                  id="appointmentTime"
-                  type="time"
-                  value={appointmentTime}
-                  onChange={handleTimeChange}
-                  className={timeError ? 'border-red-500' : ''}
-                />
-                {timeError && (
-                  <p className="text-red-500 text-sm mt-1">{timeError}</p>
-                )}
-              </div>
             </div>
           </div>
 
-          {/* Advance Booking Toggle */}
+          {/* Advanced Check-in Toggle */}
           <div className="border-t pt-6">
             <div className="flex items-center justify-between mb-6">
-              <Label htmlFor="advanceBooking" className="text-lg font-medium">Advance Booking</Label>
+              <Label htmlFor="advancedCheckIn" className="text-lg font-medium">Advanced Check-in</Label>
               <Switch
-                id="advanceBooking"
-                checked={isAdvanceBooking}
-                onCheckedChange={setIsAdvanceBooking}
+                id="advancedCheckIn"
+                checked={isAdvancedCheckIn}
+                onCheckedChange={setIsAdvancedCheckIn}
               />
             </div>
 
-            {isAdvanceBooking && (
+            {isAdvancedCheckIn && (
               <>
                 {/* Services Section */}
                 <div className="space-y-4 mb-6">
@@ -457,16 +399,9 @@ export default function AppointmentPage({ params }: { params: { id: string } }) 
                                 </div>
                                 <div>
                                   <p className="font-medium">{barber.full_name}</p>
-                                  <div className="text-sm text-muted-foreground mt-1">
-                                    {barber.schedules.map((schedule) => {
-                                      const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][schedule.day_of_week];
-                                      return (
-                                        <p key={schedule.id}>
-                                          {dayName}: {schedule.start_time} - {schedule.end_time}
-                                        </p>
-                                      );
-                                    })}
-                                  </div>
+                                  <p className="text-sm text-muted-foreground capitalize">
+                                    Status: {barber.status.replace('_', ' ')}
+                                  </p>
                                 </div>
                               </div>
                             </Card>
@@ -496,49 +431,62 @@ export default function AppointmentPage({ params }: { params: { id: string } }) 
             )}
           </div>
 
-          {/* Navigation Link and Book Button Container */}
+          {/* Navigation and Check-in Button */}
           <div className="border-t pt-6 space-y-4">
-            <Link 
-              href={`/salons/${params.id}/check-in`}
-              className="block text-center text-primary hover:underline"
-            >
-              Prefer to check in now? Click here
-            </Link>
-            
-            <div className="flex justify-center">
+            <div className="flex flex-col items-center gap-3">
+              <div className="flex gap-4 w-full">
+                <Link 
+                  href={`/salons/${salon ? salon.slug : params.idOrSlug}/queue`}
+                  className="w-full"
+                >
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    size="lg"
+                  >
+                    View Current Queue
+                  </Button>
+                </Link>
+              </div>
+
+              {!salon.is_open && (
+                <Alert variant="destructive" className="mb-2">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Shop is Closed</AlertTitle>
+                  <AlertDescription>
+                    You cannot check in at this time as the shop is currently closed. Please try again during business hours: {salon.formatted_hours}
+                  </AlertDescription>
+                </Alert>
+              )}
+              
               <Button
+                className="w-full"
                 size="lg"
-                className="min-w-[200px]"
                 disabled={
-                  isBooking ||
+                  isCheckingIn ||
                   !fullName || 
                   !phoneNumber || 
-                  !appointmentDate ||
-                  !appointmentTime ||
-                  timeError || 
+                  (!salon.is_open) ||
                   errors.fullName || 
                   errors.phoneNumber ||
-                  (isAdvanceBooking && (!selectedService || !selectedBarber))
+                  (isAdvancedCheckIn && !selectedBarber)
                 }
-                onClick={handleBookAppointment}
+                onClick={handleCheckIn}
               >
-                {isBooking ? (
+                {isCheckingIn ? (
                   <>
                     <span className="animate-spin mr-2">⏳</span>
-                    Booking...
+                    Checking In...
                   </>
                 ) : (
-                  <>
-                    <Calendar className="w-5 h-5 mr-2" />
-                    Book Appointment
-                  </>
+                  "Check In Now"
                 )}
               </Button>
             </div>
           </div>
 
           {/* Error Alert */}
-          {(errors.fullName || errors.phoneNumber || timeError) && (
+          {(errors.fullName || errors.phoneNumber) && (
             <Alert variant="destructive" className="mt-4">
               <AlertCircle className="h-4 w-4" />
               <AlertTitle>Error</AlertTitle>
@@ -547,7 +495,6 @@ export default function AppointmentPage({ params }: { params: { id: string } }) 
                 <ul className="list-disc list-inside mt-2">
                   {errors.fullName && <li>{errors.fullName}</li>}
                   {errors.phoneNumber && <li>{errors.phoneNumber}</li>}
-                  {timeError && <li>{timeError}</li>}
                 </ul>
               </AlertDescription>
             </Alert>
@@ -556,5 +503,4 @@ export default function AppointmentPage({ params }: { params: { id: string } }) 
       </Card>
     </motion.div>
   );
-}
-
+} 
