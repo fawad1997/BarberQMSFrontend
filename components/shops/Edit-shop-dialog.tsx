@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { getSession } from "next-auth/react";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -22,10 +22,41 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { Shop } from "@/types/shop";
+import { checkUsernameAvailability } from "@/lib/services/shopService";
+
+// Simple debounce implementation
+function debounce<T extends (...args: any[]) => any>(func: T, wait: number): T {
+  let timeout: NodeJS.Timeout;
+  return ((...args: any[]) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func(...args), wait);
+  }) as T;
+}
 
 // Define validation schema using Zod
 const shopFormSchema = z.object({
   name: z.string().min(1, "Shop name is required"),
+  username: z
+    .string()
+    .min(3, "Username must be at least 3 characters")
+    .max(30, "Username must be at most 30 characters")
+    .regex(/^[a-zA-Z0-9_-]+$/, "Username can only contain letters, numbers, hyphens, and underscores")
+    .refine((username) => {
+      const reservedNames = [
+        'admin', 'api', 'www', 'mail', 'ftp', 'localhost', 'app', 'web',
+        'mobile', 'help', 'support', 'contact', 'about', 'terms', 'privacy',
+        'login', 'register', 'signup', 'signin', 'logout', 'dashboard',
+        'profile', 'settings', 'account', 'user', 'users', 'shop', 'shops',
+        'queue', 'queues', 'barber', 'barbers', 'booking', 'bookings',
+        'appointment', 'appointments', 'service', 'services', 'payment',
+        'payments', 'billing', 'invoice', 'invoices', 'report', 'reports',
+        'analytics', 'stats', 'statistics', 'config', 'configuration',
+        'setup', 'install', 'installation', 'upgrade', 'update', 'patch',
+        'maintenance', 'status', 'health', 'ping', 'test', 'debug',
+        'dev', 'development', 'prod', 'production', 'staging', 'demo'
+      ];
+      return !reservedNames.includes(username.toLowerCase());
+    }, "This username is reserved and cannot be used"),
   address: z.string().min(1, "Address is required"),
   city: z.string().min(1, "City is required"),
   state: z.string().min(1, "State is required"),
@@ -49,10 +80,14 @@ interface EditShopProps {
 export function EditShop({ isOpen, onClose, shopId, initialData, onEditComplete }: EditShopProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
+  const [checkingUsername, setCheckingUsername] = useState(false);
+  const [originalUsername, setOriginalUsername] = useState(initialData.username || "");
 
   // Convert Shop object to form-compatible object
   const formInitialData = {
     name: initialData.name,
+    username: initialData.username || "",
     address: initialData.address,
     city: initialData.city,
     state: initialData.state,
@@ -64,16 +99,47 @@ export function EditShop({ isOpen, onClose, shopId, initialData, onEditComplete 
     average_wait_time: initialData.average_wait_time.toString(),
     has_advertisement: initialData.has_advertisement
   };
-
   const form = useForm<z.infer<typeof shopFormSchema>>({
     resolver: zodResolver(shopFormSchema),
     defaultValues: formInitialData,
   });
 
+  // Debounced username availability check
+  const debouncedUsernameCheck = useCallback(
+    debounce(async (username: string) => {
+      if (!username || username.length < 3 || username === originalUsername) {
+        setUsernameAvailable(null);
+        return;
+      }
+
+      setCheckingUsername(true);
+      try {
+        const result = await checkUsernameAvailability(username);
+        setUsernameAvailable(result.available);
+      } catch (error) {
+        console.error("Username check error:", error);
+        setUsernameAvailable(null);
+      } finally {
+        setCheckingUsername(false);
+      }
+    }, 500),
+    [originalUsername]
+  );
+
+  // Watch username field changes
+  const watchedUsername = form.watch("username");
+  useEffect(() => {
+    if (watchedUsername && watchedUsername !== originalUsername) {
+      debouncedUsernameCheck(watchedUsername);
+    } else if (watchedUsername === originalUsername) {
+      setUsernameAvailable(null);
+    }
+  }, [watchedUsername, debouncedUsernameCheck, originalUsername]);
   // Reset the form when shop data changes
   useEffect(() => {
-    form.reset({
+    const newFormData = {
       name: initialData.name,
+      username: initialData.username || "",
       address: initialData.address,
       city: initialData.city,
       state: initialData.state,
@@ -84,7 +150,9 @@ export function EditShop({ isOpen, onClose, shopId, initialData, onEditComplete 
       closing_time: initialData.closing_time,
       average_wait_time: initialData.average_wait_time.toString(),
       has_advertisement: initialData.has_advertisement
-    });
+    };
+    form.reset(newFormData);
+    setOriginalUsername(initialData.username || "");
   }, [initialData, form]);
 
   // Handle form submission
@@ -148,14 +216,62 @@ export function EditShop({ isOpen, onClose, shopId, initialData, onEditComplete 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.2 }}
-            >
-              {/* Shop Name */}
+            >              {/* Shop Name */}
               <FormField control={form.control} name="name" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Shop Name</FormLabel>
                   <FormControl>
                     <Input placeholder="Enter shop name" {...field} />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              {/* Username */}
+              <FormField control={form.control} name="username" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Username</FormLabel>
+                  <FormControl>
+                    <div className="relative">
+                      <Input 
+                        placeholder="Choose a unique username" 
+                        {...field}
+                        className={`pr-10 ${
+                          usernameAvailable === true 
+                            ? 'border-green-500 focus:border-green-500' 
+                            : usernameAvailable === false 
+                            ? 'border-red-500 focus:border-red-500' 
+                            : ''
+                        }`}
+                      />
+                      <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+                        {checkingUsername ? (
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
+                        ) : usernameAvailable === true ? (
+                          <svg className="h-4 w-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        ) : usernameAvailable === false ? (
+                          <svg className="h-4 w-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        ) : null}
+                      </div>
+                    </div>
+                  </FormControl>
+                  <div className="text-sm text-gray-600">
+                    This will be used in your shop URL: yourshop.com/shop/{field.value || 'username'}
+                  </div>
+                  {usernameAvailable === false && (
+                    <div className="text-sm text-red-500">
+                      This username is already taken
+                    </div>
+                  )}
+                  {usernameAvailable === true && (
+                    <div className="text-sm text-green-500">
+                      This username is available
+                    </div>
+                  )}
                   <FormMessage />
                 </FormItem>
               )} />
@@ -275,7 +391,14 @@ export function EditShop({ isOpen, onClose, shopId, initialData, onEditComplete 
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={isLoading}>
+              <Button 
+                type="submit" 
+                disabled={
+                  isLoading || 
+                  usernameAvailable === false || 
+                  (!!watchedUsername && watchedUsername !== originalUsername && usernameAvailable === null)
+                }
+              >
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
