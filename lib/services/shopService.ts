@@ -32,6 +32,13 @@ class AuthenticationError extends Error {
   }
 }
 
+// Add interface for username availability response
+interface UsernameAvailabilityResponse {
+  username: string;
+  available: boolean;
+  message: string;
+}
+
 export const getShops = async (unused: boolean = false): Promise<Shop[]> => {
   const session = await getSession();
   
@@ -233,5 +240,51 @@ export const getDashboardData = async (accessToken?: string): Promise<DashboardD
       "Failed to connect to the server. Please check your internet connection and try again.",
       error
     );
+  }
+};
+
+export const checkUsernameAvailability = async (username: string): Promise<UsernameAvailabilityResponse> => {
+  const session = await getSession();
+  
+  if (!session?.user?.accessToken) {
+    await handleUnauthorizedResponse();
+    throw new AuthenticationError("No access token found. Please login again.");
+  }
+
+  try {
+    const apiUrl = getApiEndpoint(`/shop-owners/check-username/${encodeURIComponent(username)}`);
+    
+    const response = await fetch(apiUrl, {
+      headers: {
+        'Authorization': `Bearer ${session.user.accessToken}`,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+      mode: 'cors',
+      cache: 'no-store',
+      credentials: 'include'
+    });
+    
+    if (response.status === 401) {
+      await handleUnauthorizedResponse();
+      throw new AuthenticationError("Session expired");
+    }
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Username check failed:", response.status, errorText);
+      throw new ApiError(`Failed to check username availability: ${response.statusText}`, response.status);
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error("Username availability check error:", error);
+    
+    if (error instanceof AuthenticationError || error instanceof ApiError) {
+      throw error;
+    }
+    
+    throw new NetworkError("Failed to check username availability");
   }
 };

@@ -1,6 +1,7 @@
 import { Salon, SalonSearchParams } from "@/types/salon";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
+// Use the correct API URL with fallback, ensuring it matches what's defined in middleware.ts
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export async function getSalons({ query }: { query: string; location: string }) {
   try {
@@ -19,15 +20,59 @@ export async function getSalons({ query }: { query: string; location: string }) 
   }
 }
 
-export async function getSalonDetails(salonId: string) {
+// Helper function to check if a string is a numeric ID
+function isNumericId(str: string): boolean {
+  return /^\d+$/.test(str);
+}
+
+export async function getSalonDetails(idOrSlug: string) {
+  console.log(`Fetching salon details for: ${idOrSlug}`);
   try {
-    const response = await fetch(`${API_URL}/appointments/shop/${salonId}`);
-    if (!response.ok) {
-      console.error('Response status:', response.status);
-      throw new Error('Failed to fetch salon details');
+    // If it's a numeric ID, use the direct shop endpoint
+    if (isNumericId(idOrSlug)) {
+      const endpoint = `${API_URL}/appointments/shop/${idOrSlug}`;
+      console.log(`Using numeric ID endpoint: ${endpoint}`);
+      
+      const response = await fetch(endpoint);
+      
+      if (!response.ok) {
+        console.error(`Error fetching salon with ID ${idOrSlug}: Status ${response.status}`);
+        throw new Error(`Failed to fetch salon details: ${response.status}`);
+      }
+      
+      return await response.json();
+    } 
+    // If it's a slug, find the salon in the list of all salons
+    else {
+      console.log(`Finding salon by slug: ${idOrSlug}`);
+      
+      // Fetch all salons and find the one with matching slug
+      const allSalonsResponse = await fetch(`${API_URL}/appointments/shops`);
+      if (!allSalonsResponse.ok) {
+        console.error(`Failed to fetch salons list: Status ${allSalonsResponse.status}`);
+        throw new Error(`Failed to fetch salons list: ${allSalonsResponse.status}`);
+      }
+      
+      const salonsData = await allSalonsResponse.json();
+      if (!salonsData || !salonsData.items || !Array.isArray(salonsData.items)) {
+        console.error('Invalid response format from salons endpoint');
+        throw new Error('Invalid response format from salons endpoint');
+      }
+      
+      console.log(`Searching through ${salonsData.items.length} salons for slug: ${idOrSlug}`);
+      
+      const matchingSalon = salonsData.items.find(
+        (salon: any) => salon.slug && salon.slug.toLowerCase() === idOrSlug.toLowerCase()
+      );
+      
+      if (matchingSalon) {
+        console.log(`Found matching salon by slug: ${matchingSalon.name}, ID: ${matchingSalon.id}`);
+        return matchingSalon;
+      } else {
+        console.error(`No salon found with slug: ${idOrSlug}`);
+        throw new Error(`No salon found with slug: ${idOrSlug}`);
+      }
     }
-    const data = await response.json();
-    return data;
   } catch (error) {
     console.error('Error in getSalonDetails:', error);
     throw error;

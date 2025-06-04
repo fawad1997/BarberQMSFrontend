@@ -4,26 +4,35 @@ import { useEffect, useState } from "react";
 import { getSalonDetails } from "@/lib/services/salonService";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Clock, MapPin, Phone, Mail, User } from "lucide-react";
+import { Clock, MapPin, Phone, Mail, User, Calendar, AlertCircle } from 'lucide-react';
 import { motion } from "framer-motion";
 import Link from "next/link";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle } from 'lucide-react';
-import { toast } from "sonner";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { toast } from "sonner";
+
+interface Service {
+  id: number;
+  name: string;
+  duration: number;
+  price: number;
+}
+
+interface Schedule {
+  id: number;
+  day_of_week: number; // 0=Sunday, 1=Monday, ..., 6=Saturday
+  start_time: string; // "HH:MM"
+  end_time: string; // "HH:MM"
+}
 
 interface Barber {
   id: number;
   full_name: string;
-  status: string;
-  services: Array<{
-    name: string;
-    duration: number;
-    price: number;
-  }>;
+  services: { id: number }[];
+  schedules: Schedule[];
 }
 
 interface SalonDetails {
@@ -36,22 +45,27 @@ interface SalonDetails {
   phone_number: string;
   email: string;
   formatted_hours: string;
-  estimated_wait_time: number;
   is_open: boolean;
   barbers: Barber[];
   services: Service[];
+  slug: string;
 }
 
-interface Service {
-  id: number;
-  name: string;
-  duration: number;
-  price: number;
+interface AppointmentRequest {
+  shop_id: number;
+  barber_id: number | null;
+  service_id: number | null;
+  appointment_time: string;
+  number_of_people: number;
+  user_id: number | null;
+  full_name: string;
+  phone_number: string;
 }
 
-export default function CheckInPage({ params }: { params: { id: string } }) {
+export default function AppointmentPage({ params }: { params: { idOrSlug: string } }) {
   const [salon, setSalon] = useState<SalonDetails | null>(null);
   const [loading, setLoading] = useState(true);
+  const [selectedService, setSelectedService] = useState<number | null>(null);
   const [selectedBarber, setSelectedBarber] = useState<number | null>(null);
   const [fullName, setFullName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -60,14 +74,16 @@ export default function CheckInPage({ params }: { params: { id: string } }) {
     fullName: "",
     phoneNumber: "",
   });
-  const [isCheckingIn, setIsCheckingIn] = useState(false);
-  const [isAdvancedCheckIn, setIsAdvancedCheckIn] = useState(false);
-  const [selectedService, setSelectedService] = useState<number | null>(null);
+  const [isAdvanceBooking, setIsAdvanceBooking] = useState(false);
+  const [appointmentDate, setAppointmentDate] = useState("");
+  const [appointmentTime, setAppointmentTime] = useState("");
+  const [timeError, setTimeError] = useState("");
+  const [isBooking, setIsBooking] = useState(false);
 
   useEffect(() => {
     const fetchSalonDetails = async () => {
       try {
-        const data = await getSalonDetails(params.id);
+        const data = await getSalonDetails(params.idOrSlug);
         setSalon(data);
       } catch (error) {
         console.error('Error fetching salon details:', error);
@@ -77,7 +93,7 @@ export default function CheckInPage({ params }: { params: { id: string } }) {
     };
 
     fetchSalonDetails();
-  }, [params.id]);
+  }, [params.idOrSlug]);
 
   const validateFullName = (name: string) => {
     if (name.length < 3) {
@@ -95,58 +111,136 @@ export default function CheckInPage({ params }: { params: { id: string } }) {
     }
   };
 
-  const handleCheckIn = async () => {
+  const getFormattedDateTime = () => {
+    if (!appointmentDate || !appointmentTime) return "";
+    return new Date(`${appointmentDate}T${appointmentTime}`).toISOString();
+  };
+
+  const getTomorrowDate = () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return tomorrow.toISOString().split('T')[0];
+  };
+
+  const parseBusinessHours = (formattedHours: string) => {
+    const [start, end] = formattedHours.split(' - ');
+    return {
+      start: new Date(`1970/01/01 ${start}`).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
+      end: new Date(`1970/01/01 ${end}`).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })
+    };
+  };
+
+  const isWithinBusinessHours = (time: string) => {
+    if (!salon?.formatted_hours || !time) return false;
+    
+    const { start, end } = parseBusinessHours(salon.formatted_hours);
+    
+    // Handle case where end time is earlier than start time (overnight hours)
+    if (end <= start) {
+      // If end is before or equal to start, it means the shop is open overnight
+      // So the time is valid if it's either after the start OR before the end
+      return time >= start || time <= end;
+    }
+    
+    // Normal case: shop opens and closes on the same day
+    return time >= start && time <= end;
+  };
+
+  const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedTime = e.target.value;
+    setAppointmentTime(selectedTime);
+    
+    if (!isWithinBusinessHours(selectedTime)) {
+      setTimeError(`Please select a time between ${salon?.formatted_hours}`);
+    } else {
+      setTimeError("");
+    }
+  };
+
+  const handleBookAppointment = async () => {
+    if (!salon) {
+      toast.error("Salon information not available");
+      return;
+    }
+    
     try {
-      setIsCheckingIn(true);
+      setIsBooking(true);
       
-      const checkInData = {
-        shop_id: Number(params.id),
-        service_id: isAdvancedCheckIn ? selectedService : null,
-        barber_id: isAdvancedCheckIn ? selectedBarber : null,
+      const appointmentData: AppointmentRequest = {
+        shop_id: Number(salon.id),
+        barber_id: isAdvanceBooking ? selectedBarber : null,
+        service_id: isAdvanceBooking ? selectedService : null,
+        appointment_time: getFormattedDateTime(),
+        number_of_people: Number(numberOfPeople),
+        user_id: null,
         full_name: fullName,
         phone_number: phoneNumber,
-        number_of_people: Number(numberOfPeople),
       };
-  
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/queue/`, {
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/appointments/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(checkInData),
+        body: JSON.stringify(appointmentData),
       });
-      console.log(checkInData);
-  
+      
       const data = await response.json();
-  
+
       if (!response.ok) {
-        // Extract the specific error detail
-        const errorMessage = data.detail || 'Failed to check in';
+        // Extract the specific error message from different possible response formats
+        let errorMessage = 'Failed to book appointment';
         
-        // Handle the "Already in queue" error specifically
-        if (errorMessage === "Already in queue") {
-          throw new Error("You're already in the queue for this salon");
+        // Check if there's a direct message in the response
+        if (typeof data.message === 'string') {
+          errorMessage = data.message;
+        }
+        // Check if there's a direct error in the response
+        else if (typeof data.error === 'string') {
+          errorMessage = data.error;
+        }
+        // Check if we have a detail field with an array of validation errors
+        else if (data.detail && Array.isArray(data.detail)) {
+          // Extract the actual error message from the validation errors
+          const messages = data.detail.map((error: any) => {
+            // If msg property exists, use that
+            if (error.msg) return error.msg;
+            // Sometimes the message might be directly in the error
+            if (typeof error === 'string') return error;
+            return null;
+          }).filter(Boolean);
+          
+          if (messages.length > 0) {
+            errorMessage = messages.join('. ');
+          }
+        }
+        // If there's a string detail field
+        else if (typeof data.detail === 'string') {
+          errorMessage = data.detail;
         }
         
         throw new Error(errorMessage);
+      } else {
+        // Success - show confirmation and redirect
+        toast.success("Appointment booked successfully!");
+        
+        // Store the appointment reference in localStorage
+        localStorage.setItem('lastAppointmentId', data.id?.toString() || '');
+        localStorage.setItem('appointmentShopId', salon.id.toString());
+        
+        // Redirect to confirmation or status page using the slug for the URL
+        window.location.href = `/salons/${salon.slug}/appointment-confirmation`;
       }
-  
-      // Store check-in data in localStorage
-      localStorage.setItem('checkInPhone', phoneNumber);
-      localStorage.setItem('checkInShopId', params.id);
-      
-      // Redirect to status page
-      window.location.href = `/salons/${params.id}/my-status`;
-      
     } catch (error) {
-      toast.error("Check-in Failed", {
-        description: error instanceof Error ? error.message : "Failed to check in",
+      toast.error("Booking Failed", {
+        description: error instanceof Error ? error.message : "Failed to book appointment",
       });
     } finally {
-      setIsCheckingIn(false);
+      setIsBooking(false);
     }
-  }
+  };
 
+  // Add this helper function to filter barbers based on selected service
   const getBarbersByService = (serviceId: number | null) => {
     if (!serviceId) return salon.barbers;
     
@@ -227,7 +321,7 @@ export default function CheckInPage({ params }: { params: { id: string } }) {
             </div>
           </div>
 
-          {/* Status Badge - Updated Design */}
+          {/* Status Badge */}
           <div className="border-t pt-6">
             <Card className="p-4 bg-background border-2">
               <div className="flex items-center justify-between">
@@ -244,16 +338,136 @@ export default function CheckInPage({ params }: { params: { id: string } }) {
                     </p>
                   </div>
                 </div>
-                {salon.is_open && (
-                  <div className="text-green-500 font-medium">
-                    Est. Wait: {salon.estimated_wait_time} mins
-                  </div>
-                )}
               </div>
             </Card>
           </div>
 
-          {/* Customer Information Section - Moved Up */}
+          {/* Appointment Details Section */}
+          <div className="border-t pt-6">
+            <h2 className="text-2xl font-semibold mb-4">Appointment Details</h2>
+            
+            {/* Advanced Booking Toggle */}
+            <div className="flex items-center justify-between mb-6">
+              <Label htmlFor="advanceBooking" className="text-lg font-medium">Advanced Booking</Label>
+              <Switch
+                id="advanceBooking"
+                checked={isAdvanceBooking}
+                onCheckedChange={setIsAdvanceBooking}
+              />
+            </div>
+            
+            {/* Date and Time Selection */}
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="appointmentDate">Date</Label>
+                <Input
+                  id="appointmentDate"
+                  type="date"
+                  min={getTomorrowDate()}
+                  value={appointmentDate}
+                  onChange={(e) => setAppointmentDate(e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="appointmentTime">Time</Label>
+                <Input
+                  id="appointmentTime"
+                  type="time"
+                  value={appointmentTime}
+                  onChange={handleTimeChange}
+                  required
+                />
+                {timeError && <p className="text-red-500 text-sm mt-1">{timeError}</p>}
+              </div>
+            </div>
+            
+            {isAdvanceBooking && (
+              <>
+                {/* Services Section */}
+                <div className="mt-6 space-y-4">
+                  <h3 className="text-xl font-semibold">Select a Service</h3>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    {salon.services.map((service) => (
+                      <Card
+                        key={service.id}
+                        className={`p-4 cursor-pointer transition-all hover:shadow-md ${
+                          selectedService === service.id ? 'ring-2 ring-primary' : ''
+                        }`}
+                        onClick={() => handleServiceSelection(service.id)}
+                      >
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <p className="font-medium">{service.name}</p>
+                            <p className="text-sm text-muted-foreground">
+                              Duration: {service.duration} min
+                            </p>
+                          </div>
+                          <p className="font-medium text-primary">${service.price}</p>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Barbers Section */}
+                <div className="mt-6 space-y-4">
+                  <h3 className="text-xl font-semibold">Select a Barber</h3>
+                  {selectedService ? (
+                    <>
+                      {getBarbersByService(selectedService).length > 0 ? (
+                        <div className="grid md:grid-cols-2 gap-4">
+                          {getBarbersByService(selectedService).map((barber) => (
+                            <Card
+                              key={barber.id}
+                              className={`p-4 cursor-pointer transition-all hover:shadow-md ${
+                                selectedBarber === barber.id ? 'ring-2 ring-primary' : ''
+                              }`}
+                              onClick={() => setSelectedBarber(barber.id)}
+                            >
+                              <div className="flex items-center gap-4">
+                                <div className="bg-primary/10 p-3 rounded-full">
+                                  <User className="h-6 w-6 text-primary" />
+                                </div>
+                                <div>
+                                  <p className="font-medium">{barber.full_name}</p>
+                                  <div className="text-sm text-muted-foreground mt-1">
+                                    {barber.schedules.map((schedule) => (
+                                      <p key={schedule.id}>
+                                        {schedule.day_name}: {schedule.formatted_time}
+                                      </p>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            </Card>
+                          ))}
+                        </div>
+                      ) : (
+                        <Alert variant="destructive">
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertTitle>No Barbers Available</AlertTitle>
+                          <AlertDescription>
+                            Unfortunately, no barber is currently available for this service. Please select a different service or try again later.
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                    </>
+                  ) : (
+                    <Alert>
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertTitle>Select a Service</AlertTitle>
+                      <AlertDescription>
+                        Please select a service first to see available barbers.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Personal Information Section */}
           <div className="border-t pt-6">
             <h2 className="text-2xl font-semibold mb-4">Your Information</h2>
             <div className="grid md:grid-cols-2 gap-4">
@@ -307,104 +521,12 @@ export default function CheckInPage({ params }: { params: { id: string } }) {
             </div>
           </div>
 
-          {/* Advanced Check-in Toggle */}
-          <div className="border-t pt-6">
-            <div className="flex items-center justify-between mb-6">
-              <Label htmlFor="advancedCheckIn" className="text-lg font-medium">Advanced Check-in</Label>
-              <Switch
-                id="advancedCheckIn"
-                checked={isAdvancedCheckIn}
-                onCheckedChange={setIsAdvancedCheckIn}
-              />
-            </div>
-
-            {isAdvancedCheckIn && (
-              <>
-                {/* Services Section */}
-                <div className="space-y-4 mb-6">
-                  <h2 className="text-xl font-semibold">Select a Service</h2>
-                  <div className="grid md:grid-cols-2 gap-4">
-                    {salon.services.map((service) => (
-                      <Card
-                        key={service.id}
-                        className={`p-4 cursor-pointer transition-all hover:shadow-md ${
-                          selectedService === service.id ? 'ring-2 ring-primary' : ''
-                        }`}
-                        onClick={() => handleServiceSelection(service.id)}
-                      >
-                        <div className="flex justify-between items-center">
-                          <div>
-                            <p className="font-medium">{service.name}</p>
-                            <p className="text-sm text-muted-foreground">
-                              Duration: {service.duration} min
-                            </p>
-                          </div>
-                          <p className="font-medium text-primary">${service.price}</p>
-                        </div>
-                      </Card>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Updated Barbers Section */}
-                <div className="space-y-4">
-                  <h2 className="text-xl font-semibold">Select a Barber</h2>
-                  {selectedService ? (
-                    <>
-                      {getBarbersByService(selectedService).length > 0 ? (
-                        <div className="grid md:grid-cols-2 gap-4">
-                          {getBarbersByService(selectedService).map((barber) => (
-                            <Card
-                              key={barber.id}
-                              className={`p-4 cursor-pointer transition-all hover:shadow-md ${
-                                selectedBarber === barber.id ? 'ring-2 ring-primary' : ''
-                              }`}
-                              onClick={() => setSelectedBarber(barber.id)}
-                            >
-                              <div className="flex items-center gap-4">
-                                <div className="bg-primary/10 p-3 rounded-full">
-                                  <User className="h-6 w-6 text-primary" />
-                                </div>
-                                <div>
-                                  <p className="font-medium">{barber.full_name}</p>
-                                  <p className="text-sm text-muted-foreground capitalize">
-                                    Status: {barber.status.replace('_', ' ')}
-                                  </p>
-                                </div>
-                              </div>
-                            </Card>
-                          ))}
-                        </div>
-                      ) : (
-                        <Alert variant="destructive">
-                          <AlertCircle className="h-4 w-4" />
-                          <AlertTitle>No Barbers Available</AlertTitle>
-                          <AlertDescription>
-                            Unfortunately, no barber is currently available for this service. Please select a different service or try again later.
-                          </AlertDescription>
-                        </Alert>
-                      )}
-                    </>
-                  ) : (
-                    <Alert>
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertTitle>Select a Service</AlertTitle>
-                      <AlertDescription>
-                        Please select a service first to see available barbers.
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* Navigation and Check-in Button */}
+          {/* Navigation and Book Button */}
           <div className="border-t pt-6 space-y-4">
             <div className="flex flex-col items-center gap-3">
               <div className="flex gap-4 w-full">
                 <Link 
-                  href={`/salons/${params.id}/queue`}
+                  href={`/salons/${salon.slug}/check-in`}
                   className="w-full"
                 >
                   <Button
@@ -412,49 +534,41 @@ export default function CheckInPage({ params }: { params: { id: string } }) {
                     className="w-full"
                     size="lg"
                   >
-                    View Current Queue
+                    Go to Check-In
                   </Button>
                 </Link>
               </div>
-
-              {!salon.is_open && (
-                <Alert variant="destructive" className="mb-2">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertTitle>Shop is Closed</AlertTitle>
-                  <AlertDescription>
-                    You cannot check in at this time as the shop is currently closed. Please try again during business hours: {salon.formatted_hours}
-                  </AlertDescription>
-                </Alert>
-              )}
               
               <Button
                 className="w-full"
                 size="lg"
+                onClick={handleBookAppointment}
                 disabled={
-                  isCheckingIn ||
+                  isBooking ||
                   !fullName || 
                   !phoneNumber || 
-                  (!salon.is_open) ||
+                  !appointmentDate ||
+                  !appointmentTime ||
+                  timeError ||
                   errors.fullName || 
                   errors.phoneNumber ||
-                  (isAdvancedCheckIn && !selectedBarber)
+                  (isAdvanceBooking && !selectedBarber)
                 }
-                onClick={handleCheckIn}
               >
-                {isCheckingIn ? (
+                {isBooking ? (
                   <>
                     <span className="animate-spin mr-2">⏳</span>
-                    Checking In...
+                    Booking...
                   </>
                 ) : (
-                  "Check In Now"
+                  "Book Appointment"
                 )}
               </Button>
             </div>
           </div>
 
           {/* Error Alert */}
-          {(errors.fullName || errors.phoneNumber) && (
+          {(errors.fullName || errors.phoneNumber || timeError) && (
             <Alert variant="destructive" className="mt-4">
               <AlertCircle className="h-4 w-4" />
               <AlertTitle>Error</AlertTitle>
@@ -463,6 +577,7 @@ export default function CheckInPage({ params }: { params: { id: string } }) {
                 <ul className="list-disc list-inside mt-2">
                   {errors.fullName && <li>{errors.fullName}</li>}
                   {errors.phoneNumber && <li>{errors.phoneNumber}</li>}
+                  {timeError && <li>{timeError}</li>}
                 </ul>
               </AlertDescription>
             </Alert>
@@ -471,4 +586,4 @@ export default function CheckInPage({ params }: { params: { id: string } }) {
       </Card>
     </motion.div>
   );
-}
+} 

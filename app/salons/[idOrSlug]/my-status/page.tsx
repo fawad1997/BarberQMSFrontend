@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { Clock, User } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { getSalonDetails } from "@/lib/services/salonService";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,8 +28,15 @@ interface QueueStatus {
   service_name?: string;
 }
 
-export default function MyStatusPage({ params }: { params: { id: string } }) {
+interface SalonDetails {
+  id: number;
+  name: string;
+  slug: string;
+}
+
+export default function MyStatusPage({ params }: { params: { idOrSlug: string } }) {
   const router = useRouter();
+  const [salon, setSalon] = useState<SalonDetails | null>(null);
   const [status, setStatus] = useState<QueueStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -38,17 +46,22 @@ export default function MyStatusPage({ params }: { params: { id: string } }) {
   useEffect(() => {
     const checkInPhone = localStorage.getItem('checkInPhone');
     const checkInShopId = localStorage.getItem('checkInShopId');
-
-    // Redirect if no check-in data or wrong salon
-    if (!checkInPhone || checkInShopId !== params.id) {
-      router.push(`/salons/${params.id}`);
-      return;
-    }
-
-    const fetchStatus = async () => {
+    
+    const fetchSalonAndStatus = async () => {
       try {
+        // First, get salon details to ensure we have the correct ID
+        const salonData = await getSalonDetails(params.idOrSlug);
+        setSalon(salonData);
+        
+        // Redirect if no check-in data or wrong salon
+        if (!checkInPhone || checkInShopId !== salonData.id.toString()) {
+          router.push(`/salons/${salonData.slug}`);
+          return;
+        }
+        
+        // Now fetch queue status using the salon's numeric ID
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/queue/check-status?phone=${checkInPhone}&shop_id=${params.id}`
+          `${process.env.NEXT_PUBLIC_API_URL}/queue/check-status?phone=${checkInPhone}&shop_id=${salonData.id}`
         );
         const data = await response.json();
 
@@ -63,8 +76,8 @@ export default function MyStatusPage({ params }: { params: { id: string } }) {
           status: data.status,
           checked_in_at: data.check_in_time,
           full_name: data.full_name,
-          barber_name: data.barber_name, // This might need to be fetched separately using barber_id
-          service_name: data.service_name // This might need to be fetched separately using service_id
+          barber_name: data.barber_name, 
+          service_name: data.service_name
         });
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch status');
@@ -73,18 +86,18 @@ export default function MyStatusPage({ params }: { params: { id: string } }) {
       }
     };
 
-    fetchStatus();
+    fetchSalonAndStatus();
+    
     // Poll for updates every 30 seconds
-    const interval = setInterval(fetchStatus, 30000);
-
+    const interval = setInterval(fetchSalonAndStatus, 30000);
     return () => clearInterval(interval);
-  }, [params.id, router]);
+  }, [params.idOrSlug, router]);
 
   const handleLeaveQueue = async () => {
     const checkInPhone = localStorage.getItem('checkInPhone');
     const checkInShopId = localStorage.getItem('checkInShopId');
 
-    if (checkInPhone && checkInShopId) {
+    if (checkInPhone && checkInShopId && salon) {
       setIsLeaving(true);
       try {
         const response = await fetch(
@@ -97,7 +110,7 @@ export default function MyStatusPage({ params }: { params: { id: string } }) {
           toast.success(data.message || "Successfully left the queue");
           localStorage.removeItem('checkInPhone');
           localStorage.removeItem('checkInShopId');
-          router.push(`/salons/${params.id}/check-in`);
+          router.push(`/salons/${salon.slug}/check-in`);
         } else {
           throw new Error(data.message || 'Failed to leave the queue');
         }
@@ -118,10 +131,16 @@ export default function MyStatusPage({ params }: { params: { id: string } }) {
     );
   }
 
-  if (error || !status) {
+  if (error || !status || !salon) {
     return (
       <div className="container py-8 text-center">
         <div className="text-red-500">{error || 'Status not found'}</div>
+        <Button 
+          className="mt-4" 
+          onClick={() => router.push(`/salons/${params.idOrSlug}/check-in`)}
+        >
+          Return to Check-in
+        </Button>
       </div>
     );
   }
@@ -227,4 +246,4 @@ export default function MyStatusPage({ params }: { params: { id: string } }) {
       </AlertDialog>
     </motion.div>
   );
-}
+} 

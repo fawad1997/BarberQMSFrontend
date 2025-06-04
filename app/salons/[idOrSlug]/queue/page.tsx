@@ -26,9 +26,10 @@ interface SalonDetails {
   formatted_hours: string;
   is_open: boolean;
   estimated_wait_time: number;
+  slug: string;
 }
 
-export default function QueuePage({ params }: { params: { id: string } }) {
+export default function QueuePage({ params }: { params: { idOrSlug: string } }) {
   const [salon, setSalon] = useState<SalonDetails | null>(null);
   const [queueItems, setQueueItems] = useState<QueueItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -37,11 +38,11 @@ export default function QueuePage({ params }: { params: { id: string } }) {
     const fetchData = async () => {
       try {
         // Fetch salon details
-        const salonData = await getSalonDetails(params.id);
+        const salonData = await getSalonDetails(params.idOrSlug);
         setSalon(salonData);
 
-        // Fetch queue data
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/queue/${params.id}`);
+        // Fetch queue data using the salon's numeric ID
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/queue/${salonData.id}`);
         if (!response.ok) throw new Error('Failed to fetch queue data');
         const queueData = await response.json();
         setQueueItems(queueData);
@@ -57,7 +58,7 @@ export default function QueuePage({ params }: { params: { id: string } }) {
     // Set up polling every 30 seconds
     const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
-  }, [params.id]);
+  }, [params.idOrSlug]);
 
   if (loading) {
     return (
@@ -169,4 +170,4 @@ export default function QueuePage({ params }: { params: { id: string } }) {
       </Card>
     </motion.div>
   );
-}
+} 
