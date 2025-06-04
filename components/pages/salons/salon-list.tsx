@@ -36,17 +36,16 @@ export default function SalonList({ salons, isLoading }: SalonListProps) {
             </div>
           </div>
           
-          <div className="mt-4">
-            {/* <p className="text-sm text-muted-foreground">
+          <div className="mt-4">            {/* <p className="text-sm text-muted-foreground">
               Wait time: {salon.average_wait_time} min
             </p> */}
             <div className="mt-2">
               <Button 
-                onClick={() => router.push(`/salons/${salon.slug}/check-in`)}
+                onClick={() => router.push(`/salons/${salon.slug}`)}
                 variant="default"
                 className="w-full"
               >
-                Check In
+                Visit Salon
               </Button>
               {/* <Button 
                 onClick={() => router.push(`/salons/${salon.slug}/appointment`)}
