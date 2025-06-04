@@ -1,6 +1,8 @@
 export interface Shop {
   id: number;
   name: string;
+  username?: string;
+  slug?: string;
   address: string;
   city: string;
   state: string;
