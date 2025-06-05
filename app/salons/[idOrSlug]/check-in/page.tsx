@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { getSalonDetails } from "@/lib/services/salonService";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,7 @@ import { AlertCircle } from 'lucide-react';
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { ensureSalonUrlUsesUsername } from "@/lib/utils/navigation";
 
 interface Barber {
   id: number;
@@ -38,9 +40,9 @@ interface SalonDetails {
   formatted_hours: string;
   estimated_wait_time: number;
   is_open: boolean;
-  barbers: Barber[];
-  services: Service[];
+  barbers: Barber[];  services: Service[];
   slug: string;
+  username: string;
 }
 
 interface Service {
@@ -51,6 +53,7 @@ interface Service {
 }
 
 export default function CheckInPage({ params }: { params: { idOrSlug: string } }) {
+  const router = useRouter();
   const [salon, setSalon] = useState<SalonDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -65,7 +68,6 @@ export default function CheckInPage({ params }: { params: { idOrSlug: string } }
   const [isCheckingIn, setIsCheckingIn] = useState(false);
   const [isAdvancedCheckIn, setIsAdvancedCheckIn] = useState(false);
   const [selectedService, setSelectedService] = useState<number | null>(null);
-
   useEffect(() => {
     const fetchSalonDetails = async () => {
       try {
@@ -81,6 +83,10 @@ export default function CheckInPage({ params }: { params: { idOrSlug: string } }
         console.log('Salon details fetched successfully:', data.name);
         setSalon(data);
         setError(null);
+          // Ensure URL uses the current username
+        if (data?.username) {
+          ensureSalonUrlUsesUsername(data.username, router);
+        }
       } catch (error) {
         console.error('Error fetching salon details:', error);
         setError(error instanceof Error ? error.message : 'Failed to load salon information');
@@ -90,7 +96,7 @@ export default function CheckInPage({ params }: { params: { idOrSlug: string } }
     };
 
     fetchSalonDetails();
-  }, [params.idOrSlug]);
+  }, [params.idOrSlug, router]);
 
   const validateFullName = (name: string) => {
     if (name.length < 3) {
@@ -107,8 +113,12 @@ export default function CheckInPage({ params }: { params: { idOrSlug: string } }
       setErrors(prev => ({ ...prev, phoneNumber: "" }));
     }
   };
-
   const handleCheckIn = async () => {
+    if (!salon) {
+      toast.error("Salon information not available");
+      return;
+    }
+    
     try {
       setIsCheckingIn(true);
       
@@ -149,7 +159,7 @@ export default function CheckInPage({ params }: { params: { idOrSlug: string } }
       localStorage.setItem('checkInShopId', salon.id.toString());
       
       // Redirect to status page
-      window.location.href = `/salons/${salon.slug}/my-status`;
+      window.location.href = `/salons/${salon.username}/my-status`;
       
     } catch (error) {
       toast.error("Check-in Failed", {
@@ -436,7 +446,7 @@ export default function CheckInPage({ params }: { params: { idOrSlug: string } }
             <div className="flex flex-col items-center gap-3">
               <div className="flex gap-4 w-full">
                 <Link 
-                  href={`/salons/${salon ? salon.slug : params.idOrSlug}/queue`}
+                  href={`/salons/${salon ? salon.username : params.idOrSlug}/queue`}
                   className="w-full"
                 >
                   <Button

@@ -46,9 +46,9 @@ interface SalonDetails {
   email: string;
   formatted_hours: string;
   is_open: boolean;
-  barbers: Barber[];
-  services: Service[];
+  barbers: Barber[];  services: Service[];
   slug: string;
+  username: string;
 }
 
 interface AppointmentRequest {
@@ -229,7 +229,7 @@ export default function AppointmentPage({ params }: { params: { idOrSlug: string
         localStorage.setItem('appointmentShopId', salon.id.toString());
         
         // Redirect to confirmation or status page using the slug for the URL
-        window.location.href = `/salons/${salon.slug}/appointment-confirmation`;
+        window.location.href = `/salons/${salon.username}/appointment-confirmation`;
       }
     } catch (error) {
       toast.error("Booking Failed", {
@@ -526,7 +526,7 @@ export default function AppointmentPage({ params }: { params: { idOrSlug: string
             <div className="flex flex-col items-center gap-3">
               <div className="flex gap-4 w-full">
                 <Link 
-                  href={`/salons/${salon.slug}/check-in`}
+                  href={`/salons/${salon.username}/check-in`}
                   className="w-full"
                 >
                   <Button

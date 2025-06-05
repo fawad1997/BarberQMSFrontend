@@ -23,6 +23,7 @@ import { Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { Shop } from "@/types/shop";
 import { checkUsernameAvailability } from "@/lib/services/shopService";
+import { updateSalonUrlAfterUsernameChange, updateShopUrlAfterUsernameChange } from "@/lib/utils/navigation";
 
 // Simple debounce implementation
 function debounce<T extends (...args: any[]) => any>(func: T, wait: number): T {
@@ -181,16 +182,23 @@ export function EditShop({ isOpen, onClose, shopId, initialData, onEditComplete 
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
         throw new Error(errorData?.detail || "Failed to update shop details.");
-      }
-
-      const updatedShopData = await response.json();
+      }      const updatedShopData = await response.json();
       toast.success("Shop details updated successfully!");
 
       // Preserve original shop properties not in the form
       const updatedShop: Shop = {
         ...initialData,
         ...updatedShopData
-      };
+      };      // Check if username/slug changed and update URL if needed
+      const usernameChanged = values.username !== originalUsername;
+      if (usernameChanged) {
+        console.log(`Username changed from ${originalUsername} to ${values.username}, updating URL...`);
+        // Use the shop-specific navigation utility to update the URL
+        const urlUpdated = updateShopUrlAfterUsernameChange(values.username, router);
+        if (urlUpdated) {
+          console.log("URL update initiated for shop username change");
+        }
+      }
 
       onEditComplete(updatedShop);
       onClose();

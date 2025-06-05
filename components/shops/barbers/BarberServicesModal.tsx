@@ -57,7 +57,6 @@ export function BarberServicesModal({
         }
 
         const allServicesData = await allServicesResponse.json()
-        console.log("allServicesData", allServicesData)
 
         // Ensure allServicesData is an array
         const servicesArray = Array.isArray(allServicesData)
