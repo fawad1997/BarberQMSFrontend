@@ -22,6 +22,7 @@ interface Barber {
   full_name: string;
   status: string;
   services: Array<{
+    id: number;
     name: string;
     duration: number;
     price: number;
@@ -169,8 +170,8 @@ export default function CheckInPage({ params }: { params: { idOrSlug: string } }
       setIsCheckingIn(false);
     }
   }
-
   const getBarbersByService = (serviceId: number | null) => {
+    if (!salon) return [];
     if (!serviceId) return salon.barbers;
     
     return salon.barbers.filter(barber => 
@@ -471,14 +472,13 @@ export default function CheckInPage({ params }: { params: { idOrSlug: string } }
               
               <Button
                 className="w-full"
-                size="lg"
-                disabled={
+                size="lg"                disabled={
                   isCheckingIn ||
                   !fullName || 
                   !phoneNumber || 
                   (!salon.is_open) ||
-                  errors.fullName || 
-                  errors.phoneNumber ||
+                  !!errors.fullName || 
+                  !!errors.phoneNumber ||
                   (isAdvancedCheckIn && !selectedBarber)
                 }
                 onClick={handleCheckIn}
