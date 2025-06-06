@@ -1,3 +1,4 @@
+/* @tailwind-config */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -110,3 +111,14 @@
   color: white;
 }
 
+/* Custom walkthrough highlight animation */
+@keyframes glow {
+  0% {
+    box-shadow: 0 0 5px rgba(var(--primary), 0.3);
+    transform: scale(1);
+  }
+  100% {
+    box-shadow: 0 0 20px rgba(var(--primary), 0.6);
+    transform: scale(1.02);
+  }
+}
