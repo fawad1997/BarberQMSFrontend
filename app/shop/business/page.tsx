@@ -18,6 +18,7 @@ import { getSession } from "next-auth/react";
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
+import WorkScheduleManager from '@/components/shops/schedules/WorkScheduleManager';
 
 interface Business {
   id: number;
@@ -75,20 +76,20 @@ function ServiceList({ selectedBusiness, services, onAdd, onEdit, onDelete, onDi
   onDelete: (id: number) => void,
   onDialogSubmit: (data: any) => void,
 }) {
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editData, setEditData] = useState<Service | null>(null);
+  const [serviceDialogOpen, setServiceDialogOpen] = useState(false);
+  const [serviceEditData, setServiceEditData] = useState<Service | null>(null);
 
   if (!selectedBusiness) return null;
 
   const handleAdd = () => {
-    setEditData(null);
-    setDialogOpen(true);
+    setServiceEditData(null);
+    setServiceDialogOpen(true);
     onAdd();
   };
 
   const handleEdit = (data: Service) => {
-    setEditData(data);
-    setDialogOpen(true);
+    setServiceEditData(data);
+    setServiceDialogOpen(true);
     onEdit(data);
   };
 
@@ -98,11 +99,10 @@ function ServiceList({ selectedBusiness, services, onAdd, onEdit, onDelete, onDi
 
   const handleDialogSubmit = (data: any) => {
     onDialogSubmit(data);
-    setDialogOpen(false);
+    setServiceDialogOpen(false);
   };
 
   const serviceColumns: GridColDef[] = [
-    { field: "id", headerName: "ID", width: 70 },
     { field: "name", headerName: "Service Name", width: 200 },
     { field: "price", headerName: "Price", width: 120, renderCell: (params: GridRenderCellParams) => `$${params.value}` },
     { field: "duration", headerName: "Duration (min)", width: 150 },
@@ -133,7 +133,7 @@ function ServiceList({ selectedBusiness, services, onAdd, onEdit, onDelete, onDi
         <Typography variant="subtitle1" fontWeight={600} sx={{ fontSize: { xs: 18, md: 20 } }}>
           Services
         </Typography>
-        <Button onClick={handleAdd} sx={{ minWidth: 140, fontWeight: 600 }}>
+        <Button onClick={handleAdd} className="min-w-[140px] font-semibold">
           <Plus className="h-4 w-4 mr-2" /> Add Service
         </Button>
       </Box>
@@ -149,7 +149,7 @@ function ServiceList({ selectedBusiness, services, onAdd, onEdit, onDelete, onDi
           disableRowSelectionOnClick
         />
       </Box>
-      <ServiceDialog open={dialogOpen} onClose={() => setDialogOpen(false)} onSubmit={handleDialogSubmit} initialData={editData} />
+      <ServiceDialog open={serviceDialogOpen} onClose={() => setServiceDialogOpen(false)} onSubmit={handleDialogSubmit} initialData={serviceEditData} />
     </Box>
   );
 }
@@ -186,7 +186,7 @@ function BusinessDialog({ open, onClose, onSubmit, initialData }: any) {
   // Reset form when dialog opens/closes or initialData changes
   React.useEffect(() => { reset(initialData || {}); }, [open, initialData, reset]);
   return (
-    <Dialog open={open} onClose={onClose}>
+    <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle>{initialData ? "Edit Business" : "Add Business"}</DialogTitle>
@@ -246,18 +246,48 @@ function ServiceDialog({ open, onClose, onSubmit, initialData }: any) {
     name: yup.string().required("Service name is required"),
     duration: yup.number().typeError("Duration must be a number").required("Duration is required"),
     price: yup.number().typeError("Price must be a number").required("Price is required"),
+    id: yup.number().notRequired(), // allow id for edit
   });
 
   const { control, handleSubmit, reset, formState: { errors } } = useForm({
-    defaultValues: initialData || {
-      name: "",
-      duration: "",
-      price: "",
+    defaultValues: {
+      name: initialData?.name || "",
+      duration: initialData?.duration || "",
+      price: initialData?.price || "",
+      id: initialData?.id || undefined,
     },
     resolver: yupResolver(schema),
   });
 
-  React.useEffect(() => { reset(initialData || {}); }, [open, initialData, reset]);
+  // Reset form when dialog opens/closes or initialData changes
+  React.useEffect(() => { 
+    if (initialData) {
+      reset({
+        name: initialData.name,
+        duration: initialData.duration,
+        price: initialData.price,
+        id: initialData.id
+      });
+    } else {
+      reset({
+        name: "",
+        duration: "",
+        price: "",
+        id: undefined
+      });
+    }
+  }, [open, initialData, reset]);
+
+  const onSubmitForm = (data: any) => {
+    // Ensure all fields are properly formatted before submission
+    const formattedData = {
+      ...data,
+      duration: Number(data.duration),
+      price: Number(data.price),
+      id: data.id ? Number(data.id) : undefined
+    };
+    onSubmit(formattedData);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -267,7 +297,16 @@ function ServiceDialog({ open, onClose, onSubmit, initialData }: any) {
             {initialData ? "Edit Service" : "Add New Service"}
           </DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 py-4">
+        <form onSubmit={handleSubmit(onSubmitForm)} className="space-y-6 py-4">
+          {/* Hidden id field for edit */}
+          {initialData && initialData.id && (
+            <Controller
+              name="id"
+              control={control}
+              defaultValue={initialData.id}
+              render={({ field }) => <input type="hidden" {...field} />}
+            />
+          )}
           <div className="space-y-2">
             <label
               htmlFor="name"
@@ -278,16 +317,19 @@ function ServiceDialog({ open, onClose, onSubmit, initialData }: any) {
             <Controller
               name="name"
               control={control}
-              render={({ field }) => (
+              defaultValue={initialData?.name || ""}
+              render={({ field: { onChange, value, ...field } }) => (
                 <Input
                   {...field}
+                  value={value || ""}
+                  onChange={(e) => onChange(e.target.value)}
                   id="name"
                   placeholder="e.g., Haircut, Manicure"
                   className="w-full"
                 />
               )}
             />
-            {errors.name && (
+            {typeof errors.name?.message === 'string' && (
               <p className="text-sm text-red-500">{errors.name.message}</p>
             )}
           </div>
@@ -302,19 +344,21 @@ function ServiceDialog({ open, onClose, onSubmit, initialData }: any) {
             <Controller
               name="duration"
               control={control}
-              render={({ field }) => (
+              defaultValue={initialData?.duration || ""}
+              render={({ field: { onChange, value, ...field } }) => (
                 <Input
                   {...field}
+                  value={value || ""}
+                  onChange={(e) => onChange(e.target.value.replace(/^0+/, ""))}
                   id="duration"
                   type="number"
                   placeholder="e.g., 30"
                   min="1"
                   className="w-full"
-                  onChange={(e) => field.onChange(e.target.value.replace(/^0+/, ""))}
                 />
               )}
             />
-            {errors.duration && (
+            {typeof errors.duration?.message === 'string' && (
               <p className="text-sm text-red-500">{errors.duration.message}</p>
             )}
             <p className="text-xs text-muted-foreground">
@@ -332,20 +376,22 @@ function ServiceDialog({ open, onClose, onSubmit, initialData }: any) {
             <Controller
               name="price"
               control={control}
-              render={({ field }) => (
+              defaultValue={initialData?.price || ""}
+              render={({ field: { onChange, value, ...field } }) => (
                 <Input
                   {...field}
+                  value={value || ""}
+                  onChange={(e) => onChange(e.target.value.replace(/^0+/, ""))}
                   id="price"
                   type="number"
                   placeholder="e.g., 25"
                   min="0"
                   step="0.01"
                   className="w-full"
-                  onChange={(e) => field.onChange(e.target.value.replace(/^0+/, ""))}
                 />
               )}
             />
-            {errors.price && (
+            {typeof errors.price?.message === 'string' && (
               <p className="text-sm text-red-500">{errors.price.message}</p>
             )}
           </div>
@@ -362,7 +408,7 @@ function ServiceDialog({ open, onClose, onSubmit, initialData }: any) {
 
 export default function BusinessManagementPage() {
   const [businesses, setBusinesses] = useState<Business[]>([]);
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [businessDialogOpen, setBusinessDialogOpen] = useState(false);
   const [editData, setEditData] = useState<Business | null>(null);
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -506,7 +552,13 @@ export default function BusinessManagementPage() {
           'Content-Type': 'application/json',
         },
       });
-      setEmployees(await refreshed.json());
+      const refreshedData = await refreshed.json();
+      const mapped = refreshedData.map((emp: any) => ({
+        ...emp,
+        name: emp.full_name,
+        phone: emp.phone_number,
+      }));
+      setEmployees(mapped);
     } catch (err) {
       setEmployeeError(err instanceof Error ? err.message : 'Failed to save employee');
       toast.error(err instanceof Error ? err.message : 'Failed to save employee');
@@ -542,7 +594,13 @@ export default function BusinessManagementPage() {
           'Content-Type': 'application/json',
         },
       });
-      setEmployees(await refreshed.json());
+      const refreshedData = await refreshed.json();
+      const mapped = refreshedData.map((emp: any) => ({
+        ...emp,
+        name: emp.full_name,
+        phone: emp.phone_number,
+      }));
+      setEmployees(mapped);
     } catch (err) {
       setEmployeeError(err instanceof Error ? err.message : 'Failed to delete employee');
       toast.error(err instanceof Error ? err.message : 'Failed to delete employee');
@@ -586,7 +644,6 @@ export default function BusinessManagementPage() {
 
   // 6. Update employeeColumns to add actions
   const employeeColumns: GridColDef[] = [
-    { field: 'id', headerName: 'ID', width: 70 },
     { field: 'name', headerName: 'Full Name', width: 180 },
     { field: 'email', headerName: 'Email', width: 200 },
     { field: 'phone', headerName: 'Phone Number', width: 150 },
@@ -614,14 +671,15 @@ export default function BusinessManagementPage() {
   ];
 
   // Service handlers
+  const [editServiceData, setEditServiceData] = useState<Service | null>(null);
   const handleServiceAdd = () => {
-    setEditData(null);
-    setDialogOpen(true);
+    setEditServiceData(null);
+    setServiceDialogOpen(true);
   };
 
   const handleServiceEdit = (service: Service) => {
-    setEditData(service);
-    setDialogOpen(true);
+    setEditServiceData(service);
+    setServiceDialogOpen(true);
   };
 
   const handleServiceDelete = async (id: number) => {
@@ -689,7 +747,7 @@ export default function BusinessManagementPage() {
       }
 
       const payload = {
-        name: data.name,
+        name: data.name.trim(),
         duration: Number(data.duration),
         price: Number(data.price)
       };
@@ -712,6 +770,18 @@ export default function BusinessManagementPage() {
           const errorData = await response.json().catch(() => null);
           throw new Error(errorData?.detail || `Failed to update service: ${response.statusText}`);
         }
+
+        const updatedService = await response.json();
+        
+        // Update the services list with the updated service
+        setAllServices(prev => ({
+          ...prev,
+          [selectedBusiness.id]: prev[selectedBusiness.id].map(service => 
+            service.id === data.id ? updatedService : service
+          )
+        }));
+
+        toast.success("Service updated successfully");
       } else {
         // Create new service
         const response = await fetch(
@@ -730,31 +800,19 @@ export default function BusinessManagementPage() {
           const errorData = await response.json().catch(() => null);
           throw new Error(errorData?.detail || `Failed to create service: ${response.statusText}`);
         }
+
+        const newService = await response.json();
+        
+        // Add the new service to the services list
+        setAllServices(prev => ({
+          ...prev,
+          [selectedBusiness.id]: [...(prev[selectedBusiness.id] || []), newService]
+        }));
+
+        toast.success("Service added successfully");
       }
 
-      // Refresh services after create/update
-      const servicesResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${selectedBusiness.id}/services`,
-        {
-          headers: {
-            'Authorization': `Bearer ${session.user.accessToken}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      if (!servicesResponse.ok) {
-        throw new Error("Failed to refresh services");
-      }
-
-      const updatedServices = await servicesResponse.json();
-      setAllServices(prev => ({
-        ...prev,
-        [selectedBusiness.id]: updatedServices
-      }));
-
-      toast.success(data.id ? "Service updated successfully" : "Service added successfully");
-      setDialogOpen(false);
+      setServiceDialogOpen(false);
     } catch (error) {
       console.error("Error submitting service:", error);
       toast.error(error instanceof Error ? error.message : "Failed to submit service");
@@ -803,12 +861,12 @@ export default function BusinessManagementPage() {
 
   const handleAdd = () => {
     setEditData(null);
-    setDialogOpen(true);
+    setBusinessDialogOpen(true);
   };
 
   const handleEdit = (data: Business) => {
     setEditData(data);
-    setDialogOpen(true);
+    setBusinessDialogOpen(true);
   };
 
   const handleDelete = async (id: number) => {
@@ -903,7 +961,7 @@ export default function BusinessManagementPage() {
         setBusinesses([...businesses, newBusiness]);
         toast.success("Business created successfully");
       }
-      setDialogOpen(false);
+      setBusinessDialogOpen(false);
     } catch (error) {
       console.error("Error submitting business:", error);
       toast.error(error instanceof Error ? error.message : "Failed to submit business");
@@ -911,27 +969,11 @@ export default function BusinessManagementPage() {
   };
 
   const businessColumns: GridColDef[] = [
-    { field: "id", headerName: "ID", width: 70 },
     { field: "name", headerName: "Name", width: 200 },
-    {
-      field: "addressFull",
-      headerName: "Address",
-      width: 300,
-      renderCell: (params: GridRenderCellParams) => {
-        const row = params.row || {};
-        return `${row.address || ''}, ${row.city || ''}, ${row.state || ''}, ${row.zip_code || ''}`;
-      },
-    },
     { field: "phone_number", headerName: "Phone", width: 150 },
     { field: "email", headerName: "Email", width: 200 },
     { field: "opening_time", headerName: "Opening Time", width: 120 },
     { field: "closing_time", headerName: "Closing Time", width: 120 },
-    { 
-      field: "average_wait_time", 
-      headerName: "Avg Wait (min)", 
-      width: 120,
-      valueFormatter: (params: { value: number }) => `${params.value} min`
-    },
     {
       field: "is_open",
       headerName: "Status",
@@ -977,172 +1019,6 @@ export default function BusinessManagementPage() {
             </IconButton>
           </Tooltip>
         </div>
-      ),
-    },
-  ];
-
-  // --- Work Schedules CRUD Integration ---
-  const [workSchedules, setWorkSchedules] = useState<WorkSchedule[]>([]);
-  const [workSchedulesLoading, setWorkSchedulesLoading] = useState(false);
-  const [workSchedulesError, setWorkSchedulesError] = useState<string | null>(null);
-  const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
-  const [editSchedule, setEditSchedule] = useState<WorkSchedule | null>(null);
-  const [scheduleForm, setScheduleForm] = useState({
-    barber_id: '',
-    start_date: '', // ISO string for datetime-local
-    end_date: '',   // ISO string for datetime-local
-    repeat_frequency: 'none',
-  });
-
-  // Fetch all schedules for all employees of the selected business
-  const fetchAllWorkSchedules = async (shopId: number, employees: Employee[], accessToken: string) => {
-    const schedulePromises = employees.map(async (emp) => {
-      const url = `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/barbers/${emp.id}/schedules/`;
-      const res = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        }
-      });
-      if (!res.ok) return [];
-      const data = await res.json();
-      return data.map((s: any) => ({
-        ...s,
-        barber_name: emp.name,
-        shop_id: shopId,
-      }));
-    });
-    const all = await Promise.all(schedulePromises);
-    return all.flat();
-  };
-
-  useEffect(() => {
-    if (!selectedBusiness || employees.length === 0) return;
-    const fetchSchedules = async () => {
-      setWorkSchedulesLoading(true);
-      setWorkSchedulesError(null);
-      try {
-        const session = await getSession();
-        if (!session?.user?.accessToken) throw new Error('No access token');
-        const schedules = await fetchAllWorkSchedules(selectedBusiness.id, employees, session.user.accessToken);
-        setWorkSchedules(schedules);
-      } catch (err) {
-        setWorkSchedulesError(err instanceof Error ? err.message : 'Failed to fetch schedules');
-      } finally {
-        setWorkSchedulesLoading(false);
-      }
-    };
-    fetchSchedules();
-  }, [selectedBusiness, employees]);
-
-  const handleAddSchedule = () => {
-    setEditSchedule(null);
-    setScheduleForm({
-      barber_id: '',
-      start_date: '',
-      end_date: '',
-      repeat_frequency: 'none',
-    });
-    setScheduleDialogOpen(true);
-  };
-
-  const handleEditSchedule = (row: WorkSchedule) => {
-    setEditSchedule(row);
-    setScheduleForm({
-      barber_id: String(row.barber_id),
-      start_date: row.start_date.slice(0, 16), // 'YYYY-MM-DDTHH:mm'
-      end_date: row.end_date.slice(0, 16),
-      repeat_frequency: row.repeat_frequency,
-    });
-    setScheduleDialogOpen(true);
-  };
-
-  const handleDeleteSchedule = async (row: WorkSchedule) => {
-    if (!window.confirm('Delete this schedule?')) return;
-    try {
-      const session = await getSession();
-      if (!session?.user?.accessToken) throw new Error('No access token');
-      await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${selectedBusiness.id}/barbers/${row.barber_id}/schedules/${row.id}/`,
-        {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${session.user.accessToken}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-      toast.success('Schedule deleted');
-      // Refresh
-      const schedules = await fetchAllWorkSchedules(selectedBusiness.id, employees, session.user.accessToken);
-      setWorkSchedules(schedules);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to delete schedule');
-    }
-  };
-
-  const handleScheduleFormSubmit = async (e) => {
-    e.preventDefault();
-    if (!scheduleForm.barber_id || !scheduleForm.start_date || !scheduleForm.end_date) {
-      toast.error('All fields are required');
-      return;
-    }
-    try {
-      const session = await getSession();
-      if (!session?.user?.accessToken) throw new Error('No access token');
-      const isEdit = !!editSchedule;
-      const url = `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${selectedBusiness.id}/barbers/${scheduleForm.barber_id}/schedules/${isEdit ? editSchedule?.id + '/' : ''}`;
-      const method = isEdit ? 'PUT' : 'POST';
-      const body = {
-        barber_id: Number(scheduleForm.barber_id),
-        start_date: new Date(scheduleForm.start_date).toISOString(),
-        end_date: new Date(scheduleForm.end_date).toISOString(),
-        repeat_frequency: scheduleForm.repeat_frequency,
-      };
-      const res = await fetch(url, {
-        method,
-        headers: {
-          'Authorization': `Bearer ${session.user.accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => null);
-        throw new Error(errorData?.detail || `Failed to ${isEdit ? 'update' : 'create'} schedule`);
-      }
-      toast.success(isEdit ? 'Schedule updated' : 'Schedule created');
-      // Refresh
-      const schedules = await fetchAllWorkSchedules(selectedBusiness.id, employees, session.user.accessToken);
-      setWorkSchedules(schedules);
-      setScheduleDialogOpen(false);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to save schedule');
-    }
-  };
-
-  const scheduleColumns: GridColDef[] = [
-    { field: 'barber_name', headerName: 'Employee Name', width: 180 },
-    { field: 'start_date', headerName: 'Start Date/Time', width: 180, valueFormatter: ({ value }) => new Date(value).toLocaleString() },
-    { field: 'end_date', headerName: 'End Date/Time', width: 180, valueFormatter: ({ value }) => new Date(value).toLocaleString() },
-    { field: 'repeat_frequency', headerName: 'Repeat', width: 200 },
-    {
-      field: 'actions',
-      headerName: 'Actions',
-      width: 140,
-      renderCell: (params: GridRenderCellParams) => (
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Tooltip title="Edit">
-            <IconButton size="small" onClick={() => handleEditSchedule(params.row)}>
-              <Pencil className="h-4 w-4" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Delete">
-            <IconButton size="small" onClick={() => handleDeleteSchedule(params.row)}>
-              <Trash2 className="h-4 w-4" />
-            </IconButton>
-          </Tooltip>
-        </Box>
       ),
     },
   ];
@@ -1202,7 +1078,7 @@ export default function BusinessManagementPage() {
           Businesses
         </Typography>
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
-          <Button onClick={handleAdd} sx={{ minWidth: 140, fontWeight: 600 }}>
+          <Button onClick={handleAdd} className="min-w-[140px] font-semibold">
             <Plus className="h-4 w-4 mr-2" />
             Add Business
           </Button>
@@ -1280,6 +1156,7 @@ export default function BusinessManagementPage() {
               </Box>
             )}
           </Box>
+
           {/* Add Employee Dialog */}
           <Dialog open={employeeDialogOpen} onOpenChange={setEmployeeDialogOpen}>
             <DialogContent className="sm:max-w-[425px]">
@@ -1348,130 +1225,16 @@ export default function BusinessManagementPage() {
             </DialogContent>
           </Dialog>
 
-          {/* Step 4: Work Schedules Section */}
-          {selectedBusiness && (
-            <Box p={3} border={1} borderColor="divider" borderRadius={2} sx={{ bgcolor: 'background.paper', boxShadow: 1, mt: 2 }}>
-              <Typography variant="h6" fontWeight={600} mb={2} sx={{ fontSize: { xs: 18, md: 22 } }}>
-                Work Schedules for {selectedBusiness.name}
-              </Typography>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
-                <Typography variant="subtitle1" fontWeight={600} sx={{ fontSize: { xs: 18, md: 20 } }}>
-                  Work Schedules Management
-                </Typography>
-                <Button className="min-w-[140px] font-semibold" onClick={handleAddSchedule}>
-                  <Plus className="h-4 w-4 mr-2" /> Add Schedule
-                </Button>
-              </Box>
-              <Box border={1} borderColor="divider" borderRadius={2} p={2} sx={{ bgcolor: 'background.paper', boxShadow: 1 }}>
-                {workSchedulesLoading ? (
-                  <Typography>Loading schedules...</Typography>
-                ) : workSchedulesError ? (
-                  <Typography color="error">{workSchedulesError}</Typography>
-                ) : (
-                  <DataGrid
-                    rows={workSchedules}
-                    columns={scheduleColumns}
-                    pageSizeOptions={[5, 10, 25]}
-                    initialState={{
-                      pagination: { paginationModel: { pageSize: 5 } },
-                    }}
-                    autoHeight
-                    disableRowSelectionOnClick
-                    sx={{
-                      minWidth: 600,
-                      bgcolor: 'background.default',
-                      borderRadius: 2,
-                      '& .MuiDataGrid-cell': {
-                        borderColor: 'divider',
-                      },
-                      '& .MuiDataGrid-columnHeaders': {
-                        backgroundColor: 'background.default',
-                        borderColor: 'divider',
-                      },
-                    }}
-                  />
-                )}
-              </Box>
-            </Box>
-          )}
+          {/* Work Schedule Manager Section */}
+          <Box p={3} border={1} borderColor="divider" borderRadius={2} sx={{ bgcolor: 'background.paper', boxShadow: 1, mt: 2 }}>
+            <Typography variant="h6" fontWeight={600} mb={2} sx={{ fontSize: { xs: 18, md: 22 } }}>
+              Work Schedules for {selectedBusiness.name}
+            </Typography>
+            <WorkScheduleManager shopId={selectedBusiness.id} />
+          </Box>
         </>
       )}
-      <BusinessDialog open={dialogOpen} onClose={() => setDialogOpen(false)} onSubmit={handleDialogSubmit} initialData={editData} />
-      {/* Add/Edit Schedule Dialog */}
-      <Dialog open={scheduleDialogOpen} onOpenChange={setScheduleDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-semibold">
-              {editSchedule ? 'Edit Work Hours' : 'Add Work Hours'}
-            </DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleScheduleFormSubmit} className="space-y-6 py-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Employee</label>
-              <select
-                value={scheduleForm.barber_id}
-                onChange={e => setScheduleForm(f => ({ ...f, barber_id: e.target.value }))}
-                required
-                className="w-full rounded border px-3 py-2"
-              >
-                <option value="">Select Employee</option>
-                {employees.map(emp => (
-                  <option key={emp.id} value={emp.id}>{emp.name}</option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Start Date/Time</label>
-              <input
-                type="datetime-local"
-                value={scheduleForm.start_date}
-                onChange={e => setScheduleForm(f => ({ ...f, start_date: e.target.value }))}
-                required
-                className="w-full rounded border px-3 py-2"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">End Date/Time</label>
-              <input
-                type="datetime-local"
-                value={scheduleForm.end_date}
-                onChange={e => setScheduleForm(f => ({ ...f, end_date: e.target.value }))}
-                required
-                className="w-full rounded border px-3 py-2"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Repeat</label>
-              <select
-                value={scheduleForm.repeat_frequency}
-                onChange={e => setScheduleForm(f => ({ ...f, repeat_frequency: e.target.value }))}
-                required
-                className="w-full rounded border px-3 py-2"
-              >
-                <option value="none">None</option>
-                <option value="daily">Daily</option>
-                <option value="weekly">Weekly</option>
-                <option value="weekly_no_weekends">Weekly (No Weekends)</option>
-              </select>
-            </div>
-            <div className="flex gap-4 justify-end mt-4">
-              <button
-                type="button"
-                className="rounded-md border border-gray-300 bg-white text-gray-700 py-3 px-6 text-base font-semibold hover:bg-gray-100 transition-colors"
-                onClick={() => setScheduleDialogOpen(false)}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="rounded-md bg-[#0B1120] text-white py-3 px-6 text-base font-semibold hover:bg-[#1a2233] transition-colors"
-              >
-                {editSchedule ? 'Update' : 'Create'}
-              </button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <BusinessDialog open={businessDialogOpen} onClose={() => setBusinessDialogOpen(false)} onSubmit={handleDialogSubmit} initialData={editData} />
     </Box>
   );
 } 
