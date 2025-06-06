@@ -26,6 +26,8 @@ interface Schedule {
   day_of_week: number; // 0=Sunday, 1=Monday, ..., 6=Saturday
   start_time: string; // "HH:MM"
   end_time: string; // "HH:MM"
+  day_name?: string; // Optional property for display
+  formatted_time?: string; // Optional property for display
 }
 
 interface Barber {
@@ -46,9 +48,9 @@ interface SalonDetails {
   email: string;
   formatted_hours: string;
   is_open: boolean;
-  barbers: Barber[];
-  services: Service[];
+  barbers: Barber[];  services: Service[];
   slug: string;
+  username: string;
 }
 
 interface AppointmentRequest {
@@ -229,7 +231,7 @@ export default function AppointmentPage({ params }: { params: { idOrSlug: string
         localStorage.setItem('appointmentShopId', salon.id.toString());
         
         // Redirect to confirmation or status page using the slug for the URL
-        window.location.href = `/salons/${salon.slug}/appointment-confirmation`;
+        window.location.href = `/salons/${salon.username}/appointment-confirmation`;
       }
     } catch (error) {
       toast.error("Booking Failed", {
@@ -239,19 +241,26 @@ export default function AppointmentPage({ params }: { params: { idOrSlug: string
       setIsBooking(false);
     }
   };
-
   // Add this helper function to filter barbers based on selected service
   const getBarbersByService = (serviceId: number | null) => {
+    if (!salon) return [];
     if (!serviceId) return salon.barbers;
     
     return salon.barbers.filter(barber => 
       barber.services.some(service => service.id === serviceId)
     );
   };
-
   const handleServiceSelection = (serviceId: number) => {
     setSelectedService(serviceId);
     setSelectedBarber(null);
+  };
+
+  // Helper function to format schedule display
+  const formatScheduleDisplay = (schedule: Schedule) => {
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const dayName = schedule.day_name || dayNames[schedule.day_of_week] || 'Unknown';
+    const timeDisplay = schedule.formatted_time || `${schedule.start_time} - ${schedule.end_time}`;
+    return `${dayName}: ${timeDisplay}`;
   };
 
   if (loading) {
@@ -430,11 +439,10 @@ export default function AppointmentPage({ params }: { params: { idOrSlug: string
                                   <User className="h-6 w-6 text-primary" />
                                 </div>
                                 <div>
-                                  <p className="font-medium">{barber.full_name}</p>
-                                  <div className="text-sm text-muted-foreground mt-1">
+                                  <p className="font-medium">{barber.full_name}</p>                                  <div className="text-sm text-muted-foreground mt-1">
                                     {barber.schedules.map((schedule) => (
                                       <p key={schedule.id}>
-                                        {schedule.day_name}: {schedule.formatted_time}
+                                        {formatScheduleDisplay(schedule)}
                                       </p>
                                     ))}
                                   </div>
@@ -526,7 +534,7 @@ export default function AppointmentPage({ params }: { params: { idOrSlug: string
             <div className="flex flex-col items-center gap-3">
               <div className="flex gap-4 w-full">
                 <Link 
-                  href={`/salons/${salon.slug}/check-in`}
+                  href={`/salons/${salon.username}/check-in`}
                   className="w-full"
                 >
                   <Button
@@ -542,16 +550,15 @@ export default function AppointmentPage({ params }: { params: { idOrSlug: string
               <Button
                 className="w-full"
                 size="lg"
-                onClick={handleBookAppointment}
-                disabled={
+                onClick={handleBookAppointment}                disabled={
                   isBooking ||
                   !fullName || 
                   !phoneNumber || 
                   !appointmentDate ||
                   !appointmentTime ||
-                  timeError ||
-                  errors.fullName || 
-                  errors.phoneNumber ||
+                  !!timeError ||
+                  !!errors.fullName || 
+                  !!errors.phoneNumber ||
                   (isAdvanceBooking && !selectedBarber)
                 }
               >

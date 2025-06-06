@@ -41,12 +41,11 @@ export async function getSalonDetails(idOrSlug: string) {
       }
       
       return await response.json();
-    } 
-    // If it's a slug, find the salon in the list of all salons
+    }    // If it's a username/slug, find the salon in the list of all salons
     else {
-      console.log(`Finding salon by slug: ${idOrSlug}`);
+      console.log(`Finding salon by username: ${idOrSlug}`);
       
-      // Fetch all salons and find the one with matching slug
+      // Fetch all salons and find the one with matching username
       const allSalonsResponse = await fetch(`${API_URL}/appointments/shops`);
       if (!allSalonsResponse.ok) {
         console.error(`Failed to fetch salons list: Status ${allSalonsResponse.status}`);
@@ -59,18 +58,19 @@ export async function getSalonDetails(idOrSlug: string) {
         throw new Error('Invalid response format from salons endpoint');
       }
       
-      console.log(`Searching through ${salonsData.items.length} salons for slug: ${idOrSlug}`);
+      console.log(`Searching through ${salonsData.items.length} salons for username: ${idOrSlug}`);
       
       const matchingSalon = salonsData.items.find(
-        (salon: any) => salon.slug && salon.slug.toLowerCase() === idOrSlug.toLowerCase()
+        (salon: any) => (salon.username && salon.username.toLowerCase() === idOrSlug.toLowerCase()) ||
+                       (salon.slug && salon.slug.toLowerCase() === idOrSlug.toLowerCase())
       );
       
       if (matchingSalon) {
-        console.log(`Found matching salon by slug: ${matchingSalon.name}, ID: ${matchingSalon.id}`);
+        console.log(`Found matching salon by username/slug: ${matchingSalon.name}, ID: ${matchingSalon.id}`);
         return matchingSalon;
       } else {
-        console.error(`No salon found with slug: ${idOrSlug}`);
-        throw new Error(`No salon found with slug: ${idOrSlug}`);
+        console.error(`No salon found with username: ${idOrSlug}`);
+        throw new Error(`No salon found with username: ${idOrSlug}`);
       }
     }
   } catch (error) {

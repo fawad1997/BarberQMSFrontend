@@ -13,10 +13,12 @@ import { signOut } from "next-auth/react"
 import { getNavLinks } from "@/lib/getNavLinks"
 import { EditProfileDialog } from "@/components/pages/auth/edit-profile-dialog"
 import { useSessionUpdate } from "@/lib/hooks/useSessionUpdate"
+import { useWalkthrough } from "@/components/walkthrough"
 
 export default function Navbar() {
   const router = useRouter()
   const { session, sessionKey, status } = useSessionUpdate()
+  const { isActive: walkthroughActive, currentStep, highlightTarget } = useWalkthrough()
   const [navbar, setNavbar] = useState(false)
   const navigationLinks = getNavLinks(session?.user?.role)
   const [openDropdown, setOpenDropdown] = useState<string | null>(null)
@@ -28,6 +30,31 @@ export default function Navbar() {
   useEffect(() => {
     console.log("Navbar rendering with session:", session?.user?.name, "Key:", sessionKey);
   }, [session, sessionKey]);
+  // Handle walkthrough dropdown auto-opening
+  useEffect(() => {
+    if (walkthroughActive && highlightTarget) {
+      // Open Shops dropdown when highlighting dropdown items
+      if (['manage-shops', 'artists', 'shop-services'].includes(highlightTarget)) {
+        setOpenDropdown("Shops")
+      }
+    }
+  }, [walkthroughActive, highlightTarget])
+  // Helper function to determine if an item should be highlighted during walkthrough
+  const getItemHighlightClass = (itemRoute: string) => {
+    if (!walkthroughActive || !highlightTarget) return ""
+    
+    // Map dropdown targets to item routes
+    const highlightMap: { [key: string]: string } = {
+      "manage-shops": "Manage Shops",
+      "artists": "Artists", 
+      "shop-services": "Shop Services"
+    }
+      if (highlightMap[highlightTarget] === itemRoute) {
+      return "bg-primary/10 border-2 border-primary/50 ring-2 ring-primary/20 transition-all duration-1000 animate-[glow_2s_ease-in-out_infinite_alternate]"
+    }
+    
+    return ""
+  }
 
   const handleClick = async () => {
     setNavbar(false)
@@ -194,14 +221,14 @@ export default function Navbar() {
                         <div className="md:absolute mt-2 md:mt-0 md:top-full left-0 bg-background border rounded-md shadow-md z-20 w-48 md:w-auto origin-top-left transition-all duration-200 animate-in fade-in-50 slide-in-from-top-5">
                           <ul className="py-1">
                             {link.items.map((item) => (
-                              <li key={item.route} className="px-4 py-2 hover:bg-muted transition-colors duration-150">
+                              <li key={item.route} className={`px-4 py-2 hover:bg-muted transition-colors duration-150 rounded-md mx-1 ${getItemHighlightClass(item.route)}`}>
                                 <button
                                   onClick={() => handleDropdownItemClick(
                                     item.path, 
                                     // Open Walk-Ins in a new tab
                                     item.path === "/shop/walkins"
                                   )}
-                                  className="flex items-center gap-2 whitespace-nowrap w-full text-left"
+                                  className={`flex items-center gap-2 whitespace-nowrap w-full text-left ${getItemHighlightClass(item.route)}`}
                                 >
                                   <i className={item.icon}></i>
                                   {item.route}
