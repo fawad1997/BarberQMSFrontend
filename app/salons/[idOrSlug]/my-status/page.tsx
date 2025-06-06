@@ -7,6 +7,7 @@ import { Clock, User } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { getSalonDetails } from "@/lib/services/salonService";
+import { ensureSalonUrlUsesUsername } from "@/lib/utils/navigation";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,6 +33,7 @@ interface SalonDetails {
   id: number;
   name: string;
   slug: string;
+  username: string;
 }
 
 export default function MyStatusPage({ params }: { params: { idOrSlug: string } }) {
@@ -46,16 +48,19 @@ export default function MyStatusPage({ params }: { params: { idOrSlug: string } 
   useEffect(() => {
     const checkInPhone = localStorage.getItem('checkInPhone');
     const checkInShopId = localStorage.getItem('checkInShopId');
-    
-    const fetchSalonAndStatus = async () => {
+      const fetchSalonAndStatus = async () => {
       try {
         // First, get salon details to ensure we have the correct ID
         const salonData = await getSalonDetails(params.idOrSlug);
         setSalon(salonData);
+          // Ensure URL uses the current username
+        if (salonData?.username) {
+          ensureSalonUrlUsesUsername(salonData.username, router);
+        }
         
         // Redirect if no check-in data or wrong salon
         if (!checkInPhone || checkInShopId !== salonData.id.toString()) {
-          router.push(`/salons/${salonData.slug}`);
+          router.push(`/salons/${salonData.username}`);
           return;
         }
         
@@ -110,7 +115,7 @@ export default function MyStatusPage({ params }: { params: { idOrSlug: string } 
           toast.success(data.message || "Successfully left the queue");
           localStorage.removeItem('checkInPhone');
           localStorage.removeItem('checkInShopId');
-          router.push(`/salons/${salon.slug}/check-in`);
+          router.push(`/salons/${salon.username}/check-in`);
         } else {
           throw new Error(data.message || 'Failed to leave the queue');
         }
