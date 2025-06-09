@@ -10,18 +10,21 @@ export async function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname
   const isShopPath = path.startsWith("/shop")
   const isHomePath = path === "/"
-  
-  // Handle salon ID to slug redirects for all salon-related paths
-  // This catches URLs like /salons/123, /salons/123/check-in, /salons/123/queue, etc.
-  const salonPathMatch = path.match(/^\/salons\/(\d+)(?:\/.*)?/)
+    // Handle salon ID/slug to username redirects for all salon-related paths
+  // This catches URLs like /salons/123, /salons/123/check-in, /salons/old-slug/queue, etc.
+  // and redirects them to use the current username
+  const salonPathMatch = path.match(/^\/salons\/([^\/]+)(?:\/.*)?/)
   if (salonPathMatch) {
     try {
-      const salonId = salonPathMatch[1]
+      const salonIdentifier = salonPathMatch[1]
+      const isNumericId = /^\d+$/.test(salonIdentifier)
       const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-      console.log(`[Middleware] Redirecting from ID to slug for salon ID: ${salonId}`)
+      
+      // Always fetch salon details to ensure we have the current username
+      console.log(`[Middleware] Verifying salon identifier: ${salonIdentifier}`)
       
       // Fetch salon details directly - matches salonService approach
-      const endpoint = `${API_URL}/appointments/shop/${salonId}`
+      const endpoint = `${API_URL}/appointments/shop/${salonIdentifier}`
       console.log(`[Middleware] Fetching from: ${endpoint}`)
       
       const response = await fetch(endpoint, {
@@ -33,14 +36,19 @@ export async function middleware(req: NextRequest) {
       if (response.ok) {
         const salon = await response.json()
         
-        if (salon && salon.slug) {
-          // Preserve the rest of the path (e.g., /check-in, /queue)
-          const restOfPath = path.substring(path.indexOf(salonId) + salonId.length)
-          const slugPath = `/salons/${salon.slug}${restOfPath}`
-          console.log(`[Middleware] Redirecting from ${path} to ${slugPath}`)
-          return NextResponse.redirect(new URL(slugPath, req.url))
+        if (salon && salon.username) {
+          // If the identifier in the URL is not the current username, redirect to username
+          if (salonIdentifier !== salon.username) {
+            // Preserve the rest of the path (e.g., /check-in, /queue)
+            const restOfPath = path.substring(path.indexOf(salonIdentifier) + salonIdentifier.length)
+            const usernamePath = `/salons/${salon.username}${restOfPath}`
+            console.log(`[Middleware] Redirecting from ${path} to ${usernamePath}`)
+            return NextResponse.redirect(new URL(usernamePath, req.url))
+          } else {
+            console.log(`[Middleware] URL already uses current username: ${salonIdentifier}`)
+          }
         } else {
-          console.log(`[Middleware] Salon found but no slug available for ID: ${salonId}`)
+          console.log(`[Middleware] Salon found but no username available for identifier: ${salonIdentifier}`)
         }
       } else {
         console.log(`[Middleware] Failed to fetch salon details. Status: ${response.status}`)

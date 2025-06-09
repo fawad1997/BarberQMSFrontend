@@ -13,6 +13,7 @@ const NavigationEvents = dynamic(() => import('@/components/providers/navigation
 const HideNavigation = dynamic(() => import('@/components/providers/hide-navigation'), { ssr: false })
 const ReloadChecker = dynamic(() => import('@/components/providers/reload-checker'), { ssr: false })
 const ProfileRefresher = dynamic(() => import('@/components/providers/profile-refresher'), { ssr: false })
+const WalkthroughProvider = dynamic(() => import('@/components/walkthrough').then(mod => ({ default: mod.WalkthroughProvider })), { ssr: false })
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -70,22 +71,23 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
-        <AuthProvider>
-          <NavigationEvents />
-          <HideNavigation />
-          <ReloadChecker />
-          <ProfileRefresher />
-          <Suspense fallback={<div>Loading...</div>}>
-            <div className="flex min-h-screen flex-col">
-              <Navbar />
-              <main className="flex-1">
-                {children}
-              </main>
-              <Footer />
-            </div>
-          </Suspense>
-          <Toaster />
+      <body className={inter.className}>        <AuthProvider>
+          <WalkthroughProvider>
+            <NavigationEvents />
+            <HideNavigation />
+            <ReloadChecker />
+            <ProfileRefresher />
+            <Suspense fallback={<div>Loading...</div>}>
+              <div className="flex min-h-screen flex-col">
+                <Navbar />
+                <main className="flex-1">
+                  {children}
+                </main>
+                <Footer />
+              </div>
+            </Suspense>
+            <Toaster />
+          </WalkthroughProvider>
         </AuthProvider>
       </body>
     </html>

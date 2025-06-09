@@ -48,14 +48,7 @@ export const getShops = async (unused: boolean = false): Promise<Shop[]> => {
   }
 
   try {
-    console.log("Fetching shops from API...");
     const apiUrl = getApiEndpoint("/shop-owners/shops");
-    console.log("Using API URL:", apiUrl);
-    
-    // Log token details for debugging (only first/last few chars for security)
-    const tokenStart = session.user.accessToken.substring(0, 10);
-    const tokenEnd = session.user.accessToken.length > 10 ? session.user.accessToken.substring(session.user.accessToken.length - 5) : '';
-    console.log(`Using token: ${tokenStart}...${tokenEnd}, length: ${session.user.accessToken.length}`);
     
     const response = await fetch(apiUrl, {
       headers: {
@@ -68,8 +61,6 @@ export const getShops = async (unused: boolean = false): Promise<Shop[]> => {
       credentials: 'include'
     });
 
-    console.log("Response status:", response.status);
-    console.log("Response headers:", Object.fromEntries(response.headers.entries()));
     
     if (response.status === 401) {
       await handleUnauthorizedResponse();
@@ -81,7 +72,6 @@ export const getShops = async (unused: boolean = false): Promise<Shop[]> => {
 
     // Check content type before parsing
     const contentType = response.headers.get("content-type");
-    console.log("Response content type:", contentType);
     
     if (!contentType || !contentType.includes("application/json")) {
       // If not JSON, get the text to see what was returned
@@ -103,7 +93,6 @@ export const getShops = async (unused: boolean = false): Promise<Shop[]> => {
     }
 
     const result = await response.json();
-    console.log("Shop data fetched successfully");
     return result;
   } catch (error) {
     console.error("Error in getShops:", error);
@@ -143,26 +132,17 @@ const handleError = (error: any) => {
 export const getDashboardData = async (accessToken?: string): Promise<DashboardData> => {
   // More robust token validation
   if (!accessToken) {
-    console.log("No access token provided, redirecting to login");
     redirect('/login?error=NoToken');
     return {} as DashboardData;
   }
 
   if (typeof accessToken !== 'string' || accessToken.trim() === '') {
-    console.log("Invalid token format, redirecting to login");
     redirect('/login?error=InvalidToken');
     return {} as DashboardData;
   }
 
   try {
-    console.log("Fetching dashboard data...");
     const apiUrl = getApiEndpoint("shop-owners/dashboard");
-    console.log("Using API URL for dashboard:", apiUrl);
-    
-    // Log token details for debugging (only first/last few chars for security)
-    const tokenStart = accessToken.substring(0, 10);
-    const tokenEnd = accessToken.length > 10 ? accessToken.substring(accessToken.length - 5) : '';
-    console.log(`Using token: ${tokenStart}...${tokenEnd}, length: ${accessToken.length}`);
     
     const response = await fetch(apiUrl, {
       headers: {
@@ -173,15 +153,11 @@ export const getDashboardData = async (accessToken?: string): Promise<DashboardD
       cache: 'no-store',
     });
 
-    console.log("Dashboard response status:", response.status);
-    console.log("Response headers:", Object.fromEntries(response.headers.entries()));
-
     // Clone the response for error handling
     const responseClone = response.clone();
 
     // Immediately handle auth errors
     if (response.status === 401 || response.status === 403) {
-      console.log(`Authentication failed with status ${response.status} - redirecting to login`);
       redirect('/login?error=SessionExpired');
       return {} as DashboardData;
     }
@@ -207,7 +183,6 @@ export const getDashboardData = async (accessToken?: string): Promise<DashboardD
     // For successful responses, ensure we get valid JSON
     try {
       const data = await response.json();
-      console.log("Successfully parsed dashboard data");
       return data;
     } catch (parseError) {
       console.error("Error parsing dashboard JSON:", parseError);

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getSalonDetails } from "@/lib/services/salonService";
+import { ensureSalonUrlUsesUsername } from "@/lib/utils/navigation";
 
 interface SalonDetails {
   id: number;
@@ -30,9 +31,9 @@ interface SalonDetails {
     id: number;
     name: string;
     duration: number;
-    price: number;
-  }>;
+    price: number;  }>;
   slug: string;
+  username: string;
 }
 
 export default function SalonPage({ params }: { params: { idOrSlug: string } }) {
@@ -40,13 +41,16 @@ export default function SalonPage({ params }: { params: { idOrSlug: string } }) 
   const [salon, setSalon] = useState<SalonDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
   useEffect(() => {
     const fetchSalonDetails = async () => {
       try {
         setLoading(true);
         const salonData = await getSalonDetails(params.idOrSlug);
         setSalon(salonData);
+          // Ensure URL uses the current username
+        if (salonData?.username) {
+          ensureSalonUrlUsesUsername(salonData.username, router);
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load salon details');
       } finally {
@@ -55,17 +59,17 @@ export default function SalonPage({ params }: { params: { idOrSlug: string } }) 
     };
 
     fetchSalonDetails();
-  }, [params.idOrSlug]);
+  }, [params.idOrSlug, router]);
 
   const handleCheckIn = () => {
     if (salon) {
-      router.push(`/salons/${salon.slug}/check-in`);
+      router.push(`/salons/${salon.username}/check-in`);
     }
   };
 
   const handleAppointment = () => {
     if (salon) {
-      router.push(`/salons/${salon.slug}/appointment`);
+      router.push(`/salons/${salon.username}/appointment`);
     }
   };
 
@@ -292,9 +296,7 @@ export default function SalonPage({ params }: { params: { idOrSlug: string } }) 
                 </div>
               </div>
             </Card>
-          </motion.div>
-
-          {/* Quick Actions Footer */}
+          </motion.div>          {/* Quick Actions Footer */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -302,15 +304,9 @@ export default function SalonPage({ params }: { params: { idOrSlug: string } }) 
             className="text-center mt-8"
           >
             <Button 
-              variant="outline" 
-              onClick={() => router.push('/salons')}
-              className="mr-4"
-            >
-              Browse Other Salons
-            </Button>
-            <Button 
               variant="outline"
-              onClick={() => router.push(`/salons/${salon.slug}/queue`)}
+              onClick={() => router.push(`/salons/${salon.username}/queue`)}
+              className="px-8 py-3"
             >
               View Current Queue
             </Button>

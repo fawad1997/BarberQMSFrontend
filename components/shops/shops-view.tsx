@@ -5,11 +5,12 @@ import { getShops } from "@/lib/services/shopService";
 import { Shop } from "@/types/shop";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MapPin, Phone, Mail, Clock, Trash2, AlertTriangle,Edit } from "lucide-react";
+import { MapPin, Phone, Mail, Clock, Trash2, AlertTriangle, Edit, QrCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { DeleteShopDialog } from "./delete-shop-dialog";
 import { EditShop } from "./Edit-shop-dialog"; 
+import { ShopQRCodeModal } from "./ShopQRCodeModal";
 import { ApiError } from "@/components/ui/api-error";
 import { testApiConnection } from "@/lib/utils/api-config";
 
@@ -19,10 +20,10 @@ export default function ShopsView() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [errorCode, setErrorCode] = useState<number | null>(null);
-  const [networkStatus, setNetworkStatus] = useState<string | null>(null);
-  const [selectedShop, setSelectedShop] = useState<Shop | null>(null);
+  const [networkStatus, setNetworkStatus] = useState<string | null>(null);  const [selectedShop, setSelectedShop] = useState<Shop | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isQRCodeModalOpen, setIsQRCodeModalOpen] = useState(false);
 
   // Check API connectivity
   useEffect(() => {
@@ -121,7 +122,6 @@ export default function ShopsView() {
     setSelectedShop(shop);
     setIsEditDialogOpen(true);
   };
-
   // Handle edit completion (Updates shop in UI)
   const handleEditComplete = (updatedShop: Shop) => {
     setShops((currentShops) =>
@@ -129,6 +129,12 @@ export default function ShopsView() {
     );
     setIsEditDialogOpen(false);
     setSelectedShop(null);
+  };
+
+  // Handle QR code click
+  const handleQRCodeClick = (shop: Shop) => {
+    setSelectedShop(shop);
+    setIsQRCodeModalOpen(true);
   };
 
   if (isLoading) {
@@ -204,15 +210,24 @@ export default function ShopsView() {
           ) : (
             shops.map((shop) => (
               <Card key={shop.id} className="overflow-hidden border-2 hover:border-primary/50 transition-all duration-300">
-                <div className="bg-gradient-to-r from-primary/10 to-primary/5 p-4">
-                  <div className="flex justify-between items-center mb-2">
+                <div className="bg-gradient-to-r from-primary/10 to-primary/5 p-4">                  <div className="flex justify-between items-center mb-2">
                     <h3 className="text-xl font-bold text-primary">{shop.name}</h3>
                     <div className="flex space-x-1">
                       <Button
                         variant="ghost"
                         size="icon"
+                        className="h-8 w-8 text-gray-500 hover:text-purple-600 hover:bg-purple-50"
+                        onClick={() => handleQRCodeClick(shop)}
+                        title="View QR Code"
+                      >
+                        <QrCode className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         className="h-8 w-8 text-gray-500 hover:text-blue-600 hover:bg-blue-50"
                         onClick={() => handleEditClick(shop)}
+                        title="Edit Shop"
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
@@ -221,6 +236,7 @@ export default function ShopsView() {
                         size="icon"
                         className="h-8 w-8 text-gray-500 hover:text-red-600 hover:bg-red-50"
                         onClick={() => handleDeleteClick(shop)}
+                        title="Delete Shop"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -285,9 +301,7 @@ export default function ShopsView() {
           }}
           onDelete={handleDeleteComplete}
         />
-      )}
-
-      {/* Edit Dialog */}
+      )}      {/* Edit Dialog */}
       {selectedShop && isEditDialogOpen && (
   <EditShop
     isOpen={isEditDialogOpen}
@@ -299,7 +313,18 @@ export default function ShopsView() {
     initialData={selectedShop}
     onEditComplete={handleEditComplete}
   />
-)}
+)}      {/* QR Code Modal */}
+      {selectedShop && (
+        <ShopQRCodeModal
+          isOpen={isQRCodeModalOpen}
+          onClose={() => {
+            setIsQRCodeModalOpen(false);
+            setSelectedShop(null);
+          }}
+          shopUsername={selectedShop.username || selectedShop.slug || `shop-${selectedShop.id}`}
+          shopName={selectedShop.name}
+        />
+      )}
 
     </div>
   );

@@ -9,6 +9,7 @@ declare module "next-auth" {
       email: string
       role?: string
       accessToken?: string
+      isFirstLogin?: boolean
     } & DefaultSession["user"]
   }
 
@@ -18,6 +19,7 @@ declare module "next-auth" {
     email: string
     role: string
     accessToken: string
+    isFirstLogin: boolean
   }
 }
 
@@ -25,5 +27,6 @@ declare module "next-auth/jwt" {
   interface JWT {
     role: string
     accessToken: string
+    isFirstLogin: boolean
   }
 } 
