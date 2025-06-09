@@ -23,6 +23,7 @@ import { Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { Shop } from "@/types/shop";
 import { checkUsernameAvailability } from "@/lib/services/shopService";
+import { updateSalonUrlAfterUsernameChange, updateShopUrlAfterUsernameChange } from "@/lib/utils/navigation";
 
 // Simple debounce implementation
 function debounce<T extends (...args: any[]) => any>(func: T, wait: number): T {
@@ -181,16 +182,23 @@ export function EditShop({ isOpen, onClose, shopId, initialData, onEditComplete 
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
         throw new Error(errorData?.detail || "Failed to update shop details.");
-      }
-
-      const updatedShopData = await response.json();
+      }      const updatedShopData = await response.json();
       toast.success("Shop details updated successfully!");
 
       // Preserve original shop properties not in the form
       const updatedShop: Shop = {
         ...initialData,
         ...updatedShopData
-      };
+      };      // Check if username/slug changed and update URL if needed
+      const usernameChanged = values.username !== originalUsername;
+      if (usernameChanged) {
+        console.log(`Username changed from ${originalUsername} to ${values.username}, updating URL...`);
+        // Use the shop-specific navigation utility to update the URL
+        const urlUpdated = updateShopUrlAfterUsernameChange(values.username, router);
+        if (urlUpdated) {
+          console.log("URL update initiated for shop username change");
+        }
+      }
 
       onEditComplete(updatedShop);
       onClose();
@@ -202,24 +210,22 @@ export function EditShop({ isOpen, onClose, shopId, initialData, onEditComplete 
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[600px]">
+    <Dialog open={isOpen} onOpenChange={onClose}>      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Shop Details</DialogTitle>
           <DialogDescription>
             Update your shop's information. All fields are required.
           </DialogDescription>
         </DialogHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <Form {...form}>          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.2 }}
-            >              {/* Shop Name */}
-              <FormField control={form.control} name="name" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Shop Name</FormLabel>
+              className="space-y-6"
+            >{/* Shop Name */}              <FormField control={form.control} name="name" render={({ field }) => (
+                <FormItem className="mb-6">
+                  <FormLabel className="mb-2">Shop Name</FormLabel>
                   <FormControl>
                     <Input placeholder="Enter shop name" {...field} />
                   </FormControl>
