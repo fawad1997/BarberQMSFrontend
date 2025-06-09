@@ -108,8 +108,9 @@ export const getShops = async (unused: boolean = false): Promise<Shop[]> => {
     // Handle network errors or other unexpected errors
     if (error instanceof TypeError && error.message === 'Failed to fetch') {
       console.error("Network error - Backend server might be down or unreachable");
+      const apiUrl = getApiEndpoint("");
       throw new NetworkError(
-        "Unable to connect to the server. Please check if the backend server is running at http://localhost:8000", 
+        `Unable to connect to the server. Please check if the backend server is running at ${apiUrl}`, 
         error
       );
     }
