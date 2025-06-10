@@ -10,6 +10,16 @@ const nextConfig = {
     // !! WARN !!
     ignoreBuildErrors: true,
   },
+  // Optimize performance
+  swcMinify: true,
+  // Disable static generation on pages with getServerSideProps
+  experimental: {
+    optimizeCss: true,
+  },
+  // Prevent hydration issues
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production',
+  },
 }
 
 module.exports = nextConfig
