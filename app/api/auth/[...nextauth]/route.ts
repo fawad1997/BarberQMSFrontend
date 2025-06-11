@@ -8,20 +8,26 @@ export const authOptions: NextAuthOptions = {
     strategy: 'jwt',
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
-  providers: [
-    CredentialsProvider({
+  providers: [    CredentialsProvider({
       name: 'Credentials',
       credentials: {
         username: { label: "Username", type: "text" },
         password: { label: "Password", type: "password" },
         accessToken: { label: "Access Token", type: "text" },
-      },
-      async authorize(credentials) {
+        loginType: { label: "Login Type", type: "text" },
+      },async authorize(credentials) {
         try {
+          // Prepare the request body with login data
+          const loginData = {
+            username: credentials?.username,
+            password: credentials?.password,
+            loginType: credentials?.loginType || 'shop_owner' // Default to shop_owner if not specified
+          };
+          
           const response = await fetch(getApiEndpoint("auth/login"), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(credentials)
+            body: JSON.stringify(loginData)
           })
 
           // Check content type before parsing
@@ -29,13 +35,18 @@ export const authOptions: NextAuthOptions = {
           if (!contentType || !contentType.includes("application/json")) {
             console.error("Non-JSON response from API");
             return null;
-          }          const data = await response.json()          
-          if (response.ok && data) {            console.log('Auth login data:', { 
+          }          
+          
+          const data = await response.json()          
+          if (response.ok && data) {            
+            console.log('Auth login data:', { 
               user_id: data.user_id, 
               full_name: data.full_name, 
               is_first_login: data.is_first_login,
-              is_first_login_type: typeof data.is_first_login 
+              is_first_login_type: typeof data.is_first_login,
+              role: data.role
             })
+            
             return {
               id: data.user_id.toString(),
               name: data.full_name,
@@ -99,8 +110,7 @@ export const authOptions: NextAuthOptions = {
   pages: {
     signIn: '/login',
     error: '/auth/error',
-  },
-  callbacks: {    async jwt({ token, user }) {
+  },  callbacks: {    async jwt({ token, user }) {
       if (user) {
         console.log('JWT callback - storing user data:', {
           role: user.role,
@@ -132,11 +142,13 @@ export const authOptions: NextAuthOptions = {
         isFirstLoginType: typeof session?.user?.isFirstLogin
       })
       return session
-    },
-    async redirect({ url, baseUrl }) {
-      // Allows relative callback URLs
+    },    async redirect({ url, baseUrl }) {
+      // The token isn't available directly in the redirect callback
+      // We'll handle redirects based on role in the middleware instead
+      
+      // Allow relative callback URLs
       if (url.startsWith("/")) return `${baseUrl}${url}`
-      // Allows callback URLs on the same origin
+      // Allow callback URLs on the same origin
       else if (new URL(url).origin === baseUrl) return url
       return baseUrl
     }

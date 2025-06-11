@@ -123,3 +123,40 @@
     transform: scale(1.02);
   }
 }
+
+/* Login form role selection enhanced styling */
+.role-option {
+  transition: all 0.2s ease-in-out;
+  position: relative;
+  overflow: hidden;
+}
+
+.role-option::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, var(--primary) 0%, transparent 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease-in-out;
+  z-index: -1;
+}
+
+.role-option:hover::before {
+  opacity: 0.05;
+}
+
+.role-option.selected::before {
+  opacity: 0.1;
+}
+
+/* Enhance form inputs with better focus states */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid hsl(var(--primary) / 0.5);
+  outline-offset: 2px;
+  transition: outline-color 0.2s ease;
+}
