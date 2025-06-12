@@ -143,10 +143,9 @@ export default function Navbar() {
     }, 100);
   }
 
-  return (
-    <header className="select-none">
-      <nav className="mx-auto justify-between px-4 md:flex md:items-center md:px-8 lg:max-w-7xl">
-        <div>
+  return (    <header className="select-none">
+      <nav className="mx-auto justify-between px-4 md:flex md:items-center md:justify-between md:px-8 lg:max-w-7xl">
+        <div className="md:w-1/4">
           <div className="flex items-center justify-between py-3 md:block md:py-5">
             <Link href="/" onClick={handleClick}>
               <h1 className="text-2xl font-bold duration-200 lg:hover:scale-[1.10]">
@@ -192,8 +191,7 @@ export default function Navbar() {
               <ModeToggle />
             </div>
           </div>
-        </div>
-        <div>
+        </div>        <div className="md:w-2/4 md:flex md:justify-center">
           <div
             className={`absolute left-0 right-0 z-10 m-auto justify-self-center rounded-md border bg-background p-4 md:static md:mt-0 md:block md:border-none md:p-0 ${
               navbar ? "block" : "hidden"
@@ -299,7 +297,7 @@ export default function Navbar() {
             </ul>
           </div>
         </div>
-        <div className="hidden md:flex items-center gap-4">
+        <div className="hidden md:flex md:w-1/4 md:justify-end items-center gap-4">
           {session ? (
             <div className="relative" ref={userMenuRef}>
               <button
