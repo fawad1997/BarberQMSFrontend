@@ -141,9 +141,7 @@ export default function BarberDashboardPage() {
               Average time spent per customer
             </p>
           </CardContent>
-        </Card>
-
-        {/* Upcoming Appointments Card */}
+        </Card>        {/* Upcoming Appointments Card */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -153,41 +151,78 @@ export default function BarberDashboardPage() {
           <CardContent>
             <div className="flex items-center">
               <Calendar className="h-6 w-6 text-primary mr-2" />
-              <div className="text-3xl font-bold">0</div>
+              {loading ? (
+                <Skeleton className="h-9 w-24" />
+              ) : (
+                <div className="text-3xl font-bold">
+                  {metrics?.upcoming_appointments || 0}
+                </div>
+              )}
             </div>
             <p className="text-xs text-muted-foreground mt-2">
-              Appointments for the rest of today
+              {timeFilter === "day" 
+                ? "Appointments for the rest of today" 
+                : timeFilter === "week" 
+                  ? "Appointments for this week"
+                  : "Appointments for this month"}
             </p>
           </CardContent>
         </Card>
-      </div>
-
-      {/* Performance Chart */}
+      </div>      {/* Performance Chart */}
       <Card className="mb-8">
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-lg font-medium">Performance Metrics</CardTitle>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 bg-primary rounded-sm"></div>
+              <span>Customers Served</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 bg-blue-400 rounded-sm"></div>
+              <span>Service Duration (min)</span>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {loading ? (
             <div className="space-y-2">
-              <Skeleton className="h-[200px] w-full rounded-lg" />
+              <Skeleton className="h-[250px] w-full rounded-lg" />
             </div>
           ) : metrics && metrics.daily_data && metrics.daily_data.length > 0 ? (
-            <div className="h-[200px] flex items-end justify-between gap-2">
+            <div className="h-[250px] flex items-end justify-between gap-2">
               {metrics.daily_data.map((day, i) => {
-                const maxValue = Math.max(...metrics.daily_data.map(d => d.customers_served)) || 1;
-                const heightPercentage = (day.customers_served / maxValue) * 100;
+                // Calculate metrics for display
+                const maxCustomers = Math.max(...metrics.daily_data.map(d => d.customers_served)) || 1;
+                const customerHeightPercentage = (day.customers_served / maxCustomers) * 100;
+                
+                // Get average service duration for this day (if available)
+                const serviceDuration = day.avg_service_duration || 0;
+                const maxDuration = Math.max(...metrics.daily_data.map(d => d.avg_service_duration || 0)) || 30;
+                const durationHeightPercentage = (serviceDuration / maxDuration) * 100;
                 
                 return (
-                  <div key={i} className="flex flex-col items-center w-full">
-                    <div style={{ height: `${heightPercentage}%`, minHeight: '4px' }} 
-                      className="w-full bg-primary/80 rounded-t-md"
-                    />
+                  <div key={i} className="flex flex-col items-center w-full group relative">
+                    <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-black/80 text-white px-2 py-1 rounded text-xs opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                      <div>Served: {day.customers_served}</div>
+                      <div>Duration: {serviceDuration} min</div>
+                    </div>
+                    
+                    <div className="w-full flex gap-1 justify-center">
+                      {/* Customers bar */}
+                      <div 
+                        style={{ height: `${customerHeightPercentage}%`, minHeight: '4px' }} 
+                        className="w-1/3 bg-primary rounded-t-md transition-all duration-300 ease-in-out"
+                      />
+                      
+                      {/* Duration bar */}
+                      <div 
+                        style={{ height: `${durationHeightPercentage}%`, minHeight: '4px' }} 
+                        className="w-1/3 bg-blue-400 rounded-t-md transition-all duration-300 ease-in-out"
+                      />
+                    </div>
+                    
                     <p className="text-xs text-muted-foreground mt-2">
                       {formatDate(day.date)}
-                    </p>
-                    <p className="text-xs font-medium">
-                      {day.customers_served}
                     </p>
                   </div>
                 );
