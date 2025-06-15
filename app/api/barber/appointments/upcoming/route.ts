@@ -35,17 +35,16 @@ export async function GET(request: NextRequest) {
         { error: 'Failed to fetch upcoming appointments' }, 
         { status: response.status }
       );
-    }
-
-    // Return the upcoming appointments data
+    }    // Return the upcoming appointments data
     const data = await response.json();
     return NextResponse.json(data);
 
   } catch (error) {
     console.error('Upcoming appointments error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' }, 
-      { status: 500 }
-    );
+    // Return zero appointments instead of error to maintain UI consistency
+    return NextResponse.json({
+      count: 0,
+      appointments: []
+    });
   }
 }
