@@ -30,33 +30,26 @@ function generateMockMetricsData(timePeriod: string) {
     endDate.setDate(startDate.getDate() + 6);
   }
   
-  // Generate daily data for the range
+  // Generate daily data for the range with all zeros
   const dailyData = [];
   const currentDate = new Date(startDate);
   
   while (currentDate <= endDate) {
-    // Generate reasonable random values
-    const customersServed = Math.floor(Math.random() * 10) + 1; // 1-10 customers
-    const avgServiceDuration = Math.floor(Math.random() * 30) + 15; // 15-45 minutes
-    
     dailyData.push({
       date: currentDate.toISOString().split('T')[0],
-      customers_served: customersServed,
-      avg_service_duration: avgServiceDuration,
-      appointments_count: customersServed + Math.floor(Math.random() * 3) // Some additional appointments
+      customers_served: 0,
+      avg_service_duration: 0,
+      appointments_count: 0
     });
     
     // Move to next day
     currentDate.setDate(currentDate.getDate() + 1);
   }
   
-  // Calculate upcoming appointments (higher for longer time periods)
-  const upcomingAppointmentsMultiplier = timePeriod === 'day' ? 1 : timePeriod === 'week' ? 3 : 8;
-  const upcomingAppointments = Math.floor(Math.random() * 5) + (upcomingAppointmentsMultiplier);
-  
-  // Calculate aggregate metrics
-  const totalCustomersServed = dailyData.reduce((sum, day) => sum + day.customers_served, 0);
-  const avgServiceDurationMinutes = dailyData.reduce((sum, day) => sum + day.avg_service_duration, 0) / dailyData.length;
+  // Set all metrics to zero
+  const upcomingAppointments = 0;
+  const totalCustomersServed = 0;
+  const avgServiceDurationMinutes = 0;
   
   return {
     time_period: timePeriod,

@@ -41,10 +41,26 @@ export default function BarberDashboardPage() {
         }
 
         const data = await response.json();
-        setMetrics(data);
-      } catch (err) {
+        setMetrics(data);      } catch (err) {
         console.error("Error fetching barber metrics:", err);
         setError("Could not load metrics data. Please try again later.");
+        
+        // Set default zero metrics in case of error to avoid showing random numbers
+        const now = new Date();
+        const today = now.toISOString().split('T')[0];
+        setMetrics({
+          time_period: timeFilter,
+          start_date: today,
+          end_date: today,
+          customers_served: 0,
+          upcoming_appointments: 0,
+          avg_service_duration_minutes: 0,
+          daily_data: [{
+            date: today,
+            customers_served: 0,
+            avg_service_duration: 0
+          }]
+        });
       } finally {
         setLoading(false);
       }

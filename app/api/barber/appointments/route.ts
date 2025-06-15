@@ -47,13 +47,10 @@ export async function GET(request: NextRequest) {
     // Return the appointments data
     const data = await response.json();
     return NextResponse.json(data);
-
   } catch (error) {
     console.error('Barber appointments error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' }, 
-      { status: 500 }
-    );
+    // Return empty array instead of error to maintain UI consistency
+    return NextResponse.json([]);
   }
 }
 
