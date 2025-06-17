@@ -82,7 +82,6 @@ function AddBarberModal({
     reset,
     formState: { errors },
   } = useForm<AddBarberFormData>()
-
   const onSubmit = async (data: AddBarberFormData) => {
     try {
       const response = await fetch(
@@ -93,10 +92,7 @@ function AddBarberModal({
             "Content-Type": "application/json",
             Authorization: `Bearer ${accessToken}`,
           },
-          body: JSON.stringify({
-            ...data,
-            password: "Temp1234",
-          }),
+          body: JSON.stringify(data),
         }
       )
 
@@ -110,7 +106,9 @@ function AddBarberModal({
         throw new Error(errorMessage)
       }
 
-      toast.success("Artist has been added successfully")
+      toast.success(
+        "Artist has been added successfully. An email with password setup instructions has been sent to their email address."
+      )
       reset()
       onSuccess()
       onClose()
@@ -180,6 +178,8 @@ function AddBarberModal({
             {errors.status && (
               <p className="text-sm text-red-500">Status is required.</p>
             )}
+          </div>          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md text-sm text-blue-700">
+            <p>An email will be sent to the artist with instructions to set up their password.</p>
           </div>
           <Button type="submit" className="w-full">
             Add Artist
