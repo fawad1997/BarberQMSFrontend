@@ -9,19 +9,16 @@ export const authOptions: NextAuthOptions = {
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
   providers: [    CredentialsProvider({
-      name: 'Credentials',
-      credentials: {
+      name: 'Credentials',      credentials: {
         username: { label: "Username", type: "text" },
         password: { label: "Password", type: "password" },
         accessToken: { label: "Access Token", type: "text" },
-        loginType: { label: "Login Type", type: "text" },
       },async authorize(credentials) {
         try {
           // Prepare the request body with login data
           const loginData = {
             username: credentials?.username,
             password: credentials?.password,
-            loginType: credentials?.loginType || 'shop_owner' // Default to shop_owner if not specified
           };
           
           const response = await fetch(getApiEndpoint("auth/login"), {

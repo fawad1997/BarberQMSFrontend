@@ -22,7 +22,6 @@ import {
   FormMessage,
 } from "../../../components/ui/form";
 import { Input } from "../../../components/ui/input";
-import { RadioGroup, RadioGroupItem } from "../../../components/ui/radio-group";
 import { Separator } from "../../../components/ui/separator";
 import SSOButton from "./sso-button";
 
@@ -33,9 +32,6 @@ const formSchema = z.object({
   password: z.string().min(1, {
     message: "Password is required.",
   }),
-  loginType: z.enum(["shop_owner", "barber"], {
-    required_error: "Please select login type.",
-  }),
 });
 
 export default function LoginForm() {
@@ -43,16 +39,13 @@ export default function LoginForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
-
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       username: "",
       password: "",
-      loginType: "shop_owner",
     },
   });
-
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
     setError(null);
@@ -81,29 +74,25 @@ export default function LoginForm() {
 
       if (!response.ok) {
         throw new Error(data.message || "Invalid username or password");
-      }
+      }      // Determine redirect URL based on the user's role from API response
+      const userRole = data.role?.value || "";
+      const callbackUrl = userRole === "BARBER" ? "/barber/dashboard" : "/shop/dashboard";
 
-      // Determine where to redirect based on login type
-      const callbackUrl = values.loginType === "barber" ? "/barber/dashboard" : "/shop/dashboard";
-
-      // Pass loginType to signIn for use in credentials authorize function
+      // Call signIn with credentials
       const result = await signIn("credentials", {
         username: values.username,
         password: values.password,
         accessToken: data.access_token,
         callbackUrl: callbackUrl,
         redirect: false,
-        loginType: values.loginType,
       });
 
       if (result?.error) {
         throw new Error("Invalid credentials");
-      }
-
-      if (result?.ok) {
+      }      if (result?.ok) {
         toast.success("Login successful!");
-        // Redirect to the appropriate dashboard
-        const redirectUrl = values.loginType === "barber" ? "/barber/dashboard" : "/shop/dashboard";
+        // Redirect to the appropriate dashboard based on role
+        const redirectUrl = userRole === "BARBER" ? "/barber/dashboard" : "/shop/dashboard";
         router.push(redirectUrl);
       }
     } catch (error) {
@@ -144,89 +133,8 @@ export default function LoginForm() {
         <Separator className="flex-1" />
         <span className="mx-4 text-xs font-medium text-muted-foreground">OR CONTINUE WITH EMAIL</span>
         <Separator className="flex-1" />
-      </div>
-
-      <Form {...form}>
+      </div>      <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
-          <FormField
-            control={form.control}
-            name="loginType"
-            render={({ field }) => (
-              <FormItem className="space-y-2">
-                <FormLabel className="font-medium">Login As</FormLabel>
-                <FormControl>
-                  <RadioGroup
-                    onValueChange={field.onChange}
-                    defaultValue={field.value}
-                    className="flex flex-col sm:flex-row gap-3"
-                  >
-                    <div className={`flex-1 border-2 rounded-xl p-4 transition-all cursor-pointer ${
-                      field.value === 'shop_owner' 
-                        ? 'border-primary bg-primary/5 shadow-md' 
-                        : 'border-border hover:border-primary/50 hover:bg-muted'
-                    }`}
-                    onClick={() => field.onChange('shop_owner')}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className={`p-2 rounded-full ${field.value === 'shop_owner' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
-                          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-store">
-                            <path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/>
-                            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
-                            <path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/>
-                            <path d="M2 7h20"/>
-                            <path d="M22 7v3a2 2 0 0 1-2 2v0a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 16 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 12 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 8 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 4 12v0a2 2 0 0 1-2-2V7"/>
-                          </svg>
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between">
-                            <label htmlFor="shop_owner" className="cursor-pointer text-sm font-medium leading-none">
-                              Shop Owner
-                            </label>
-                            <RadioGroupItem value="shop_owner" id="shop_owner" className="mt-0" />
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-2">
-                            Access shop management tools, barbers, and services
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className={`flex-1 border-2 rounded-xl p-4 transition-all cursor-pointer ${
-                      field.value === 'barber' 
-                        ? 'border-primary bg-primary/5 shadow-md' 
-                        : 'border-border hover:border-primary/50 hover:bg-muted'
-                    }`}
-                    onClick={() => field.onChange('barber')}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className={`p-2 rounded-full ${field.value === 'barber' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
-                          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-scissors">
-                            <circle cx="6" cy="6" r="3"/>
-                            <circle cx="18" cy="18" r="3"/>
-                            <path d="M8.12 8.12 18 18"/>
-                            <path d="M8.12 8.12 18 18"/>
-                            <path d="m18 6-9.88 9.88"/>
-                          </svg>
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between">
-                            <label htmlFor="barber" className="cursor-pointer text-sm font-medium leading-none">
-                              Barber/Artist
-                            </label>
-                            <RadioGroupItem value="barber" id="barber" className="mt-0" />
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-2">
-                            Manage your appointments, schedule and clients
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </RadioGroup>
-                </FormControl>
-                <FormMessage className="text-xs" />
-              </FormItem>
-            )}
-          />
           
           <FormField
             control={form.control}
@@ -287,9 +195,7 @@ export default function LoginForm() {
                 <FormMessage className="text-xs" />
               </FormItem>
             )}
-          />
-
-          {error && (
+          />          {error && (
             <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive text-center">
               {error}
             </div>
