@@ -1,0 +1,19 @@
+name: Deploy Frontend to DigitalOcean
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Deploy to frontend server
+      uses: appleboy/ssh-action@v0.1.5
+      with:
+        host: ${{ secrets.FRONTEND_HOST }}
+        username: root
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        script: |
+          cd /var/www/nextjs-app
+          ./deploy.sh 
