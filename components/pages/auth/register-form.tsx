@@ -8,8 +8,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
+import { getApiEndpoint } from "../../../lib/utils/api-config";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "../../../components/ui/button";
 import {
   Form,
   FormControl,
@@ -17,8 +18,8 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
+} from "../../../components/ui/form";
+import { Input } from "../../../components/ui/input";
 
 const formSchema = z.object({
   full_name: z.string().min(2, {
@@ -55,7 +56,8 @@ export default function RegisterForm() {
     setError(null);
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/register/shop-owner`, {
+      console.log("Registration values:", values);
+      const response = await fetch(getApiEndpoint("auth/register/shop-owner"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -63,13 +65,23 @@ export default function RegisterForm() {
         body: JSON.stringify(values),
       });
 
+      // Check content type before parsing JSON
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        // If not JSON, get the text to see what was returned
+        const textResponse = await response.text();
+        console.error("Non-JSON response:", textResponse.substring(0, 500));
+        throw new Error("The server returned an invalid response format. Please try again later.");
+      }
+
       const data = await response.json();
+      console.log("Registration response:", data);
 
       if (!response.ok) {
         if (response.status === 422) {
           throw new Error(data.detail[0]?.msg || "Validation error occurred");
         }
-        throw new Error("Registration failed. Please try again.");
+        throw new Error(data.detail || "Registration failed. Please try again.");
       }
 
       toast.success("Registration successful! Please login to continue.");

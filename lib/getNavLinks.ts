@@ -55,6 +55,13 @@ export const getNavLinks = (role?: string) => {
         ]
       },
     ];
+  }  if (role === "BARBER") {
+    return [
+      { route: "Dashboard", path: "/barber/dashboard", icon: "fa-solid fa-chart-line" },
+      { route: "Appointments", path: "/barber/appointments", icon: "fa-solid fa-calendar-check" },
+      { route: "Schedule", path: "/barber/schedule", icon: "fa-solid fa-clock" },
+      { route: "Queue", path: "/barber/queue", icon: "fa-solid fa-users" }
+    ];
   }
   return navLinks;
 };

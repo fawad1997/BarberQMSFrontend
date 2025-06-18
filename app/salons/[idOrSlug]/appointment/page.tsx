@@ -451,12 +451,15 @@ export default function AppointmentPage({ params }: { params: { idOrSlug: string
                             </Card>
                           ))}
                         </div>
-                      ) : (
-                        <Alert variant="destructive">
+                      ) : (                        <Alert variant="destructive">
                           <AlertCircle className="h-4 w-4" />
                           <AlertTitle>No Barbers Available</AlertTitle>
                           <AlertDescription>
-                            Unfortunately, no barber is currently available for this service. Please select a different service or try again later.
+                            {salon.barbers?.length === 0 ? (
+                              "This salon doesn't have any barbers registered yet. Please try another salon."
+                            ) : (
+                              "No barbers are scheduled to work at the selected time. Please try a different time, date, or service."
+                            )}
                           </AlertDescription>
                         </Alert>
                       )}
