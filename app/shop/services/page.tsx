@@ -83,7 +83,7 @@ function ServiceModal({
       }
 
       const response = await fetch(
-        getApiEndpoint(`shop-owners/shops/${shopId}/services/`),
+        getApiEndpoint(`business-owners/businesses/${shopId}/services/`),
         {
           method: "POST",
           headers: {
@@ -229,7 +229,7 @@ function EditServiceModal({
       }
 
       const response = await fetch(
-        getApiEndpoint(`shop-owners/shops/${shopId}/services/${service.id}`),
+        getApiEndpoint(`business-owners/businesses/${shopId}/services/${service.id}`),
         {
           method: "PUT",
           headers: {
@@ -350,7 +350,7 @@ function DeleteServiceDialog({
   const handleDelete = async () => {
     try {
       const response = await fetch(
-        getApiEndpoint(`shop-owners/shops/services/${service.id}`),
+        getApiEndpoint(`business-owners/businesses/${shopId}/services/${service.id}`),
         {
           method: "DELETE",
           headers: {
@@ -491,7 +491,7 @@ export default function ServicesPage() {
       try {
         // Fetch shops
         const shopsResponse = await fetch(
-          getApiEndpoint("shop-owners/shops"),
+          getApiEndpoint("business-owners/businesses"),
           {
             headers: {
               Authorization: `Bearer ${session.user.accessToken}`,
@@ -513,7 +513,7 @@ export default function ServicesPage() {
         const shopsWithServices = await Promise.all(
           shopsData.map(async (shop: Shop) => {
             const servicesResponse = await fetch(
-              getApiEndpoint(`shop-owners/shops/${shop.id}/services`),
+              getApiEndpoint(`business-owners/businesses/${shop.id}/services`),
               {
                 headers: {
                   Authorization: `Bearer ${session.user.accessToken}`,
@@ -642,7 +642,7 @@ export default function ServicesPage() {
 
               try {
                 const servicesResponse = await fetch(
-                  getApiEndpoint(`shop-owners/shops/${selectedShopId}/services`),
+                  getApiEndpoint(`business-owners/businesses/${selectedShopId}/services`),
                   {
                     headers: {
                       Authorization: `Bearer ${session.user.accessToken}`,
@@ -690,7 +690,7 @@ export default function ServicesPage() {
 
               try {
                 const servicesResponse = await fetch(
-                  getApiEndpoint(`shop-owners/shops/${selectedShopId}/services`),
+                  getApiEndpoint(`business-owners/businesses/${selectedShopId}/services`),
                   {
                     headers: {
                       Authorization: `Bearer ${session.user.accessToken}`,
@@ -738,7 +738,7 @@ export default function ServicesPage() {
 
               try {
                 const servicesResponse = await fetch(
-                  getApiEndpoint(`shop-owners/shops/${selectedShopId}/services`),
+                  getApiEndpoint(`business-owners/businesses/${selectedShopId}/services`),
                   {
                     headers: {
                       Authorization: `Bearer ${session.user.accessToken}`,

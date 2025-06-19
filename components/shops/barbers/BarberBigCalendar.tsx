@@ -137,7 +137,7 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
     try {
       console.log('Fetching appointments for shop:', shopId)
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/appointments/shop/${shopId}/appointments`,
+        `${process.env.NEXT_PUBLIC_API_URL}/appointments/business/${shopId}/appointments`,
         {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
@@ -203,7 +203,7 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
       console.log('Starting to fetch barber schedules...')
       // Fetch schedules for all barbers
       const schedulePromises = barbers.map(async (barber) => {
-        const url = `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/barbers/${barber.id}/schedules/`
+        const url = `${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${shopId}/employees/${barber.id}/schedules/`
         console.log(`Fetching schedules for barber ${barber.id} from:`, url)
         
         const response = await fetch(url, {
@@ -364,7 +364,7 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
     setIsLoadingServices(true)
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/barbers/${barberId}/services`,
+        `${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${shopId}/employees/${barberId}/services`,
         {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
@@ -804,7 +804,7 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
         })
 
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/barbers/${event.resource.barber_id}/schedules/${scheduleId}`,
+          `${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${shopId}/employees/${event.resource.barber_id}/schedules/${scheduleId}`,
           {
             method: 'PUT',
             headers: {
@@ -911,7 +911,7 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
         })
 
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/barbers/${event.resource.barber_id}/schedules/${scheduleId}`,
+          `${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${shopId}/employees/${event.resource.barber_id}/schedules/${scheduleId}`,
           {
             method: 'PUT',
             headers: {
@@ -1062,7 +1062,7 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
     try {
       const scheduleId = selectedSchedule.id.toString().split('-')[1]
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/barbers/${selectedSchedule.resource.barber_id}/schedules/${scheduleId}`,
+        `${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${shopId}/employees/${selectedSchedule.resource.barber_id}/schedules/${scheduleId}`,
         {
           method: 'DELETE',
           headers: {
@@ -1115,7 +1115,7 @@ export function BarberBigCalendar({ barbers, shopId, accessToken }: BarberBigCal
       const isEditing = selectedSchedule !== null
       const scheduleId = isEditing ? selectedSchedule.id.toString().split('-')[1] : ''
       
-      const url = `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/barbers/${scheduleFormData.barber_id}/schedules/${isEditing ? scheduleId : ''}`
+      const url = `${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${shopId}/employees/${scheduleFormData.barber_id}/schedules/${isEditing ? scheduleId : ''}`
       
       console.log(`${isEditing ? 'Updating' : 'Creating'} schedule:`, {
         url,

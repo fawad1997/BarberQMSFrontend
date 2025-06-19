@@ -54,8 +54,8 @@ interface SalonDetails {
 }
 
 interface AppointmentRequest {
-  shop_id: number;
-  barber_id: number | null;
+  business_id: number; // Changed from shop_id
+  employee_id: number | null; // Changed from barber_id
   service_id: number | null;
   appointment_time: string;
   number_of_people: number;
@@ -169,8 +169,8 @@ export default function AppointmentPage({ params }: { params: { idOrSlug: string
       setIsBooking(true);
       
       const appointmentData: AppointmentRequest = {
-        shop_id: Number(salon.id),
-        barber_id: isAdvanceBooking ? selectedBarber : null,
+        business_id: Number(salon.id), // Changed from shop_id
+        employee_id: isAdvanceBooking ? selectedBarber : null, // Changed from barber_id
         service_id: isAdvanceBooking ? selectedService : null,
         appointment_time: getFormattedDateTime(),
         number_of_people: Number(numberOfPeople),

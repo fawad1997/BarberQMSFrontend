@@ -36,7 +36,7 @@ interface WorkSchedule {
   end_time: string;
   is_active: boolean;
   breaks: ScheduleBreak[];
-  barber_id: number;
+  employee_id: number; // Changed from barber_id
   day_of_week: number[];
   effective_start_date: string;
   effective_end_date: string;
@@ -52,8 +52,8 @@ interface ScheduleBreak {
 
 interface EmployeeSchedule {
   id: number;
-  barber_id: number;
-  barber_name: string;
+  employee_id: number; // Changed from barber_id
+  employee_name: string; // Changed from barber_name
   schedule_id: number;
   effective_start_date: string;
   effective_end_date: string;
@@ -61,8 +61,8 @@ interface EmployeeSchedule {
 
 interface ScheduleOverride {
   id: number;
-  barber_id: number;
-  barber_name: string;
+  employee_id: number; // Changed from barber_id
+  employee_name: string; // Changed from barber_name
   date: string;
   start_time: string;
   end_time: string;
@@ -81,7 +81,7 @@ const DAYS_OF_WEEK = [
 ];
 
 interface WorkScheduleManagerProps {
-  shopId: number;
+  shopId: number; // Note: This represents a business ID in the new schema
 }
 
 interface ScheduleForm {
@@ -124,21 +124,21 @@ const WorkScheduleManager: React.FC<WorkScheduleManagerProps> = ({ shopId }) => 
   });
 
   const [assignmentForm, setAssignmentForm] = useState({
-    barber_id: '',
+    employee_id: '', // Changed from barber_id
     effective_start_date: null as Date | null,
     effective_end_date: null as Date | null,
   });
 
   const [overrideForm, setOverrideForm] = useState({
-    barber_id: '',
-    shop_id: shopId,
+    employee_id: '', // Changed from barber_id
+    business_id: shopId, // Changed from shop_id
     start_date: null as Date | null,
     end_date: null as Date | null,
     repeat_frequency: '' as string | null,
   });
 
-  // Add state for barbers
-  const [barbers, setBarbers] = useState<{ id: number; name?: string; full_name?: string }[]>([]);
+  // Add state for employees (formerly barbers)
+  const [employees, setEmployees] = useState<{ id: number; name?: string; full_name?: string }[]>([]);
 
   // Add state for selected employee and their schedules
   const [selectedEmployee, setSelectedEmployee] = useState<number | null>(null);
@@ -148,22 +148,22 @@ const WorkScheduleManager: React.FC<WorkScheduleManagerProps> = ({ shopId }) => 
   const [overrides, setOverrides] = useState<any[]>([]);
 
   const [overrideFilters, setOverrideFilters] = useState({
-    barber_id: '',
+    employee_id: '', // Changed from barber_id
     start_date: null as Date | null,
     end_date: null as Date | null,
   });
 
   const [selectedOverride, setSelectedOverride] = useState<any | null>(null);
   const [editOverrideForm, setEditOverrideForm] = useState({
-    barber_id: '',
-    shop_id: shopId,
+    employee_id: '', // Changed from barber_id
+    business_id: shopId, // Changed from shop_id
     start_date: null as Date | null,
     end_date: null as Date | null,
     repeat_frequency: '' as string | null,
   });
   const [openEditOverrideModal, setOpenEditOverrideModal] = useState(false);
 
-  const [allShops, setAllShops] = useState<any[]>([]);
+  const [allBusinesses, setAllBusinesses] = useState<any[]>([]);
 
   const columns: GridColDef[] = [
     { field: 'name', headerName: 'Name', flex: 1 },

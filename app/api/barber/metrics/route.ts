@@ -81,7 +81,7 @@ export async function GET(request: NextRequest) {
     // Try to call the backend API first
     try {
       const backendUrl = process.env.BACKEND_URL || 'http://localhost:8000';
-      const response = await fetch(`${backendUrl}/barbers/metrics?time_period=${timePeriod}`, {
+      const response = await fetch(`${backendUrl}/employees/metrics?time_period=${timePeriod}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token.accessToken}`,

@@ -89,7 +89,7 @@ export function AddScheduleModal({ isOpen, onClose, barberId, shopId, accessToke
 
         try {
           const response = await fetch(
-            `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/barbers/${barberId}/schedules/`,
+            `${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${shopId}/employees/${barberId}/schedules/`,
             {
               method: 'POST',
               headers: {

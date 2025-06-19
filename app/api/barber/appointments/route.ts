@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
     
     // Call the backend API
     const backendUrl = process.env.BACKEND_URL || 'http://localhost:8000';
-    const url = `${backendUrl}/barbers/appointments/?${queryParams.toString()}`;
+    const url = `${backendUrl}/employees/appointments/?${queryParams.toString()}`;
     
     const response = await fetch(url, {
       method: 'GET',
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
     if (!response.ok) {
       console.error('Backend error:', await response.text());
       return NextResponse.json(
-        { error: 'Failed to fetch barber appointments' }, 
+        { error: 'Failed to fetch employee appointments' }, 
         { status: response.status }
       );
     }
@@ -78,7 +78,7 @@ export async function PUT(request: NextRequest) {
 
     // Call the backend API
     const backendUrl = process.env.BACKEND_URL || 'http://localhost:8000';
-    const response = await fetch(`${backendUrl}/barbers/appointments/${appointmentId}`, {
+    const response = await fetch(`${backendUrl}/employees/appointments/${appointmentId}`, {
       method: 'PUT',
       headers: {
         'Authorization': `Bearer ${token.accessToken}`,
