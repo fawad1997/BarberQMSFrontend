@@ -9,9 +9,11 @@ import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { checkUsernameAvailability } from "@/lib/services/shopService";
+import { US_TIMEZONES } from "@/types/shop";
 
 // Simple debounce implementation
 function debounce<T extends (...args: any[]) => any>(func: T, wait: number): T {
@@ -68,6 +70,7 @@ const shopFormSchema = z.object({
   is_advertisement_active: z.boolean().default(false),
   opening_time: z.string().min(1, "Opening time is required"),
   closing_time: z.string().min(1, "Closing time is required"),
+  timezone: z.string().min(1, "Timezone is required"),
 });
 
 export default function CreateShopForm() {
@@ -82,8 +85,10 @@ export default function CreateShopForm() {
     defaultValues: {
       username: "",
       has_advertisement: false,
-      is_advertisement_active: false,      opening_time: "",
+      is_advertisement_active: false,
+      opening_time: "",
       closing_time: "",
+      timezone: "America/Los_Angeles",
     },
   });
 
@@ -191,6 +196,7 @@ export default function CreateShopForm() {
         has_advertisement: values.has_advertisement,
         opening_time: values.opening_time,
         closing_time: values.closing_time,
+        timezone: values.timezone,
       };
 
       const shopResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/`, {
@@ -445,6 +451,31 @@ export default function CreateShopForm() {
             </FormItem>
           )}
         />
+
+        <FormField
+          control={form.control}
+          name="timezone"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Timezone</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select your shop's timezone" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {Object.entries(US_TIMEZONES).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 {/* Will hide advertisement for now */}
         {/* <FormField
           control={form.control}
@@ -566,4 +597,4 @@ export default function CreateShopForm() {
       </form>
     </Form>
   );
-} 
+}
