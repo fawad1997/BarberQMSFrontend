@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Box, IconButton, Tooltip, Typography } from "@mui/material";
 import { DataGrid, GridColDef, GridRenderCellParams } from "@mui/x-data-grid";
 import { Button } from "@/components/ui/button";
@@ -8,29 +8,36 @@ import { Plus, Pencil, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { useForm, Controller } from "react-hook-form";
-import * as yup from "yup";
-import { yupResolver } from "@hookform/resolvers/yup";
-import TextField from "@mui/material/TextField";
-import Select from "@mui/material/Select";
-import MenuItem from "@mui/material/MenuItem";
+import { useForm, Path, Controller } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
+import { Checkbox } from "@/components/ui/checkbox";
 import { getSession } from "next-auth/react";
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import WorkScheduleManager from '@/components/shops/schedules/WorkScheduleManager';
+import debounce from 'lodash/debounce';
+
+interface OperatingHour {
+  day_of_week: number;
+  opening_time: string;
+  closing_time: string;
+  is_closed: boolean;
+}
 
 interface Business {
   id: number;
   name: string;
+  username: string;
   address: string;
   city: string;
   state: string;
   zip_code: string;
   phone_number: string;
   email: string;
-  opening_time: string;
-  closing_time: string;
+  operating_hours: OperatingHour[];
   average_wait_time: number;
   has_advertisement: boolean;
   advertisement_image_url?: string;
@@ -38,9 +45,8 @@ interface Business {
   advertisement_end_date?: string;
   is_advertisement_active: boolean;
   estimated_wait_time: number;
-  is_open: boolean;
-  formatted_hours: string;
   owner_id: number;
+  services: Service[];
 }
 
 interface Service {
@@ -68,37 +74,189 @@ interface WorkSchedule {
   repeat_frequency: 'none' | 'daily' | 'weekly' | 'weekly_no_weekends';
 }
 
-function ServiceList({ selectedBusiness, services, onAdd, onEdit, onDelete, onDialogSubmit }: {
-  selectedBusiness: Business | null,
-  services: Service[],
-  onAdd: () => void,
-  onEdit: (service: Service) => void,
-  onDelete: (id: number) => void,
-  onDialogSubmit: (data: any) => void,
+async function checkUsernameAvailability(username: string): Promise<{ available: boolean }> {
+  try {
+    const session = await getSession();
+    if (!session?.user?.accessToken) {
+      throw new Error("No access token found. Please login again.");
+    }
+
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/shop-owners/check-username/${username}`, {
+      headers: {
+        'Authorization': `Bearer ${session.user.accessToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.detail || `Failed to check username: ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error checking username:", error);
+    throw error;
+  }
+}
+
+// BusinessDialog for add/edit business
+function BusinessDialog({ open, onClose, onSubmit, initialData }: {
+  open: boolean;
+  onClose: () => void;
+  onSubmit: (data: any) => void;
+  initialData: Business | null;
 }) {
+  const [checkingUsername, setCheckingUsername] = useState(false);
+  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
+  const [originalUsername, setOriginalUsername] = useState(initialData?.username || "");
+  const [services, setServices] = useState<Service[]>(initialData?.services || []);
   const [serviceDialogOpen, setServiceDialogOpen] = useState(false);
   const [serviceEditData, setServiceEditData] = useState<Service | null>(null);
 
-  if (!selectedBusiness) return null;
+  const businessSchema = z.object({
+    name: z.string().min(1, "Business name is required"),
+    username: z.string().min(1, "Username is required"),
+    address: z.string().min(1, "Address is required"),
+    city: z.string().min(1, "City is required"),
+    state: z.string().min(1, "State is required"),
+    zip_code: z.string().min(1, "ZIP code is required"),
+    phone_number: z.string().min(1, "Phone number is required"),
+    email: z.string().email("Invalid email address"),
+    average_wait_time: z.number().min(1, "Average wait time is required"),
+    has_advertisement: z.boolean().default(false),
+    operating_hours: z.array(z.object({
+      day_of_week: z.number(),
+      opening_time: z.string(),
+      closing_time: z.string(),
+      is_closed: z.boolean().default(false),
+    })),
+    services: z.array(z.object({
+      id: z.number().optional(),
+      name: z.string().min(1, "Service name is required"),
+      duration: z.number().min(1, "Duration must be a positive number"),
+      price: z.number().min(0, "Price must be a non-negative number"),
+    })),
+  });
 
-  const handleAdd = () => {
+  const form = useForm<z.infer<typeof businessSchema>>({
+    resolver: zodResolver(businessSchema),
+    defaultValues: {
+      name: initialData?.name || "",
+      username: initialData?.username || "",
+      address: initialData?.address || "",
+      city: initialData?.city || "",
+      state: initialData?.state || "",
+      zip_code: initialData?.zip_code || "",
+      phone_number: initialData?.phone_number || "",
+      email: initialData?.email || "",
+      average_wait_time: initialData?.average_wait_time || 0,
+      has_advertisement: initialData?.has_advertisement || false,
+      operating_hours: initialData?.operating_hours || [
+        { day_of_week: 0, opening_time: "09:00", closing_time: "17:00", is_closed: true }, // Sunday
+        { day_of_week: 1, opening_time: "09:00", closing_time: "17:00", is_closed: false }, // Monday
+        { day_of_week: 2, opening_time: "09:00", closing_time: "17:00", is_closed: false }, // Tuesday
+        { day_of_week: 3, opening_time: "09:00", closing_time: "17:00", is_closed: false }, // Wednesday
+        { day_of_week: 4, opening_time: "09:00", closing_time: "17:00", is_closed: false }, // Thursday
+        { day_of_week: 5, opening_time: "09:00", closing_time: "17:00", is_closed: false }, // Friday
+        { day_of_week: 6, opening_time: "09:00", closing_time: "17:00", is_closed: false }, // Saturday
+      ],
+      services: initialData?.services || [],
+    },
+  });
+
+  // Reset form and services when dialog opens/closes or initialData changes
+  useEffect(() => {
+    const newFormData = {
+      name: initialData?.name || "",
+      username: initialData?.username || "",
+      address: initialData?.address || "",
+      city: initialData?.city || "",
+      state: initialData?.state || "",
+      zip_code: initialData?.zip_code || "",
+      phone_number: initialData?.phone_number || "",
+      email: initialData?.email || "",
+      average_wait_time: initialData?.average_wait_time || 0,
+      has_advertisement: initialData?.has_advertisement || false,
+      operating_hours: initialData?.operating_hours || [
+        { day_of_week: 0, opening_time: "09:00", closing_time: "17:00", is_closed: true }, // Sunday
+        { day_of_week: 1, opening_time: "09:00", closing_time: "17:00", is_closed: false }, // Monday
+        { day_of_week: 2, opening_time: "09:00", closing_time: "17:00", is_closed: false }, // Tuesday
+        { day_of_week: 3, opening_time: "09:00", closing_time: "17:00", is_closed: false }, // Wednesday
+        { day_of_week: 4, opening_time: "09:00", closing_time: "17:00", is_closed: false }, // Thursday
+        { day_of_week: 5, opening_time: "09:00", closing_time: "17:00", is_closed: false }, // Friday
+        { day_of_week: 6, opening_time: "09:00", closing_time: "17:00", is_closed: false }, // Saturday
+      ],
+      services: initialData?.services || [],
+    };
+    form.reset(newFormData);
+    setServices(initialData?.services || []);
+    setOriginalUsername(initialData?.username || "");
+    form.setValue('services', initialData?.services || []);
+  }, [initialData, form, setServices]);
+
+  // Debounced username availability check
+  const debouncedUsernameCheck = useCallback(
+    debounce(async (username: string) => {
+      if (!username || username.length < 3 || username === originalUsername) {
+        setUsernameAvailable(null);
+        return;
+      }
+
+      setCheckingUsername(true);
+      try {
+        const result = await checkUsernameAvailability(username);
+        setUsernameAvailable(result.available);
+      } catch (error) {
+        console.error("Username check error:", error);
+        setUsernameAvailable(null);
+      } finally {
+        setCheckingUsername(false);
+      }
+    }, 500),
+    [originalUsername]
+  );
+
+  // Watch username field changes
+  const watchedUsername = form.watch("username");
+  useEffect(() => {
+    if (watchedUsername && watchedUsername !== originalUsername) {
+      debouncedUsernameCheck(watchedUsername);
+    } else if (watchedUsername === originalUsername) {
+      setUsernameAvailable(null);
+    }
+  }, [watchedUsername, debouncedUsernameCheck, originalUsername]);
+
+  const handleServiceAdd = () => {
     setServiceEditData(null);
     setServiceDialogOpen(true);
-    onAdd();
   };
 
-  const handleEdit = (data: Service) => {
-    setServiceEditData(data);
+  const handleServiceEdit = (service: Service) => {
+    setServiceEditData(service);
     setServiceDialogOpen(true);
-    onEdit(data);
   };
 
-  const handleDelete = (id: number) => {
-    onDelete(id);
+  const handleServiceDelete = (id: number) => {
+    const updatedServices = services.filter(service => service.id !== id);
+    setServices(updatedServices);
   };
 
-  const handleDialogSubmit = (data: any) => {
-    onDialogSubmit(data);
+  const handleServiceDialogSubmit = (data: any) => {
+    if (serviceEditData) {
+      // Update existing service
+      const updatedServices = services.map(service => 
+        service.id === serviceEditData.id ? { ...data, id: service.id } : service
+      );
+      setServices(updatedServices);
+    } else {
+      // Add new service
+      const newService = {
+        ...data,
+        id: Math.max(0, ...services.map(s => s.id || 0)) + 1
+      };
+      setServices([...services, newService]);
+    }
     setServiceDialogOpen(false);
   };
 
@@ -113,12 +271,12 @@ function ServiceList({ selectedBusiness, services, onAdd, onEdit, onDelete, onDi
       renderCell: (params: GridRenderCellParams) => (
         <Box sx={{ display: 'flex', gap: 1 }}>
           <Tooltip title="Edit">
-            <IconButton size="small" onClick={() => handleEdit(params.row)}>
+            <IconButton size="small" onClick={() => handleServiceEdit(params.row)}>
               <Pencil className="h-4 w-4" />
             </IconButton>
           </Tooltip>
           <Tooltip title="Delete">
-            <IconButton size="small" onClick={() => handleDelete(params.row.id)}>
+            <IconButton size="small" onClick={() => handleServiceDelete(params.row.id)}>
               <Trash2 className="h-4 w-4" />
             </IconButton>
           </Tooltip>
@@ -127,166 +285,348 @@ function ServiceList({ selectedBusiness, services, onAdd, onEdit, onDelete, onDi
     },
   ];
 
-  return (
-    <Box mt={2} sx={{ mt: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
-        <Typography variant="subtitle1" fontWeight={600} sx={{ fontSize: { xs: 18, md: 20 } }}>
-          Services
-        </Typography>
-        <Button onClick={handleAdd} className="min-w-[140px] font-semibold">
-          <Plus className="h-4 w-4 mr-2" /> Add Service
-        </Button>
-      </Box>
-      <Box border={1} borderColor="divider" borderRadius={2} p={2} sx={{ bgcolor: 'background.paper', boxShadow: 1 }}>
-        <DataGrid
-          rows={services}
-          columns={serviceColumns}
-          pageSizeOptions={[5, 10, 25]}
-          initialState={{
-            pagination: { paginationModel: { pageSize: 5 } },
-          }}
-          autoHeight
-          disableRowSelectionOnClick
-        />
-      </Box>
-      <ServiceDialog open={serviceDialogOpen} onClose={() => setServiceDialogOpen(false)} onSubmit={handleDialogSubmit} initialData={serviceEditData} />
-    </Box>
-  );
-}
+  const days = [
+    { key: 0, label: "Sunday" },
+    { key: 1, label: "Monday" },
+    { key: 2, label: "Tuesday" },
+    { key: 3, label: "Wednesday" },
+    { key: 4, label: "Thursday" },
+    { key: 5, label: "Friday" },
+    { key: 6, label: "Saturday" },
+  ] as const;
 
-// BusinessDialog for add/edit business
-function BusinessDialog({ open, onClose, onSubmit, initialData }: any) {
-  const schema = yup.object().shape({
-    name: yup.string().required("Name is required"),
-    address: yup.string().required("Address is required"),
-    city: yup.string().required("City is required"),
-    state: yup.string().required("State is required"),
-    zip_code: yup.string().required("ZIP code is required"),
-    phone_number: yup.string().required("Phone number is required"),
-    email: yup.string().email().required("Email is required"),
-    opening_time: yup.string().required("Opening time is required"),
-    closing_time: yup.string().required("Closing time is required"),
-    average_wait_time: yup.number().typeError("Average wait time must be a number").required("Average wait time is required"),
-  });
-  const { control, handleSubmit, reset, formState: { errors } } = useForm({
-    defaultValues: initialData || {
-      name: "",
-      address: "",
-      city: "",
-      state: "",
-      zip_code: "",
-      phone_number: "",
-      email: "",
-      opening_time: "",
-      closing_time: "",
-      average_wait_time: "",
-    },
-    resolver: yupResolver(schema),
-  });
-  // Reset form when dialog opens/closes or initialData changes
-  React.useEffect(() => { reset(initialData || {}); }, [open, initialData, reset]);
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="max-w-4xl max-h-[90vh]">
         <DialogHeader>
           <DialogTitle>{initialData ? "Edit Business" : "Add Business"}</DialogTitle>
+          <DialogDescription>
+            {initialData ? "Update your business information" : "Enter your business information"}
+          </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)}>
-          <Box display="flex" flexDirection="column" gap={2}>
-            <Controller name="name" control={control} render={({ field }) => (
-              <TextField {...field} label="Name" error={!!errors.name} helperText={typeof errors.name?.message === 'string' ? errors.name?.message : ''} fullWidth />
-            )} />
-            <Controller name="address" control={control} render={({ field }) => (
-              <TextField {...field} label="Address" error={!!errors.address} helperText={typeof errors.address?.message === 'string' ? errors.address?.message : ''} fullWidth />
-            )} />
-            <Box display="flex" gap={2}>
-              <Controller name="city" control={control} render={({ field }) => (
-                <TextField {...field} label="City" error={!!errors.city} helperText={typeof errors.city?.message === 'string' ? errors.city?.message : ''} fullWidth />
-              )} />
-              <Controller name="state" control={control} render={({ field }) => (
-                <TextField {...field} label="State" error={!!errors.state} helperText={typeof errors.state?.message === 'string' ? errors.state?.message : ''} fullWidth />
-              )} />
-            </Box>
-            <Box display="flex" gap={2}>
-              <Controller name="zip_code" control={control} render={({ field }) => (
-                <TextField {...field} label="ZIP Code" error={!!errors.zip_code} helperText={typeof errors.zip_code?.message === 'string' ? errors.zip_code?.message : ''} fullWidth />
-              )} />
-              <Controller name="phone_number" control={control} render={({ field }) => (
-                <TextField {...field} label="Phone Number" error={!!errors.phone_number} helperText={typeof errors.phone_number?.message === 'string' ? errors.phone_number?.message : ''} fullWidth />
-              )} />
-            </Box>
-            <Controller name="email" control={control} render={({ field }) => (
-              <TextField {...field} label="Email" error={!!errors.email} helperText={typeof errors.email?.message === 'string' ? errors.email?.message : ''} fullWidth />
-            )} />
-            <Box display="flex" gap={2}>
-              <Controller name="opening_time" control={control} render={({ field }) => (
-                <TextField {...field} label="Opening Time" type="time" error={!!errors.opening_time} helperText={typeof errors.opening_time?.message === 'string' ? errors.opening_time?.message : ''} fullWidth InputLabelProps={{ shrink: true }} />
-              )} />
-              <Controller name="closing_time" control={control} render={({ field }) => (
-                <TextField {...field} label="Closing Time" type="time" error={!!errors.closing_time} helperText={typeof errors.closing_time?.message === 'string' ? errors.closing_time?.message : ''} fullWidth InputLabelProps={{ shrink: true }} />
-              )} />
-            </Box>
-            <Controller name="average_wait_time" control={control} render={({ field }) => (
-              <TextField {...field} label="Average Wait Time (min)" type="number" error={!!errors.average_wait_time} helperText={typeof errors.average_wait_time?.message === 'string' ? errors.average_wait_time?.message : ''} fullWidth />
-            )} />
-            <Box display="flex" justifyContent="flex-end" gap={2} mt={2}>
-              <Button variant="outline" onClick={onClose} type="button">Cancel</Button>
-              <Button type="submit">{initialData ? "Update" : "Add"}</Button>
-            </Box>
-          </Box>
-        </form>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <div className="overflow-y-auto max-h-[calc(90vh-200px)] pr-4">
+              {/* Basic Information Section */}
+              <div className="space-y-4">
+                <Typography variant="h6" className="text-lg font-semibold">
+                  Basic Information
+                </Typography>
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Business Name</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="username"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Username</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        {checkingUsername && (
+                          <div className="text-sm text-gray-500">
+                            Checking username availability...
+                          </div>
+                        )}
+                        {usernameAvailable === false && (
+                          <div className="text-sm text-red-500">
+                            This username is already taken
+                          </div>
+                        )}
+                        {usernameAvailable === true && (
+                          <div className="text-sm text-green-500">
+                            This username is available
+                          </div>
+                        )}
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="address"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Address</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="grid grid-cols-3 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="city"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>City</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="state"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>State</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="zip_code"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>ZIP Code</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="phone_number"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Phone Number</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email</FormLabel>
+                        <FormControl>
+                          <Input {...field} type="email" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="average_wait_time"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Average Wait Time (minutes)</FormLabel>
+                      <FormControl>
+                        <Input {...field} type="number" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* Operating Hours Section */}
+              <div className="space-y-4 mt-6">
+                <Typography variant="h6" className="text-lg font-semibold">
+                  Operating Hours
+                </Typography>
+                {days.map((day) => {
+                  const dayIndex = form.getValues("operating_hours").findIndex(
+                    (hours) => hours.day_of_week === day.key
+                  );
+                  
+                  return (
+                    <div key={day.key} className="grid grid-cols-4 gap-4 items-center">
+                      <Controller
+                        control={form.control}
+                        name={`operating_hours.${dayIndex}.is_closed`}
+                        render={({ field }) => (
+                          <FormItem className="flex items-center space-x-2">
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                              />
+                            </FormControl>
+                            <FormLabel className="font-normal">
+                              {day.label}
+                            </FormLabel>
+                          </FormItem>
+                        )}
+                      />
+                      <Controller
+                        control={form.control}
+                        name={`operating_hours.${dayIndex}.opening_time`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                type="time"
+                                value={field.value ? String(field.value) : ''}
+                                disabled={Boolean(form.watch(`operating_hours.${dayIndex}.is_closed`))}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <Controller
+                        control={form.control}
+                        name={`operating_hours.${dayIndex}.closing_time`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                type="time"
+                                value={field.value ? String(field.value) : ''}
+                                disabled={Boolean(form.watch(`operating_hours.${dayIndex}.is_closed`))}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Services Section */}
+              <div className="space-y-4 mt-6">
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                  <Typography variant="h6" className="text-lg font-semibold">
+                    Services
+                  </Typography>
+                  <Button onClick={handleServiceAdd} className="min-w-[140px] font-semibold">
+                    <Plus className="h-4 w-4 mr-2" /> Add Service
+                  </Button>
+                </Box>
+                <Box border={1} borderColor="divider" borderRadius={2} p={2} sx={{ bgcolor: 'background.paper', boxShadow: 1 }}>
+                  <DataGrid
+                    rows={services}
+                    columns={serviceColumns}
+                    pageSizeOptions={[5, 10, 25]}
+                    initialState={{
+                      pagination: { paginationModel: { pageSize: 5 } },
+                    }}
+                    autoHeight
+                    disableRowSelectionOnClick
+                  />
+                </Box>
+              </div>
+
+              <FormField
+                control={form.control}
+                name="has_advertisement"
+                render={({ field }) => (
+                  <FormItem className="flex items-center space-x-2">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                    <FormLabel className="font-normal">
+                      Enable Advertisement
+                    </FormLabel>
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <DialogFooter className="pt-4 border-t">
+              <Button type="button" variant="outline" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button type="submit">
+                {initialData ? "Update Business" : "Add Business"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
       </DialogContent>
+
+      {/* Service Dialog */}
+      <ServiceDialog
+        open={serviceDialogOpen}
+        onClose={() => setServiceDialogOpen(false)}
+        onSubmit={handleServiceDialogSubmit}
+        initialData={serviceEditData}
+      />
     </Dialog>
   );
 }
 
 // ServiceDialog for add/edit service
-function ServiceDialog({ open, onClose, onSubmit, initialData }: any) {
-  const schema = yup.object().shape({
-    name: yup.string().required("Service name is required"),
-    duration: yup.number().typeError("Duration must be a number").required("Duration is required"),
-    price: yup.number().typeError("Price must be a number").required("Price is required"),
-    id: yup.number().notRequired(), // allow id for edit
+function ServiceDialog({ open, onClose, onSubmit, initialData }: {
+  open: boolean;
+  onClose: () => void;
+  onSubmit: (data: any) => void;
+  initialData: Service | null;
+}) {
+  const schema = z.object({
+    name: z.string().min(1, "Service name is required"),
+    duration: z.coerce.number().min(1, "Duration must be a positive number"),
+    price: z.coerce.number().min(0, "Price must be a non-negative number"),
+    id: z.number().optional(),
   });
 
-  const { control, handleSubmit, reset, formState: { errors } } = useForm({
+  const form = useForm<z.infer<typeof schema>>({
+    resolver: zodResolver(schema),
     defaultValues: {
       name: initialData?.name || "",
-      duration: initialData?.duration || "",
-      price: initialData?.price || "",
+      duration: initialData?.duration || 0,
+      price: initialData?.price || 0,
       id: initialData?.id || undefined,
     },
-    resolver: yupResolver(schema),
   });
 
   // Reset form when dialog opens/closes or initialData changes
-  React.useEffect(() => { 
-    if (initialData) {
-      reset({
-        name: initialData.name,
-        duration: initialData.duration,
-        price: initialData.price,
-        id: initialData.id
-      });
-    } else {
-      reset({
-        name: "",
-        duration: "",
-        price: "",
-        id: undefined
-      });
-    }
-  }, [open, initialData, reset]);
-
-  const onSubmitForm = (data: any) => {
-    // Ensure all fields are properly formatted before submission
-    const formattedData = {
-      ...data,
-      duration: Number(data.duration),
-      price: Number(data.price),
-      id: data.id ? Number(data.id) : undefined
+  useEffect(() => {
+    const newFormData = {
+      name: initialData?.name || "",
+      duration: initialData?.duration || 0,
+      price: initialData?.price || 0,
+      id: initialData?.id || undefined,
     };
-    onSubmit(formattedData);
+    form.reset(newFormData);
+  }, [open, initialData, form]);
+
+  const onSubmitForm = (data: z.infer<typeof schema>) => {
+    onSubmit(data);
   };
 
   return (
@@ -297,110 +637,94 @@ function ServiceDialog({ open, onClose, onSubmit, initialData }: any) {
             {initialData ? "Edit Service" : "Add New Service"}
           </DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmitForm)} className="space-y-6 py-4">
-          {/* Hidden id field for edit */}
-          {initialData && initialData.id && (
-            <Controller
-              name="id"
-              control={control}
-              defaultValue={initialData.id}
-              render={({ field }) => <input type="hidden" {...field} />}
-            />
-          )}
-          <div className="space-y-2">
-            <label
-              htmlFor="name"
-              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-            >
-              Service Name
-            </label>
-            <Controller
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmitForm)} className="space-y-6 py-4">
+            <FormField
+              control={form.control}
               name="name"
-              control={control}
-              defaultValue={initialData?.name || ""}
-              render={({ field: { onChange, value, ...field } }) => (
-                <Input
-                  {...field}
-                  value={value || ""}
-                  onChange={(e) => onChange(e.target.value)}
-                  id="name"
-                  placeholder="e.g., Haircut, Manicure"
-                  className="w-full"
-                />
+              render={({ field }) => (
+                <FormItem className="space-y-2">
+                  <FormLabel>Service Name</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g., Haircut, Manicure" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
               )}
             />
-            {typeof errors.name?.message === 'string' && (
-              <p className="text-sm text-red-500">{errors.name.message}</p>
-            )}
-          </div>
 
-          <div className="space-y-2">
-            <label
-              htmlFor="duration"
-              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-            >
-              Duration (minutes)
-            </label>
-            <Controller
+            <FormField
+              control={form.control}
               name="duration"
-              control={control}
-              defaultValue={initialData?.duration || ""}
-              render={({ field: { onChange, value, ...field } }) => (
-                <Input
-                  {...field}
-                  value={value || ""}
-                  onChange={(e) => onChange(e.target.value.replace(/^0+/, ""))}
-                  id="duration"
-                  type="number"
-                  placeholder="e.g., 30"
-                  min="1"
-                  className="w-full"
-                />
+              render={({ field }) => (
+                <FormItem className="space-y-2">
+                  <FormLabel>Duration (minutes)</FormLabel>
+                  <FormControl>
+                    <Input type="number" placeholder="e.g., 30" min="1" {...field} 
+                      onChange={(e) => field.onChange(Number(e.target.value))}
+                    />
+                  </FormControl>
+                  <FormDescription>Enter the estimated duration in minutes</FormDescription>
+                  <FormMessage />
+                </FormItem>
               )}
             />
-            {typeof errors.duration?.message === 'string' && (
-              <p className="text-sm text-red-500">{errors.duration.message}</p>
-            )}
-            <p className="text-xs text-muted-foreground">
-              Enter the estimated duration in minutes
-            </p>
-          </div>
 
-          <div className="space-y-2">
-            <label
-              htmlFor="price"
-              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-            >
-              Price ($)
-            </label>
-            <Controller
+            <FormField
+              control={form.control}
               name="price"
-              control={control}
-              defaultValue={initialData?.price || ""}
-              render={({ field: { onChange, value, ...field } }) => (
-                <Input
-                  {...field}
-                  value={value || ""}
-                  onChange={(e) => onChange(e.target.value.replace(/^0+/, ""))}
-                  id="price"
-                  type="number"
-                  placeholder="e.g., 25"
-                  min="0"
-                  step="0.01"
-                  className="w-full"
-                />
+              render={({ field }) => (
+                <FormItem className="space-y-2">
+                  <FormLabel>Price ($)</FormLabel>
+                  <FormControl>
+                    <Input type="number" placeholder="e.g., 25" min="0" step="0.01" {...field}
+                      onChange={(e) => field.onChange(Number(e.target.value))}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
               )}
             />
-            {typeof errors.price?.message === 'string' && (
-              <p className="text-sm text-red-500">{errors.price.message}</p>
-            )}
-          </div>
 
           <Box display="flex" justifyContent="flex-end" gap={2} mt={2}>
             <Button variant="outline" onClick={onClose} type="button">Cancel</Button>
             <Button type="submit">{initialData ? "Update" : "Add"}</Button>
           </Box>
         </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// DeleteConfirmationDialog component
+function DeleteConfirmationDialog({
+  open,
+  onClose,
+  onConfirm,
+  itemName,
+  dialogTitle,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  itemName: string;
+  dialogTitle: string;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>{dialogTitle}</DialogTitle>
+          <DialogDescription>
+            Are you sure you want to delete &quot;{itemName}&quot;? This action cannot
+            be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="destructive" onClick={onConfirm}>Delete</Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
@@ -413,6 +737,23 @@ export default function BusinessManagementPage() {
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false);
+  const [businessToDelete, setBusinessToDelete] = useState<{ id: number; name: string } | null>(null);
+
+  // Employee state
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [employeeLoading, setEmployeeLoading] = useState(false);
+  const [employeeError, setEmployeeError] = useState<string | null>(null);
+  const [employeeDialogOpen, setEmployeeDialogOpen] = useState(false);
+  const [newEmployee, setNewEmployee] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    status: ''
+  });
+  const [editEmployeeId, setEditEmployeeId] = useState<number | null>(null);
+  const [showEmployeeDeleteConfirmDialog, setShowEmployeeDeleteConfirmDialog] = useState(false);
+  const [employeeToDelete, setEmployeeToDelete] = useState<{ id: number; name: string } | null>(null);
 
   // Fetch businesses on component mount
   useEffect(() => {
@@ -452,27 +793,6 @@ export default function BusinessManagementPage() {
 
     fetchBusinesses();
   }, []);
-
-  // Store all services by business id
-  const [allServices, setAllServices] = useState<{ [businessId: number]: Service[] }>({
-    1: [
-      { id: 1, name: "Classic Haircut", price: 25, duration: 30 },
-      { id: 2, name: "Beard Trim", price: 15, duration: 15 },
-      { id: 3, name: "Shave", price: 20, duration: 20 },
-    ],
-    2: [
-      { id: 1, name: "Premium Cut", price: 30, duration: 40 },
-      { id: 2, name: "Hot Towel Shave", price: 22, duration: 25 },
-    ],
-  });
-
-  // Get services for selected business
-  const services = selectedBusiness ? allServices[selectedBusiness.id] || [] : [];
-
-  // 1. Employee state, loading, error
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [employeeLoading, setEmployeeLoading] = useState(false);
-  const [employeeError, setEmployeeError] = useState<string | null>(null);
 
   // 2. Fetch employees for selected business
   useEffect(() => {
@@ -568,14 +888,19 @@ export default function BusinessManagementPage() {
   };
 
   // 4. Delete employee
-  const handleDeleteEmployee = async (id: number) => {
-    if (!window.confirm('Are you sure you want to delete this employee?')) return;
+  const handleDeleteEmployee = async (id: number, name: string) => {
+    setEmployeeToDelete({ id, name });
+    setShowEmployeeDeleteConfirmDialog(true);
+  };
+
+  const confirmDeleteEmployee = async () => {
+    if (!selectedBusiness || !employeeToDelete) return;
     setEmployeeLoading(true);
     setEmployeeError(null);
     try {
       const session = await getSession();
       if (!session?.user?.accessToken) throw new Error('No access token');
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${selectedBusiness?.id}/barbers/${id}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${selectedBusiness?.id}/barbers/${employeeToDelete.id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${session.user.accessToken}`,
@@ -606,24 +931,12 @@ export default function BusinessManagementPage() {
       toast.error(err instanceof Error ? err.message : 'Failed to delete employee');
     } finally {
       setEmployeeLoading(false);
+      setShowEmployeeDeleteConfirmDialog(false);
+      setEmployeeToDelete(null);
     }
   };
 
-  // Add this after the allServices state in BusinessManagementPage
-  const [employeeDialogOpen, setEmployeeDialogOpen] = useState(false);
-
-  // Add Employee form state
-  const [newEmployee, setNewEmployee] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    status: ''
-  });
-
   // 1. Add state for editing employee
-  const [editEmployeeId, setEditEmployeeId] = useState<number | null>(null);
-
-  // 2. Update handleAddEmployee to reset edit state
   const handleAddEmployee = () => {
     setNewEmployee({ name: '', email: '', phone: '', status: '' });
     setEditEmployeeId(null);
@@ -661,7 +974,7 @@ export default function BusinessManagementPage() {
             </IconButton>
           </Tooltip>
           <Tooltip title="Delete">
-            <IconButton size="small" onClick={() => handleDeleteEmployee(params.row.id)}>
+            <IconButton size="small" onClick={() => handleDeleteEmployee(params.row.id, params.row.name)}>
               <Trash2 className="h-4 w-4" />
             </IconButton>
           </Tooltip>
@@ -669,195 +982,6 @@ export default function BusinessManagementPage() {
       ),
     },
   ];
-
-  // Service handlers
-  const [editServiceData, setEditServiceData] = useState<Service | null>(null);
-  const handleServiceAdd = () => {
-    setEditServiceData(null);
-    setServiceDialogOpen(true);
-  };
-
-  const handleServiceEdit = (service: Service) => {
-    setEditServiceData(service);
-    setServiceDialogOpen(true);
-  };
-
-  const handleServiceDelete = async (id: number) => {
-    if (!selectedBusiness) return;
-    
-    if (window.confirm("Are you sure you want to delete this service?")) {
-      try {
-        const session = await getSession();
-        if (!session?.user?.accessToken) {
-          throw new Error("No access token found. Please login again.");
-        }
-
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${selectedBusiness.id}/services/${id}`,
-          {
-            method: "DELETE",
-            headers: {
-              'Authorization': `Bearer ${session.user.accessToken}`,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => null);
-          throw new Error(errorData?.detail || `Failed to delete service: ${response.statusText}`);
-        }
-
-        // Refresh services after deletion
-        const servicesResponse = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${selectedBusiness.id}/services`,
-          {
-            headers: {
-              'Authorization': `Bearer ${session.user.accessToken}`,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
-
-        if (!servicesResponse.ok) {
-          throw new Error("Failed to refresh services");
-        }
-
-        const updatedServices = await servicesResponse.json();
-        setAllServices(prev => ({
-          ...prev,
-          [selectedBusiness.id]: updatedServices
-        }));
-
-        toast.success("Service deleted successfully");
-      } catch (error) {
-        console.error("Error deleting service:", error);
-        toast.error(error instanceof Error ? error.message : "Failed to delete service");
-      }
-    }
-  };
-
-  const handleServiceDialogSubmit = async (data: any) => {
-    if (!selectedBusiness) return;
-
-    try {
-      const session = await getSession();
-      if (!session?.user?.accessToken) {
-        throw new Error("No access token found. Please login again.");
-      }
-
-      const payload = {
-        name: data.name.trim(),
-        duration: Number(data.duration),
-        price: Number(data.price)
-      };
-
-      if (data.id) {
-        // Update existing service
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${selectedBusiness.id}/services/${data.id}`,
-          {
-            method: "PUT",
-            headers: {
-              'Authorization': `Bearer ${session.user.accessToken}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payload)
-          }
-        );
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => null);
-          throw new Error(errorData?.detail || `Failed to update service: ${response.statusText}`);
-        }
-
-        const updatedService = await response.json();
-        
-        // Update the services list with the updated service
-        setAllServices(prev => ({
-          ...prev,
-          [selectedBusiness.id]: prev[selectedBusiness.id].map(service => 
-            service.id === data.id ? updatedService : service
-          )
-        }));
-
-        toast.success("Service updated successfully");
-      } else {
-        // Create new service
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${selectedBusiness.id}/services/`,
-          {
-            method: "POST",
-            headers: {
-              'Authorization': `Bearer ${session.user.accessToken}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payload)
-          }
-        );
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => null);
-          throw new Error(errorData?.detail || `Failed to create service: ${response.statusText}`);
-        }
-
-        const newService = await response.json();
-        
-        // Add the new service to the services list
-        setAllServices(prev => ({
-          ...prev,
-          [selectedBusiness.id]: [...(prev[selectedBusiness.id] || []), newService]
-        }));
-
-        toast.success("Service added successfully");
-      }
-
-      setServiceDialogOpen(false);
-    } catch (error) {
-      console.error("Error submitting service:", error);
-      toast.error(error instanceof Error ? error.message : "Failed to submit service");
-    }
-  };
-
-  // Fetch services when a business is selected
-  useEffect(() => {
-    const fetchServices = async () => {
-      if (!selectedBusiness) return;
-
-      try {
-        const session = await getSession();
-        if (!session?.user?.accessToken) {
-          throw new Error("No access token found. Please login again.");
-        }
-
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${selectedBusiness.id}/services`,
-          {
-            headers: {
-              'Authorization': `Bearer ${session.user.accessToken}`,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => null);
-          throw new Error(errorData?.detail || `Failed to fetch services: ${response.statusText}`);
-        }
-
-        const services = await response.json();
-        setAllServices(prev => ({
-          ...prev,
-          [selectedBusiness.id]: services
-        }));
-      } catch (error) {
-        console.error("Error fetching services:", error);
-        toast.error(error instanceof Error ? error.message : "Failed to fetch services");
-      }
-    };
-
-    fetchServices();
-  }, [selectedBusiness]);
 
   const handleAdd = () => {
     setEditData(null);
@@ -869,15 +993,20 @@ export default function BusinessManagementPage() {
     setBusinessDialogOpen(true);
   };
 
-  const handleDelete = async (id: number) => {
-    if (window.confirm("Are you sure you want to delete this business?")) {
+  const handleDelete = async (id: number, name: string) => {
+    setBusinessToDelete({ id, name });
+    setShowDeleteConfirmDialog(true);
+  };
+
+  const confirmDeleteBusiness = async () => {
+    if (!businessToDelete) return;
       try {
         const session = await getSession();
         if (!session?.user?.accessToken) {
           throw new Error("No access token found. Please login again.");
         }
 
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${id}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${businessToDelete.id}`, {
           method: "DELETE",
           headers: {
             'Authorization': `Bearer ${session.user.accessToken}`,
@@ -890,12 +1019,14 @@ export default function BusinessManagementPage() {
           throw new Error(errorData?.detail || `Failed to delete business: ${response.statusText}`);
         }
 
-        setBusinesses(businesses.filter((b) => b.id !== id));
+      setBusinesses(businesses.filter((b) => b.id !== businessToDelete.id));
         toast.success("Business deleted successfully");
       } catch (error) {
         console.error("Error deleting business:", error);
         toast.error(error instanceof Error ? error.message : "Failed to delete business");
-      }
+    } finally {
+      setShowDeleteConfirmDialog(false);
+      setBusinessToDelete(null);
     }
   };
 
@@ -908,18 +1039,23 @@ export default function BusinessManagementPage() {
 
       const payload = {
         name: data.name,
+        username: data.username,
         address: data.address,
         city: data.city,
         state: data.state,
         zip_code: data.zip_code,
         phone_number: data.phone_number,
         email: data.email,
-        average_wait_time: parseInt(data.average_wait_time),
-        has_advertisement: false,
+        average_wait_time: data.average_wait_time,
+        has_advertisement: data.has_advertisement,
         is_advertisement_active: false,
-        is_open: true,
-        opening_time: data.opening_time,
-        closing_time: data.closing_time
+        operating_hours: data.operating_hours,
+        services: data.services.map((service: any) => ({
+          name: service.name,
+          duration: service.duration,
+          price: service.price,
+          id: service.id
+        }))
       };
 
       if (editData) {
@@ -943,7 +1079,7 @@ export default function BusinessManagementPage() {
         toast.success("Business updated successfully");
       } else {
         // Create new business
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/`, {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops`, {
           method: "POST",
           headers: {
             'Authorization': `Bearer ${session.user.accessToken}`,
@@ -961,6 +1097,7 @@ export default function BusinessManagementPage() {
         setBusinesses([...businesses, newBusiness]);
         toast.success("Business created successfully");
       }
+
       setBusinessDialogOpen(false);
     } catch (error) {
       console.error("Error submitting business:", error);
@@ -972,22 +1109,27 @@ export default function BusinessManagementPage() {
     { field: "name", headerName: "Name", width: 200 },
     { field: "phone_number", headerName: "Phone", width: 150 },
     { field: "email", headerName: "Email", width: 200 },
-    { field: "opening_time", headerName: "Opening Time", width: 120 },
-    { field: "closing_time", headerName: "Closing Time", width: 120 },
     {
-      field: "is_open",
-      headerName: "Status",
-      width: 100,
-      renderCell: (params: GridRenderCellParams) => (
-        <Box
-          sx={{
-            color: params.value ? 'success.main' : 'error.main',
-            fontWeight: 'medium'
-          }}
-        >
-          {params.value ? 'Open' : 'Closed'}
+      field: "operating_hours",
+      headerName: "Operating Hours",
+      width: 200,
+      renderCell: (params: GridRenderCellParams) => {
+        const hours = params.value as OperatingHour[];
+        const todayDayOfWeek = new Date().getDay();
+        
+        // Find today's hours
+        const todayHours = hours?.find((h: OperatingHour) => h.day_of_week === todayDayOfWeek);
+        
+        if (!todayHours || todayHours.is_closed) {
+          return <Box sx={{ color: 'error.main' }}>Closed Today</Box>;
+        }
+        
+        return (
+          <Box>
+            {todayHours.opening_time} - {todayHours.closing_time}
         </Box>
-      )
+        );
+      }
     },
     {
       field: "actions",
@@ -1014,7 +1156,7 @@ export default function BusinessManagementPage() {
             </IconButton>
           </Tooltip>
           <Tooltip title="Delete">
-            <IconButton size="small" onClick={() => handleDelete(params.row.id)}>
+            <IconButton size="small" onClick={() => handleDelete(params.row.id, params.row.name)}>
               <Trash2 className="h-4 w-4" />
             </IconButton>
           </Tooltip>
@@ -1099,20 +1241,6 @@ export default function BusinessManagementPage() {
 
       {selectedBusiness && (
         <>
-          <Box p={3} border={1} borderColor="divider" borderRadius={2} sx={{ bgcolor: 'background.paper', boxShadow: 1, mt: 2 }}>
-            <Typography variant="h6" fontWeight={600} mb={2} sx={{ fontSize: { xs: 18, md: 22 } }}>
-              Services for {selectedBusiness.name}
-            </Typography>
-            <ServiceList
-              selectedBusiness={selectedBusiness}
-              services={services}
-              onAdd={handleServiceAdd}
-              onEdit={handleServiceEdit}
-              onDelete={handleServiceDelete}
-              onDialogSubmit={handleServiceDialogSubmit}
-            />
-          </Box>
-
           <Box p={3} border={1} borderColor="divider" borderRadius={2} sx={{ bgcolor: 'background.paper', boxShadow: 1, mt: 2 }}>
             <Typography variant="h6" fontWeight={600} mb={2} sx={{ fontSize: { xs: 18, md: 22 } }}>
               Employees for {selectedBusiness.name}
@@ -1234,7 +1362,32 @@ export default function BusinessManagementPage() {
           </Box>
         </>
       )}
-      <BusinessDialog open={businessDialogOpen} onClose={() => setBusinessDialogOpen(false)} onSubmit={handleDialogSubmit} initialData={editData} />
+      <BusinessDialog
+        key={businessDialogOpen ? "open" : "closed"}
+        open={businessDialogOpen}
+        onClose={() => {
+          setBusinessDialogOpen(false);
+          setSelectedBusiness(null);
+        }}
+        onSubmit={handleDialogSubmit}
+        initialData={selectedBusiness}
+      />
+      <DeleteConfirmationDialog
+        open={showDeleteConfirmDialog}
+        onClose={() => setShowDeleteConfirmDialog(false)}
+        onConfirm={confirmDeleteBusiness}
+        itemName={businessToDelete?.name || ''}
+        dialogTitle="Delete Business"
+      />
+      {employeeToDelete && (
+        <DeleteConfirmationDialog
+          open={showEmployeeDeleteConfirmDialog}
+          onClose={() => setShowEmployeeDeleteConfirmDialog(false)}
+          onConfirm={confirmDeleteEmployee}
+          itemName={employeeToDelete.name}
+          dialogTitle="Delete Employee"
+        />
+      )}
     </Box>
   );
 } 
