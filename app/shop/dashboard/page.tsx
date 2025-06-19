@@ -99,12 +99,27 @@ export default async function DashboardPage() {
         <Card className="mb-6 shadow-md">
           <CardHeader>
             <CardTitle className="text-xl font-semibold">
-              Shops Overview
+              Businesses Overview
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              {dashboardData.shops.map((shop) => (
+            {dashboardData.shops.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground mb-4">No businesses found.</p>
+                <p className="text-sm text-muted-foreground">
+                  Create your first business to see metrics here.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm text-blue-800">
+                    📊 <strong>Note:</strong> Dashboard metrics are currently showing placeholder data. 
+                    Real-time analytics will be available once the metrics endpoints are implemented.
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  {dashboardData.shops.map((shop) => (
                 <Card key={shop.shop_id} className="shadow-sm">
                   <CardContent className="p-4">
                     <h3 className="mb-3 text-lg font-bold flex items-center space-x-2">
@@ -173,7 +188,9 @@ export default async function DashboardPage() {
                   </CardContent>
                 </Card>
               ))}
-            </div>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
 

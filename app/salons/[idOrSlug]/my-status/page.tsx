@@ -66,7 +66,7 @@ export default function MyStatusPage({ params }: { params: { idOrSlug: string } 
         
         // Now fetch queue status using the salon's numeric ID
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/queue/check-status?phone=${checkInPhone}&shop_id=${salonData.id}`
+          `${process.env.NEXT_PUBLIC_API_URL}/queue/check-status?phone=${checkInPhone}&business_id=${salonData.id}`
         );
         const data = await response.json();
 
@@ -106,7 +106,7 @@ export default function MyStatusPage({ params }: { params: { idOrSlug: string } 
       setIsLeaving(true);
       try {
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/queue/leave?phone=${checkInPhone}&shop_id=${checkInShopId}`,
+          `${process.env.NEXT_PUBLIC_API_URL}/queue/leave?phone=${checkInPhone}&business_id=${checkInShopId}`,
           { method: "DELETE" }
         );
         const data = await response.json();

@@ -10,7 +10,7 @@ export async function getSalons({ query }: { query: string; location: string }) 
       searchParams.append('search', query);
     }
     
-    const response = await fetch(`${API_URL}/appointments/shops?${searchParams.toString()}`);
+    const response = await fetch(`${API_URL}/appointments/businesses?${searchParams.toString()}`);
     if (!response.ok) throw new Error('Failed to fetch salons');
     const data = await response.json();
     return data.items;
@@ -35,7 +35,7 @@ export async function getSalonDetails(idOrSlug: string) {
       console.log(`Finding salon ID by username/slug: ${idOrSlug}`);
       
       // Fetch all salons and find the one with matching username
-      const allSalonsResponse = await fetch(`${API_URL}/appointments/shops`);
+      const allSalonsResponse = await fetch(`${API_URL}/appointments/businesses`);
       if (!allSalonsResponse.ok) {
         console.error(`Failed to fetch salons list: Status ${allSalonsResponse.status}`);
         throw new Error(`Failed to fetch salons list: ${allSalonsResponse.status}`);
@@ -63,9 +63,9 @@ export async function getSalonDetails(idOrSlug: string) {
       }
     }
     
-    // Now that we have the shop ID, always fetch the complete shop details
-    const endpoint = `${API_URL}/appointments/shop/${shopId}`;
-    console.log(`Fetching complete shop details from: ${endpoint}`);
+    // Now that we have the business ID, always fetch the complete business details
+    const endpoint = `${API_URL}/appointments/business/${shopId}`;
+    console.log(`Fetching complete business details from: ${endpoint}`);
     
     const response = await fetch(endpoint);
     

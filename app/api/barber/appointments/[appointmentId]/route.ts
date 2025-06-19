@@ -23,7 +23,7 @@ export async function PUT(
     
     // Call the backend API
     const backendUrl = process.env.BACKEND_URL || 'http://localhost:8000';
-    const response = await fetch(`${backendUrl}/barbers/appointments/${appointmentId}`, {
+    const response = await fetch(`${backendUrl}/employees/appointments/${appointmentId}`, {
       method: 'PUT',
       headers: {
         'Authorization': `Bearer ${token.accessToken}`,

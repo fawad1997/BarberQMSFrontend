@@ -154,7 +154,7 @@ export default function CreateShopForm() {
       }
 
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/advertisement`,
+        `${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${shopId}/advertisement`,
         {
           method: "POST",
           headers: {
@@ -199,7 +199,7 @@ export default function CreateShopForm() {
         timezone: values.timezone,
       };
 
-      const shopResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/`, {
+      const shopResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

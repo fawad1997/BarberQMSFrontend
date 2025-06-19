@@ -426,7 +426,7 @@ export default function BusinessManagementPage() {
           throw new Error("No access token found. Please login again.");
         }
 
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops`, {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses`, {
           headers: {
             'Authorization': `Bearer ${session.user.accessToken}`,
             'Accept': 'application/json',
@@ -483,7 +483,7 @@ export default function BusinessManagementPage() {
       try {
         const session = await getSession();
         if (!session?.user?.accessToken) throw new Error('No access token');
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${selectedBusiness.id}/barbers/`, {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${selectedBusiness.id}/employees/`, {
           headers: {
             'Authorization': `Bearer ${session.user.accessToken}`,
             'Content-Type': 'application/json',
@@ -529,8 +529,8 @@ export default function BusinessManagementPage() {
         status: statusMap[newEmployee.status] || newEmployee.status,
       };
       const url = editEmployeeId !== null
-        ? `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${selectedBusiness?.id}/barbers/${editEmployeeId}`
-        : `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${selectedBusiness?.id}/barbers/`;
+        ? `${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${selectedBusiness?.id}/employees/${editEmployeeId}`
+        : `${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${selectedBusiness?.id}/employees/`;
       const res = await fetch(url, {
         method: editEmployeeId !== null ? 'PUT' : 'POST',
         headers: {
@@ -546,7 +546,7 @@ export default function BusinessManagementPage() {
       setEmployeeDialogOpen(false);
       toast.success(editEmployeeId !== null ? 'Employee updated successfully' : 'Employee added successfully');
       // Refresh list
-      const refreshed = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${selectedBusiness?.id}/barbers/`, {
+      const refreshed = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${selectedBusiness?.id}/employees/`, {
         headers: {
           'Authorization': `Bearer ${session.user.accessToken}`,
           'Content-Type': 'application/json',
@@ -575,7 +575,7 @@ export default function BusinessManagementPage() {
     try {
       const session = await getSession();
       if (!session?.user?.accessToken) throw new Error('No access token');
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${selectedBusiness?.id}/barbers/${id}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${selectedBusiness?.id}/employees/${id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${session.user.accessToken}`,
@@ -588,7 +588,7 @@ export default function BusinessManagementPage() {
       }
       toast.success('Employee deleted successfully');
       // Refresh list
-      const refreshed = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${selectedBusiness?.id}/barbers/`, {
+      const refreshed = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${selectedBusiness?.id}/employees/`, {
         headers: {
           'Authorization': `Bearer ${session.user.accessToken}`,
           'Content-Type': 'application/json',
@@ -693,7 +693,7 @@ export default function BusinessManagementPage() {
         }
 
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${selectedBusiness.id}/services/${id}`,
+          `${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${selectedBusiness.id}/services/${id}`,
           {
             method: "DELETE",
             headers: {
@@ -710,7 +710,7 @@ export default function BusinessManagementPage() {
 
         // Refresh services after deletion
         const servicesResponse = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${selectedBusiness.id}/services`,
+          `${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${selectedBusiness.id}/services`,
           {
             headers: {
               'Authorization': `Bearer ${session.user.accessToken}`,
@@ -755,7 +755,7 @@ export default function BusinessManagementPage() {
       if (data.id) {
         // Update existing service
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${selectedBusiness.id}/services/${data.id}`,
+          `${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${selectedBusiness.id}/services/${data.id}`,
           {
             method: "PUT",
             headers: {
@@ -785,7 +785,7 @@ export default function BusinessManagementPage() {
       } else {
         // Create new service
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${selectedBusiness.id}/services/`,
+          `${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${selectedBusiness.id}/services/`,
           {
             method: "POST",
             headers: {
@@ -831,7 +831,7 @@ export default function BusinessManagementPage() {
         }
 
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${selectedBusiness.id}/services`,
+          `${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${selectedBusiness.id}/services`,
           {
             headers: {
               'Authorization': `Bearer ${session.user.accessToken}`,
@@ -877,7 +877,7 @@ export default function BusinessManagementPage() {
           throw new Error("No access token found. Please login again.");
         }
 
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${id}`, {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${id}`, {
           method: "DELETE",
           headers: {
             'Authorization': `Bearer ${session.user.accessToken}`,
@@ -924,7 +924,7 @@ export default function BusinessManagementPage() {
 
       if (editData) {
         // Update existing business
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${editData.id}`, {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${editData.id}`, {
           method: "PUT",
           headers: {
             'Authorization': `Bearer ${session.user.accessToken}`,
@@ -943,7 +943,7 @@ export default function BusinessManagementPage() {
         toast.success("Business updated successfully");
       } else {
         // Create new business
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/`, {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/`, {
           method: "POST",
           headers: {
             'Authorization': `Bearer ${session.user.accessToken}`,

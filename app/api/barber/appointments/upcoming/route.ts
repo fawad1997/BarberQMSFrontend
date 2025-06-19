@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
     
     // Call the backend API
     const backendUrl = process.env.BACKEND_URL || 'http://localhost:8000';
-    const url = `${backendUrl}/barbers/appointments/upcoming/?time_period=${timePeriod}`;
+    const url = `${backendUrl}/employees/appointments/upcoming/?time_period=${timePeriod}`;
     
     const response = await fetch(url, {
       method: 'GET',

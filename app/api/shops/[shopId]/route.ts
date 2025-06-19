@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 
-// Endpoint to get shop data by ID
+// Endpoint to get business data by ID
 export async function GET(
   request: NextRequest,
   { params }: { params: { shopId: string } }
@@ -19,31 +19,31 @@ export async function GET(
     
     const { shopId } = params;
     
-    // Get shop data from the backend API using the shop-owners endpoint
-    const shopResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}`, {
+    // Get business data from the backend API using the business-owners endpoint
+    const businessResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${shopId}`, {
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${token.accessToken}`
       }
     });
     
-    if (!shopResponse.ok) {
-      const errorData = await shopResponse.json();
-      return new NextResponse(JSON.stringify({ error: errorData.detail || "Failed to get shop data" }), {
-        status: shopResponse.status,
+    if (!businessResponse.ok) {
+      const errorData = await businessResponse.json();
+      return new NextResponse(JSON.stringify({ error: errorData.detail || "Failed to get business data" }), {
+        status: businessResponse.status,
         headers: { "Content-Type": "application/json" }
       });
     }
     
-    const shop = await shopResponse.json();
+    const business = await businessResponse.json();
     
-    return new NextResponse(JSON.stringify(shop), {
+    return new NextResponse(JSON.stringify(business), {
       status: 200,
       headers: { "Content-Type": "application/json" }
     });
     
   } catch (error) {
-    console.error("Error fetching shop data:", error);
+    console.error("Error fetching business data:", error);
     return new NextResponse(JSON.stringify({ error: "Internal server error" }), {
       status: 500,
       headers: { "Content-Type": "application/json" }

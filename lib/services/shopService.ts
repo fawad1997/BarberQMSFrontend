@@ -48,7 +48,7 @@ export const getShops = async (unused: boolean = false): Promise<Shop[]> => {
   }
 
   try {
-    const apiUrl = getApiEndpoint("/shop-owners/shops");
+    const apiUrl = getApiEndpoint("/business-owners/businesses");
     
     const response = await fetch(apiUrl, {
       headers: {
@@ -84,11 +84,11 @@ export const getShops = async (unused: boolean = false): Promise<Shop[]> => {
       try {
         const errorData = await responseClone.json();
         console.error("Error response data:", errorData);
-        throw new ApiError(errorData.message || `Failed to fetch shops. Status code: ${response.status}`, response.status);
+        throw new ApiError(errorData.message || `Failed to fetch businesses. Status code: ${response.status}`, response.status);
       } catch (parseError) {
         const textResponse = await responseClone.text();
         console.error("Raw error response:", textResponse);
-        throw new ApiError(`Failed to fetch shops: ${textResponse || 'Unknown error'}`, response.status);
+        throw new ApiError(`Failed to fetch businesses: ${textResponse || 'Unknown error'}`, response.status);
       }
     }
 
@@ -143,7 +143,8 @@ export const getDashboardData = async (accessToken?: string): Promise<DashboardD
   }
 
   try {
-    const apiUrl = getApiEndpoint("shop-owners/dashboard");
+    // Use the available businesses endpoint since /dashboard doesn't exist
+    const apiUrl = getApiEndpoint("business-owners/businesses/");
     
     const response = await fetch(apiUrl, {
       headers: {
@@ -178,15 +179,37 @@ export const getDashboardData = async (accessToken?: string): Promise<DashboardD
         errorMessage = textResponse || 'Unknown error';
       }
       
-      throw new ApiError(`Failed to fetch dashboard data: ${errorMessage}`, response.status);
+      throw new ApiError(`Failed to fetch business data: ${errorMessage}`, response.status);
     }
 
     // For successful responses, ensure we get valid JSON
     try {
-      const data = await response.json();
-      return data;
+      const businesses = await response.json();
+      
+      // Transform businesses data into dashboard format
+      // Since we don't have real metrics yet, provide placeholder data
+      const dashboardData: DashboardData = {
+        shops: businesses.map((business: any) => ({
+          shop_id: business.id,
+          shop_name: business.name,
+          total_customers_today: 0, // Placeholder - will be updated when metrics endpoint is available
+          customers_in_queue: 0, // Placeholder
+          customers_served: 0, // Placeholder
+          cancellations: 0, // Placeholder
+          average_wait_time: business.average_wait_time || 0,
+          barber_management: [] // Placeholder - will be populated when employee metrics are available
+        })),
+        daily_insights: {
+          total_customer_visits_today: 0, // Placeholder
+          average_wait_time: businesses.length > 0 ? 
+            businesses.reduce((sum: number, b: any) => sum + (b.average_wait_time || 0), 0) / businesses.length : 0
+        },
+        historical_trends: [] // Placeholder - will be populated when analytics endpoint is available
+      };
+      
+      return dashboardData;
     } catch (parseError) {
-      console.error("Error parsing dashboard JSON:", parseError);
+      console.error("Error parsing business data JSON:", parseError);
       throw new ApiError("Invalid response format from server", response.status);
     }
   } catch (error: any) {
@@ -228,7 +251,7 @@ export const checkUsernameAvailability = async (username: string): Promise<Usern
   }
 
   try {
-    const apiUrl = getApiEndpoint(`/shop-owners/check-username/${encodeURIComponent(username)}`);
+    const apiUrl = getApiEndpoint(`/business-owners/check-username/${encodeURIComponent(username)}`);
     
     const response = await fetch(apiUrl, {
       headers: {
