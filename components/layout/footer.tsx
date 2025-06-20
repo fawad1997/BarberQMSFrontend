@@ -1,8 +1,17 @@
+"use client"
+
 import Link from "next/link"
+import { useSession } from "next-auth/react"
 import { siteConfig } from "@/config/site"
-import { navLinks, footerLinks } from "@/lib/links"
+import { navLinks, footerLinks, barberFooterLinks } from "@/lib/links"
+import { getNavLinks } from "@/lib/getNavLinks"
 
 export default function Footer() {
+  const { data: session } = useSession();
+  const footerNavLinks = getNavLinks(session?.user?.role);
+  // Use barber-specific footer links when the user is a barber
+  const displayFooterLinks = session?.user?.role === "BARBER" ? barberFooterLinks : footerLinks;
+
   return (
     <footer className="mt-auto">
       <div className="mx-auto w-full max-w-screen-xl p-6 md:py-8">
@@ -13,7 +22,7 @@ export default function Footer() {
             </h1>
           </Link>
           <ul className="mb-6 flex flex-wrap items-center text-primary opacity-60 sm:mb-0">
-            {navLinks.map((link) => (
+            {footerNavLinks.map((link) => (
               <li key={link.route}>
                 <Link href={link.path} className="mr-4 hover:underline md:mr-6">
                   {link.route}
@@ -25,7 +34,7 @@ export default function Footer() {
         
         {/* Legal Links */}
         <div className="mt-4 flex flex-wrap justify-center gap-4 text-sm text-muted-foreground">
-          {footerLinks.map((link) => (
+          {displayFooterLinks.map((link) => (
             <Link key={link.route} href={link.path} className="hover:text-primary hover:underline">
               {link.route}
             </Link>

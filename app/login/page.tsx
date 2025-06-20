@@ -29,7 +29,7 @@ export default function LoginPage({
           <div className="mb-8 flex w-full flex-col items-center gap-2 text-center">
             <h1 className="text-3xl font-bold">Welcome Back</h1>
             <p className="text-muted-foreground">
-              Login to manage your barbershop queue
+              Login with your account credentials to access your dashboard
             </p>
           </div>
           

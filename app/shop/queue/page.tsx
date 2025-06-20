@@ -202,7 +202,7 @@ function SortableCard({
       
       // Use the specific barber endpoint
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/queue/${item.id}/barber`,
+                    `${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${shopId}/queue/${item.id}/employee`,
         {
           method: 'PUT',
           headers: {
@@ -284,7 +284,7 @@ function SortableCard({
       const toastId = toast.loading(`Updating status to ${newStatus.toLowerCase()}...`);
       
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${item.shop_id}/queue/${item.id}`,
+                      `${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${item.shop_id}/queue/${item.id}`,
         {
           method: 'PUT',
           headers: {
@@ -395,7 +395,7 @@ function SortableCard({
       
       // Use the specific service endpoint
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/queue/${item.id}/service`,
+                    `${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${shopId}/queue/${item.id}/service`,
         {
           method: 'PUT',
           headers: {
@@ -746,7 +746,7 @@ function QueueSection({
 
         // Make API call to update positions
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/queue/`,
+          `${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${shopId}/queue/`,
           {
             method: 'PUT',
             headers: {
@@ -1125,7 +1125,7 @@ export default function QueuePage() {
       }
 
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${selectedShopId}/queue/history`,
+                    `${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${selectedShopId}/queue/history`,
         {
           headers: {
             'Authorization': `Bearer ${session.user.accessToken}`,
@@ -1185,7 +1185,7 @@ export default function QueuePage() {
       }
 
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${selectedShopId}/queue/`,
+                  `${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${selectedShopId}/queue/`,
         {
           headers: {
             'Authorization': `Bearer ${session.user.accessToken}`,
@@ -1236,7 +1236,7 @@ export default function QueuePage() {
 
       // Fetch scheduled appointments
       const scheduledResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/appointments/shop/${selectedShopId}/appointments?status=scheduled`,
+                    `${process.env.NEXT_PUBLIC_API_URL}/appointments/business/${selectedShopId}/appointments?status=scheduled`,
         {
           headers: {
             'Authorization': `Bearer ${session.user.accessToken}`,
@@ -1260,7 +1260,7 @@ export default function QueuePage() {
 
       // Fetch completed appointments
       const completedResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/appointments/shop/${selectedShopId}/appointments?status=completed`,
+                    `${process.env.NEXT_PUBLIC_API_URL}/appointments/business/${selectedShopId}/appointments?status=completed`,
         {
           headers: {
             'Authorization': `Bearer ${session.user.accessToken}`,
@@ -1304,7 +1304,7 @@ export default function QueuePage() {
       }
 
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${selectedShopId}/barbers/`,
+                    `${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${selectedShopId}/employees/`,
         {
           headers: {
             'Authorization': `Bearer ${session.user.accessToken}`,

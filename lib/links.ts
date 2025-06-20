@@ -39,3 +39,23 @@ export const footerLinks = [
     path: "/legal"
   }
 ]
+
+export const barberFooterLinks = [
+  {
+    route: "Dashboard",
+    path: "/barber/dashboard"
+  },
+  {
+    route: "Appointments",
+    path: "/barber/appointments"
+  },
+  {
+    route: "Schedule",
+    path: "/barber/schedule"
+  },
+  {
+    route: "Support",
+    path: "/contact"
+  },
+  ...footerLinks
+]

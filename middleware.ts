@@ -57,7 +57,6 @@ export async function middleware(req: NextRequest) {
       console.error('[Middleware] Error in redirect:', error)
     }
   }
-
   // Handle auth logic
   try {
     const token = await getToken({ 
@@ -66,12 +65,40 @@ export async function middleware(req: NextRequest) {
       secureCookie: process.env.NODE_ENV === "production"
     })
 
-    if (isHomePath && token && token.role === "SHOP_OWNER") {
-      return NextResponse.redirect(new URL("/shop/dashboard", req.url))
+    const isBarberPath = path.startsWith("/barber")
+
+    // Redirect from home to appropriate dashboard based on role
+    if (isHomePath && token) {
+      if (token.role === "SHOP_OWNER") {
+        return NextResponse.redirect(new URL("/shop/dashboard", req.url))
+      } else if (token.role === "BARBER") {
+        return NextResponse.redirect(new URL("/barber/dashboard", req.url))
+      }
     }
 
+    // Handle shop owner routes
     if (isShopPath) {
       if (!token || token.role !== "SHOP_OWNER") {
+        // If user is a barber, redirect to barber dashboard
+        if (token && token.role === "BARBER") {
+          return NextResponse.redirect(new URL("/barber/dashboard", req.url))
+        }
+        return NextResponse.redirect(new URL("/login", req.url))
+      }
+      
+      const tokenExp = token.exp as number | undefined;
+      if (tokenExp && Date.now() / 1000 >= tokenExp) {
+        return NextResponse.redirect(new URL("/login?error=SessionExpired", req.url))
+      }
+    }
+
+    // Handle barber routes
+    if (isBarberPath) {
+      if (!token || token.role !== "BARBER") {
+        // If user is a shop owner, redirect to shop dashboard
+        if (token && token.role === "SHOP_OWNER") {
+          return NextResponse.redirect(new URL("/shop/dashboard", req.url))
+        }
         return NextResponse.redirect(new URL("/login", req.url))
       }
       
@@ -81,7 +108,7 @@ export async function middleware(req: NextRequest) {
       }
     }
   } catch (error) {
-    if (isShopPath) {
+    if (isShopPath || path.startsWith("/barber")) {
       return NextResponse.redirect(new URL("/login?error=AuthError", req.url))
     }
   }

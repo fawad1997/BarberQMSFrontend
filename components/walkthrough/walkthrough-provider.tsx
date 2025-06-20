@@ -74,11 +74,14 @@ export function WalkthroughProvider({ children }: { children: React.ReactNode })
       setHighlightTarget(null)
     }
   }, [isActive, currentStep])
-
   useEffect(() => {
     // Check if user is logging in for the first time
     
     if (status === 'authenticated' && session?.user) {
+      // Don't show walkthrough for barbers, only for shop owners
+      if (session.user.role === 'BARBER') {
+        return
+      }
       
       // Create user-specific localStorage key
       const userId = session.user.email || session.user.id || 'anonymous'
@@ -89,11 +92,14 @@ export function WalkthroughProvider({ children }: { children: React.ReactNode })
       // If this specific user already completed, never show again
       if (walkthroughCompleted === 'true') {
         return
-      }      // Check if this is a first-time login from session data
+      }      
       
-      if (session.user.isFirstLogin === true) {        setIsActive(true)
+      // Check if this is a first-time login from session data
+      if (session.user.isFirstLogin === true) {
+        setIsActive(true)
       }
-    }  }, [session, status])
+    }  
+  }, [session, status])
 
   const completeWalkthrough = async () => {
     try {

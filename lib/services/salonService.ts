@@ -10,7 +10,7 @@ export async function getSalons({ query }: { query: string; location: string }) 
       searchParams.append('search', query);
     }
     
-    const response = await fetch(`${API_URL}/appointments/shops?${searchParams.toString()}`);
+    const response = await fetch(`${API_URL}/appointments/businesses?${searchParams.toString()}`);
     if (!response.ok) throw new Error('Failed to fetch salons');
     const data = await response.json();
     return data.items;
@@ -28,25 +28,14 @@ function isNumericId(str: string): boolean {
 export async function getSalonDetails(idOrSlug: string) {
   console.log(`Fetching salon details for: ${idOrSlug}`);
   try {
-    // If it's a numeric ID, use the direct shop endpoint
-    if (isNumericId(idOrSlug)) {
-      const endpoint = `${API_URL}/appointments/shop/${idOrSlug}`;
-      console.log(`Using numeric ID endpoint: ${endpoint}`);
-      
-      const response = await fetch(endpoint);
-      
-      if (!response.ok) {
-        console.error(`Error fetching salon with ID ${idOrSlug}: Status ${response.status}`);
-        throw new Error(`Failed to fetch salon details: ${response.status}`);
-      }
-      
-      return await response.json();
-    }    // If it's a username/slug, find the salon in the list of all salons
-    else {
-      console.log(`Finding salon by username: ${idOrSlug}`);
+    let shopId: string = idOrSlug;
+
+    // If it's not a numeric ID, we need to find the salon ID first
+    if (!isNumericId(idOrSlug)) {
+      console.log(`Finding salon ID by username/slug: ${idOrSlug}`);
       
       // Fetch all salons and find the one with matching username
-      const allSalonsResponse = await fetch(`${API_URL}/appointments/shops`);
+      const allSalonsResponse = await fetch(`${API_URL}/appointments/businesses`);
       if (!allSalonsResponse.ok) {
         console.error(`Failed to fetch salons list: Status ${allSalonsResponse.status}`);
         throw new Error(`Failed to fetch salons list: ${allSalonsResponse.status}`);
@@ -67,12 +56,25 @@ export async function getSalonDetails(idOrSlug: string) {
       
       if (matchingSalon) {
         console.log(`Found matching salon by username/slug: ${matchingSalon.name}, ID: ${matchingSalon.id}`);
-        return matchingSalon;
+        shopId = matchingSalon.id.toString();
       } else {
         console.error(`No salon found with username: ${idOrSlug}`);
         throw new Error(`No salon found with username: ${idOrSlug}`);
       }
     }
+    
+    // Now that we have the business ID, always fetch the complete business details
+    const endpoint = `${API_URL}/appointments/business/${shopId}`;
+    console.log(`Fetching complete business details from: ${endpoint}`);
+    
+    const response = await fetch(endpoint);
+    
+    if (!response.ok) {
+      console.error(`Error fetching salon with ID ${shopId}: Status ${response.status}`);
+      throw new Error(`Failed to fetch salon details: ${response.status}`);
+    }
+    
+    return await response.json();
   } catch (error) {
     console.error('Error in getSalonDetails:', error);
     throw error;

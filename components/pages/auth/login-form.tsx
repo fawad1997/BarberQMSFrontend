@@ -9,10 +9,10 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { signIn } from "next-auth/react";
-import { getApiEndpoint } from "@/lib/utils/api-config";
+import { getApiEndpoint } from "../../../lib/utils/api-config";
 import { Eye, EyeOff, Mail, Lock } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "../../../components/ui/button";
 import {
   Form,
   FormControl,
@@ -20,9 +20,9 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
+} from "../../../components/ui/form";
+import { Input } from "../../../components/ui/input";
+import { Separator } from "../../../components/ui/separator";
 import SSOButton from "./sso-button";
 
 const formSchema = z.object({
@@ -39,7 +39,6 @@ export default function LoginForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
-
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -47,7 +46,6 @@ export default function LoginForm() {
       password: "",
     },
   });
-
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
     setError(null);
@@ -76,23 +74,26 @@ export default function LoginForm() {
 
       if (!response.ok) {
         throw new Error(data.message || "Invalid username or password");
-      }
+      }      // Determine redirect URL based on the user's role from API response
+      const userRole = data.role?.value || "";
+      const callbackUrl = userRole === "BARBER" ? "/barber/dashboard" : "/shop/dashboard";
 
+      // Call signIn with credentials
       const result = await signIn("credentials", {
         username: values.username,
         password: values.password,
         accessToken: data.access_token,
-        callbackUrl: "/shop/dashboard",
+        callbackUrl: callbackUrl,
         redirect: false,
       });
 
       if (result?.error) {
         throw new Error("Invalid credentials");
-      }
-
-      if (result?.ok) {
+      }      if (result?.ok) {
         toast.success("Login successful!");
-        router.push("/shop/dashboard");
+        // Redirect to the appropriate dashboard based on role
+        const redirectUrl = userRole === "BARBER" ? "/barber/dashboard" : "/shop/dashboard";
+        router.push(redirectUrl);
       }
     } catch (error) {
       console.error("Login error:", error);
@@ -132,10 +133,9 @@ export default function LoginForm() {
         <Separator className="flex-1" />
         <span className="mx-4 text-xs font-medium text-muted-foreground">OR CONTINUE WITH EMAIL</span>
         <Separator className="flex-1" />
-      </div>
-
-      <Form {...form}>
+      </div>      <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+          
           <FormField
             control={form.control}
             name="username"
@@ -195,9 +195,7 @@ export default function LoginForm() {
                 <FormMessage className="text-xs" />
               </FormItem>
             )}
-          />
-
-          {error && (
+          />          {error && (
             <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive text-center">
               {error}
             </div>
@@ -221,4 +219,4 @@ export default function LoginForm() {
       </p> */}
     </motion.div>
   );
-} 
+}

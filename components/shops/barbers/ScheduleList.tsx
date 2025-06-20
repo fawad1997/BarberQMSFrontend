@@ -23,7 +23,7 @@ export function ScheduleList({ schedules, onEdit, onDelete, onAdd, accessToken, 
   const handleDelete = async (schedule: BarberSchedule) => {
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/barbers/${barberId}/schedules/${schedule.id}/`,
+                  `${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${shopId}/employees/${barberId}/schedules/${schedule.id}/`,
         {
           method: 'DELETE',
           headers: {

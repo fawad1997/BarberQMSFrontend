@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { getSalonDetails } from "@/lib/services/salonService";
+import { US_TIMEZONES } from "@/types/shop";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Clock, MapPin, Phone, Mail, User, Calendar, AlertCircle } from 'lucide-react';
+import { Clock, MapPin, Phone, Mail, User, Calendar, AlertCircle, Globe } from 'lucide-react';
+import { getUserTimezone, getTimezoneDisplayName, convertFormattedHoursToUserTimezone, isTimeWithinBusinessHours, convertTimeFromUserToShopTimezone } from "@/lib/utils/timezone";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -48,14 +50,16 @@ interface SalonDetails {
   email: string;
   formatted_hours: string;
   is_open: boolean;
-  barbers: Barber[];  services: Service[];
+  timezone: string;
+  barbers: Barber[];
+  services: Service[];
   slug: string;
   username: string;
 }
 
 interface AppointmentRequest {
-  shop_id: number;
-  barber_id: number | null;
+  business_id: number; // Changed from shop_id
+  employee_id: number | null; // Changed from barber_id
   service_id: number | null;
   appointment_time: string;
   number_of_people: number;
@@ -114,8 +118,13 @@ export default function AppointmentPage({ params }: { params: { idOrSlug: string
   };
 
   const getFormattedDateTime = () => {
-    if (!appointmentDate || !appointmentTime) return "";
-    return new Date(`${appointmentDate}T${appointmentTime}`).toISOString();
+    if (!appointmentDate || !appointmentTime || !salon?.timezone) return "";
+    
+    // Convert user's selected time to shop timezone for backend
+    const userTimezone = getUserTimezone();
+    const shopTime = convertTimeFromUserToShopTimezone(appointmentTime, userTimezone, salon.timezone);
+    
+    return new Date(`${appointmentDate}T${shopTime}`).toISOString();
   };
 
   const getTomorrowDate = () => {
@@ -124,28 +133,11 @@ export default function AppointmentPage({ params }: { params: { idOrSlug: string
     return tomorrow.toISOString().split('T')[0];
   };
 
-  const parseBusinessHours = (formattedHours: string) => {
-    const [start, end] = formattedHours.split(' - ');
-    return {
-      start: new Date(`1970/01/01 ${start}`).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
-      end: new Date(`1970/01/01 ${end}`).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })
-    };
-  };
-
   const isWithinBusinessHours = (time: string) => {
-    if (!salon?.formatted_hours || !time) return false;
+    if (!salon?.formatted_hours || !time || !salon?.timezone) return false;
     
-    const { start, end } = parseBusinessHours(salon.formatted_hours);
-    
-    // Handle case where end time is earlier than start time (overnight hours)
-    if (end <= start) {
-      // If end is before or equal to start, it means the shop is open overnight
-      // So the time is valid if it's either after the start OR before the end
-      return time >= start || time <= end;
-    }
-    
-    // Normal case: shop opens and closes on the same day
-    return time >= start && time <= end;
+    // Use timezone-aware validation
+    return isTimeWithinBusinessHours(time, salon.formatted_hours, salon.timezone);
   };
 
   const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -153,7 +145,9 @@ export default function AppointmentPage({ params }: { params: { idOrSlug: string
     setAppointmentTime(selectedTime);
     
     if (!isWithinBusinessHours(selectedTime)) {
-      setTimeError(`Please select a time between ${salon?.formatted_hours}`);
+      const userTimezone = getUserTimezone();
+      const convertedHours = convertFormattedHoursToUserTimezone(salon?.formatted_hours || '', salon?.timezone || '', userTimezone);
+      setTimeError(`Please select a time between ${convertedHours} (your local time)`);
     } else {
       setTimeError("");
     }
@@ -169,8 +163,8 @@ export default function AppointmentPage({ params }: { params: { idOrSlug: string
       setIsBooking(true);
       
       const appointmentData: AppointmentRequest = {
-        shop_id: Number(salon.id),
-        barber_id: isAdvanceBooking ? selectedBarber : null,
+        business_id: Number(salon.id), // Changed from shop_id
+        employee_id: isAdvanceBooking ? selectedBarber : null, // Changed from barber_id
         service_id: isAdvanceBooking ? selectedService : null,
         appointment_time: getFormattedDateTime(),
         number_of_people: Number(numberOfPeople),
@@ -290,7 +284,11 @@ export default function AppointmentPage({ params }: { params: { idOrSlug: string
         <div className="space-y-6">
           {/* Salon Header */}
           <div className="text-center mb-6">
-            <h1 className="text-4xl font-bold mb-6 text-primary">{salon.name}</h1>
+            <h1 className="text-4xl font-bold mb-2 text-primary">{salon.name}</h1>
+            <div className="flex items-center justify-center gap-1 text-sm text-muted-foreground mb-6">
+              <Globe className="h-3 w-3" />
+              <span>{getTimezoneDisplayName(salon.timezone)}</span>
+            </div>
             
             {/* Improved Shop Details Layout */}
             <div className="grid md:grid-cols-2 gap-4 text-left max-w-2xl mx-auto">
@@ -307,7 +305,10 @@ export default function AppointmentPage({ params }: { params: { idOrSlug: string
                   <Clock className="h-5 w-5 text-primary shrink-0 mt-1" />
                   <div>
                     <p className="font-medium">Business Hours</p>
-                    <p className="text-muted-foreground">{salon.formatted_hours}</p>
+                    <p className="text-muted-foreground">
+                      {convertFormattedHoursToUserTimezone(salon.formatted_hours, salon.timezone)}
+                      <span className="text-xs opacity-75 block">(Your time)</span>
+                    </p>
                   </div>
                 </div>
               </div>
@@ -388,6 +389,9 @@ export default function AppointmentPage({ params }: { params: { idOrSlug: string
                   required
                 />
                 {timeError && <p className="text-red-500 text-sm mt-1">{timeError}</p>}
+                <p className="text-xs text-muted-foreground mt-1">
+                  Times are automatically converted to the shop's timezone
+                </p>
               </div>
             </div>
             
@@ -451,12 +455,15 @@ export default function AppointmentPage({ params }: { params: { idOrSlug: string
                             </Card>
                           ))}
                         </div>
-                      ) : (
-                        <Alert variant="destructive">
+                      ) : (                        <Alert variant="destructive">
                           <AlertCircle className="h-4 w-4" />
                           <AlertTitle>No Barbers Available</AlertTitle>
                           <AlertDescription>
-                            Unfortunately, no barber is currently available for this service. Please select a different service or try again later.
+                            {salon.barbers?.length === 0 ? (
+                              "This salon doesn't have any barbers registered yet. Please try another salon."
+                            ) : (
+                              "No barbers are scheduled to work at the selected time. Please try a different time, date, or service."
+                            )}
                           </AlertDescription>
                         </Alert>
                       )}
@@ -593,4 +600,4 @@ export default function AppointmentPage({ params }: { params: { idOrSlug: string
       </Card>
     </motion.div>
   );
-} 
+}

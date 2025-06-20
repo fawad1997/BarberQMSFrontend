@@ -82,42 +82,66 @@ function AddBarberModal({
     reset,
     formState: { errors },
   } = useForm<AddBarberFormData>()
-
   const onSubmit = async (data: AddBarberFormData) => {
     try {
+      console.log("Adding employee with data:", data)
+      
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/barbers/`,
+        `${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${shopId}/employees/`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${accessToken}`,
           },
-          body: JSON.stringify({
-            ...data,
-            password: "Temp1234",
-          }),
+          body: JSON.stringify(data),
         }
       )
 
       if (!response.ok) {
         // Parse the error response to get the detailed message
-        const errorData = await response.json()
+        let errorData: any = {}
+        try {
+          errorData = await response.json()
+        } catch (parseError) {
+          console.error("Could not parse error response:", parseError)
+        }
+        
         const errorMessage = errorData.detail || 
                             errorData.message || 
                             errorData.error || 
-                            `Failed to add artist (Status: ${response.status})`
+                            `Failed to add employee (Status: ${response.status})`
         throw new Error(errorMessage)
       }
 
-      toast.success("Artist has been added successfully")
+      // Try to parse the response to get the created employee
+      let createdEmployee = null
+      try {
+        createdEmployee = await response.json()
+        console.log("Employee created successfully:", createdEmployee)
+      } catch (parseError) {
+        console.log("Could not parse response, but employee was created")
+      }
+
+      toast.success(
+        "Employee has been added successfully! They will receive an email with setup instructions."
+      )
       reset()
-      onSuccess()
+      onSuccess() // This will trigger refreshBarbers to show the new employee
       onClose()
     } catch (error) {
-      console.error("Error adding artist:", error)
+      console.error("Error adding employee:", error)
       // Display the specific error message from the backend
-      toast.error(error instanceof Error ? error.message : "Failed to add artist. Please try again.")
+      const errorMessage = error instanceof Error ? error.message : "Failed to add employee. Please try again."
+      
+      // Provide specific guidance for common errors
+      if (errorMessage.includes("already has role")) {
+        toast.error("This user already has a role in the system. Please use a different email address.")
+      } else if (errorMessage.includes("send_artist_onboarding_email")) {
+        toast.error("Employee was created but email notification failed. Please contact the employee directly.")
+      } else {
+        toast.error(errorMessage)
+      }
     }
   }
 
@@ -180,6 +204,8 @@ function AddBarberModal({
             {errors.status && (
               <p className="text-sm text-red-500">Status is required.</p>
             )}
+          </div>          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md text-sm text-blue-700">
+            <p>An email will be sent to the artist with instructions to set up their password.</p>
           </div>
           <Button type="submit" className="w-full">
             Add Artist
@@ -225,7 +251,7 @@ function EditBarberModal({
       console.log("Sending data:", data)
 
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/barbers/${barber.id}/`,
+        `${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${shopId}/employees/${barber.id}/`,
         {
           method: "PUT",
           headers: {
@@ -243,8 +269,20 @@ function EditBarberModal({
 
       if (!response.ok) {
         // Parse the error response to get the detailed message
-        const errorData = await response.json()
+        let errorData: any = {}
+        try {
+          errorData = await response.json()
+        } catch (parseError) {
+          console.error("Could not parse error response:", parseError)
+        }
+        
         console.error("API Error Response:", errorData)
+        
+        // Handle specific server errors
+        if (response.status === 500) {
+          throw new Error("Server error occurred while updating artist. Please try again or contact support.")
+        }
+        
         const errorMessage = errorData.detail || 
                             errorData.message || 
                             errorData.error || 
@@ -387,7 +425,7 @@ export default function BarbersPage() {
       try {
         // Fetch shops
         const shopsResponse = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/`,
+          `${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/`,
           {
             headers: {
               Authorization: `Bearer ${accessToken}`,
@@ -408,33 +446,47 @@ export default function BarbersPage() {
 
         setShops(simplifiedShops)
 
-        // Fetch barbers for each shop
+        // Expand the first shop by default
+        if (simplifiedShops.length > 0) {
+          setExpandedShops({ [simplifiedShops[0].id]: true })
+        }
+
+        // Fetch employees for each business
         for (const shop of simplifiedShops) {
-          const barbersResponse = await fetch(
-            `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shop.id}/barbers/`,
-            {
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-              },
-            }
-          )
-
-          if (barbersResponse.ok) {
-            const barbersData: Barber[] = await barbersResponse.json()
-            const barbersWithSchedules = await Promise.all(
-              barbersData.map(async (barber) => {
-                const schedules = await fetchBarberSchedules(shop.id, barber.id)
-                return { ...barber, schedules }
-              })
+          try {
+            const employeesResponse = await fetch(
+              `${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${shop.id}/employees/`,
+              {
+                headers: {
+                  Authorization: `Bearer ${accessToken}`,
+                },
+              }
             )
 
-            setShops((prevShops) =>
-              prevShops.map((prevShop) =>
-                prevShop.id === shop.id
-                  ? { ...prevShop, barbers: barbersWithSchedules }
-                  : prevShop
+            if (employeesResponse.ok) {
+              const employeesData: Barber[] = await employeesResponse.json()
+              console.log(`Fetched ${employeesData.length} employees for business ${shop.name}:`, employeesData)
+              
+                             // Fetch schedules for each employee
+               const employeesWithSchedules = await Promise.all(
+                 employeesData.map(async (employee) => {
+                   const schedules = await fetchBarberSchedules(shop.id, employee.id)
+                   return { ...employee, schedules }
+                 })
+               )
+
+              setShops((prevShops) =>
+                prevShops.map((prevShop) =>
+                  prevShop.id === shop.id
+                    ? { ...prevShop, barbers: employeesWithSchedules }
+                    : prevShop
+                )
               )
-            )
+            } else {
+              console.error(`Failed to fetch employees for business ${shop.id}:`, employeesResponse.status)
+            }
+          } catch (error) {
+            console.error(`Error fetching employees for business ${shop.id}:`, error)
           }
         }
       } catch (err) {
@@ -450,7 +502,7 @@ export default function BarbersPage() {
   const fetchBarberSchedules = async (shopId: number, barberId: number) => {
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/barbers/${barberId}/schedules/`,
+        `${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${shopId}/employees/${barberId}/schedules/`,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -458,7 +510,8 @@ export default function BarbersPage() {
         }
       )
       if (!response.ok) {
-        throw new Error('Failed to fetch schedules')
+        console.error(`Failed to fetch schedules for employee ${barberId} in business ${shopId}:`, response.status)
+        return []
       }
       return await response.json()
     } catch (error) {
@@ -469,8 +522,10 @@ export default function BarbersPage() {
 
   const refreshBarbers = async (shopId: number) => {
     try {
-      const barbersResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/barbers/`,
+      console.log("Refreshing employees for shop:", shopId)
+      
+      const employeesResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${shopId}/employees/`,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -478,27 +533,32 @@ export default function BarbersPage() {
         }
       )
 
-      if (barbersResponse.ok) {
-        const barbersData: Barber[] = await barbersResponse.json()
+      if (employeesResponse.ok) {
+        const employeesData: Barber[] = await employeesResponse.json()
+        console.log(`Refreshed ${employeesData.length} employees for business ${shopId}:`, employeesData)
         
-        // Fetch schedules for each barber
-        const barbersWithSchedules = await Promise.all(
-          barbersData.map(async (barber) => {
-            const schedules = await fetchBarberSchedules(shopId, barber.id)
-            return { ...barber, schedules }
+        // Fetch schedules for each employee
+        const employeesWithSchedules = await Promise.all(
+          employeesData.map(async (employee) => {
+            const schedules = await fetchBarberSchedules(shopId, employee.id)
+            return { ...employee, schedules }
           })
         )
 
         setShops((prevShops) =>
           prevShops.map((prevShop) =>
             prevShop.id === shopId
-              ? { ...prevShop, barbers: barbersWithSchedules }
+              ? { ...prevShop, barbers: employeesWithSchedules }
               : prevShop
           )
         )
+      } else {
+        console.error(`Failed to refresh employees for business ${shopId}:`, employeesResponse.status)
+        toast.error("Failed to refresh employee list")
       }
     } catch (error) {
-      console.error("Error refreshing barbers:", error)
+      console.error("Error refreshing employees:", error)
+      toast.error("Failed to refresh employee list")
     }
   }
 
@@ -506,7 +566,7 @@ export default function BarbersPage() {
     if (!barberToDelete) return
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/barbers/${barberToDelete.id}/`,
+        `${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${barberToDelete.shopId}/employees/${barberToDelete.id}/`,
         {
           method: "DELETE",
           headers: {
@@ -559,8 +619,8 @@ export default function BarbersPage() {
 
   const handleScheduleEdit = async (schedule: BarberSchedule) => {
     // Find the shop and barber for this schedule
-    const shop = shops.find(s => s.id === schedule.shop_id)
-    const barber = shop?.barbers.find(b => b.id === schedule.barber_id)
+    const shop = shops.find(s => s.id === schedule.business_id)
+    const barber = shop?.barbers.find(b => b.id === schedule.employee_id)
     
     if (shop && barber) {
       setSelectedShopId(shop.id)
@@ -782,9 +842,9 @@ export default function BarbersPage() {
       {/* Manage Services Modal */}
       {selectedShopId && selectedBarberForServices && (
         <BarberServicesModal
-          shopId={selectedShopId}
-          barberId={selectedBarberForServices.id}
-          barberName={selectedBarberForServices.full_name}
+          businessId={selectedShopId}
+          employeeId={selectedBarberForServices.id}
+          employeeName={selectedBarberForServices.full_name}
           isOpen={isServicesModalOpen}
           onClose={() => {
             setIsServicesModalOpen(false)

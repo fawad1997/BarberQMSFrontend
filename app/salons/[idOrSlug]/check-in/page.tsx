@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { ensureSalonUrlUsesUsername } from "@/lib/utils/navigation";
 
-interface Barber {
+interface Employee {
   id: number;
   full_name: string;
   status: string;
@@ -28,6 +28,9 @@ interface Barber {
     price: number;
   }>;
 }
+
+// Keep Barber alias for backward compatibility
+interface Barber extends Employee {}
 
 interface SalonDetails {
   id: number;
@@ -41,7 +44,9 @@ interface SalonDetails {
   formatted_hours: string;
   estimated_wait_time: number;
   is_open: boolean;
-  barbers: Barber[];  services: Service[];
+  employees: Employee[]; // Changed from barbers
+  barbers: Employee[]; // Keep for backward compatibility
+  services: Service[];
   slug: string;
   username: string;
 }
@@ -124,9 +129,9 @@ export default function CheckInPage({ params }: { params: { idOrSlug: string } }
       setIsCheckingIn(true);
       
       const checkInData = {
-        shop_id: Number(salon.id),
+        business_id: Number(salon.id), // Changed from shop_id
         service_id: isAdvancedCheckIn ? selectedService : null,
-        barber_id: isAdvancedCheckIn ? selectedBarber : null,
+        employee_id: isAdvancedCheckIn ? selectedBarber : null, // Changed from barber_id
         full_name: fullName,
         phone_number: phoneNumber,
         number_of_people: Number(numberOfPeople),
@@ -170,14 +175,18 @@ export default function CheckInPage({ params }: { params: { idOrSlug: string } }
       setIsCheckingIn(false);
     }
   }
-  const getBarbersByService = (serviceId: number | null) => {
+  const getEmployeesByService = (serviceId: number | null) => {
     if (!salon) return [];
-    if (!serviceId) return salon.barbers;
+    if (!serviceId) return salon.employees || salon.barbers; // Support both field names
     
-    return salon.barbers.filter(barber => 
-      barber.services.some(service => service.id === serviceId)
+    const employees = salon.employees || salon.barbers;
+    return employees.filter(employee => 
+      employee.services.some(service => service.id === serviceId)
     );
   };
+
+  // Keep old function name for backward compatibility
+  const getBarbersByService = getEmployeesByService;
 
   const handleServiceSelection = (serviceId: number) => {
     setSelectedService(serviceId);
@@ -418,12 +427,15 @@ export default function CheckInPage({ params }: { params: { idOrSlug: string } }
                             </Card>
                           ))}
                         </div>
-                      ) : (
-                        <Alert variant="destructive">
+                      ) : (                        <Alert variant="destructive">
                           <AlertCircle className="h-4 w-4" />
                           <AlertTitle>No Barbers Available</AlertTitle>
                           <AlertDescription>
-                            Unfortunately, no barber is currently available for this service. Please select a different service or try again later.
+                            {salon.barbers?.length === 0 ? (
+                              "This salon doesn't have any barbers registered yet. Please try another salon."
+                            ) : (
+                              "No barbers are currently available for this service. Please select a different service or try again later."
+                            )}
                           </AlertDescription>
                         </Alert>
                       )}
