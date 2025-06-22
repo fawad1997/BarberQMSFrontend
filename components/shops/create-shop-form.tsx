@@ -79,7 +79,6 @@ export default function CreateShopForm() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
   const [checkingUsername, setCheckingUsername] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<z.infer<typeof shopFormSchema>>({
     resolver: zodResolver(shopFormSchema),
@@ -174,11 +173,10 @@ export default function CreateShopForm() {
       throw error;
     }
   }
+
   async function onSubmit(values: z.infer<typeof shopFormSchema>) {
     try {
       setIsLoading(true);
-
-      setIsSubmitting(true);
 
       const session = await getSession();
       if (!session?.user?.accessToken) {
@@ -198,7 +196,8 @@ export default function CreateShopForm() {
         has_advertisement: values.has_advertisement,
         opening_time: values.opening_time,
         closing_time: values.closing_time,
-        timezone: values.timezone,      };
+        timezone: values.timezone,
+      };
 
       const shopResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/`, {
         method: "POST",
