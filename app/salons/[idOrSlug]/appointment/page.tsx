@@ -6,7 +6,7 @@ import { US_TIMEZONES } from "@/types/shop";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Clock, MapPin, Phone, Mail, User, Calendar, AlertCircle, Globe } from 'lucide-react';
-import { getUserTimezone, getTimezoneDisplayName, convertFormattedHoursToUserTimezone, isTimeWithinBusinessHours, convertTimeFromUserToShopTimezone } from "@/lib/utils/timezone";
+import { getUserTimezone, getTimezoneDisplayName, convertFormattedHoursToUserTimezone, isTimeWithinBusinessHours, convertTimeFromUserToShopTimezone, convertTimeToUserTimezone } from "@/lib/utils/timezone";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -66,6 +66,7 @@ interface AppointmentRequest {
   user_id: number | null;
   full_name: string;
   phone_number: string;
+  user_timezone?: string; // User's timezone for proper conversion
 }
 
 export default function AppointmentPage({ params }: { params: { idOrSlug: string } }) {
@@ -115,16 +116,13 @@ export default function AppointmentPage({ params }: { params: { idOrSlug: string
     } else {
       setErrors(prev => ({ ...prev, phoneNumber: "" }));
     }
-  };
-
-  const getFormattedDateTime = () => {
+  };  const getFormattedDateTime = () => {
     if (!appointmentDate || !appointmentTime || !salon?.timezone) return "";
     
-    // Convert user's selected time to shop timezone for backend
-    const userTimezone = getUserTimezone();
-    const shopTime = convertTimeFromUserToShopTimezone(appointmentTime, userTimezone, salon.timezone);
-    
-    return new Date(`${appointmentDate}T${shopTime}`).toISOString();
+    // The simplest approach: send the user's time as is, and let the backend 
+    // handle the timezone conversion properly. The backend knows both timezones
+    // and can do the conversion correctly.
+    return new Date(`${appointmentDate}T${appointmentTime}:00`).toISOString();
   };
 
   const getTomorrowDate = () => {
@@ -132,22 +130,66 @@ export default function AppointmentPage({ params }: { params: { idOrSlug: string
     tomorrow.setDate(tomorrow.getDate() + 1);
     return tomorrow.toISOString().split('T')[0];
   };
-
   const isWithinBusinessHours = (time: string) => {
     if (!salon?.formatted_hours || !time || !salon?.timezone) return false;
     
+    // Get user's timezone
+    const userTimezone = getUserTimezone();
+    
     // Use timezone-aware validation
-    return isTimeWithinBusinessHours(time, salon.formatted_hours, salon.timezone);
-  };
-
-  const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    return isTimeWithinBusinessHours(time, salon.formatted_hours, salon.timezone, userTimezone);
+  };  const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedTime = e.target.value;
     setAppointmentTime(selectedTime);
     
     if (!isWithinBusinessHours(selectedTime)) {
       const userTimezone = getUserTimezone();
-      const convertedHours = convertFormattedHoursToUserTimezone(salon?.formatted_hours || '', salon?.timezone || '', userTimezone);
-      setTimeError(`Please select a time between ${convertedHours} (your local time)`);
+      const shopTime = convertTimeFromUserToShopTimezone(selectedTime, userTimezone, salon?.timezone || '');
+      
+      // Parse the original business hours to get clean start/end times
+      const timeRangeRegex = /(\d{1,2}:\d{2})\s*(AM|PM)?\s*-\s*(\d{1,2}:\d{2})\s*(AM|PM)?/i;
+      const match = salon?.formatted_hours?.match(timeRangeRegex);
+      
+      let userFriendlyHours = salon?.formatted_hours || '';
+      
+      if (match) {
+        const [, startTime, startPeriod, endTime, endPeriod] = match;
+        
+        // Convert shop hours to user timezone
+        const convert12to24 = (time: string, period?: string): string => {
+          if (!period) return time;
+          const [hours, minutes] = time.split(':').map(Number);
+          let hour24 = hours;
+          if (period.toLowerCase() === 'pm' && hours !== 12) {
+            hour24 += 12;
+          } else if (period.toLowerCase() === 'am' && hours === 12) {
+            hour24 = 0;
+          }
+          return `${hour24.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+        };
+        
+        const startTime24 = convert12to24(startTime, startPeriod);
+        const endTime24 = convert12to24(endTime, endPeriod);
+        
+        // Convert to user timezone
+        const userStartTime = convertTimeToUserTimezone(startTime24, salon?.timezone || '', userTimezone);
+        const userEndTime = convertTimeToUserTimezone(endTime24, salon?.timezone || '', userTimezone);
+        
+        // Convert back to 12-hour format for display
+        const convertTo12Hour = (time: string): string => {
+          const [hours, minutes] = time.split(':').map(Number);
+          const period = hours >= 12 ? 'PM' : 'AM';
+          const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+          return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
+        };
+        
+        userFriendlyHours = `${convertTo12Hour(userStartTime)} - ${convertTo12Hour(userEndTime)}`;
+      }
+      
+      setTimeError(
+        `Selected time (${shopTime} in shop timezone) is outside operating hours. ` +
+        `Please select a time between ${userFriendlyHours} (your local time).`
+      );
     } else {
       setTimeError("");
     }
@@ -161,8 +203,7 @@ export default function AppointmentPage({ params }: { params: { idOrSlug: string
     
     try {
       setIsBooking(true);
-      
-      const appointmentData: AppointmentRequest = {
+        const appointmentData: AppointmentRequest = {
         business_id: Number(salon.id), // Changed from shop_id
         employee_id: isAdvanceBooking ? selectedBarber : null, // Changed from barber_id
         service_id: isAdvanceBooking ? selectedService : null,
@@ -171,6 +212,7 @@ export default function AppointmentPage({ params }: { params: { idOrSlug: string
         user_id: null,
         full_name: fullName,
         phone_number: phoneNumber,
+        user_timezone: getUserTimezone(), // Include user's timezone
       };
 
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/appointments/`, {
@@ -342,9 +384,9 @@ export default function AppointmentPage({ params }: { params: { idOrSlug: string
                   <div>
                     <h3 className={`font-medium ${salon.is_open ? 'text-green-500' : 'text-red-500'}`}>
                       {salon.is_open ? 'Currently Open' : 'Currently Closed'}
-                    </h3>
-                    <p className="text-sm text-muted-foreground">
+                    </h3>                    <p className="text-sm text-muted-foreground">
                       Business Hours: {salon.formatted_hours}
+                      <span className="text-xs opacity-75 ml-1">(Shop time)</span>
                     </p>
                   </div>
                 </div>
@@ -378,8 +420,7 @@ export default function AppointmentPage({ params }: { params: { idOrSlug: string
                   onChange={(e) => setAppointmentDate(e.target.value)}
                   required
                 />
-              </div>
-              <div>
+              </div>              <div>
                 <Label htmlFor="appointmentTime">Time</Label>
                 <Input
                   id="appointmentTime"
@@ -388,9 +429,18 @@ export default function AppointmentPage({ params }: { params: { idOrSlug: string
                   onChange={handleTimeChange}
                   required
                 />
-                {timeError && <p className="text-red-500 text-sm mt-1">{timeError}</p>}
+                {timeError && <p className="text-red-500 text-sm mt-1">{timeError}</p>}                {appointmentTime && !timeError && salon?.timezone && (
+                  <p className="text-green-600 text-sm mt-1">
+                    ✓ {convertTimeFromUserToShopTimezone(appointmentTime, getUserTimezone(), salon.timezone)} in shop timezone - Within operating hours
+                  </p>
+                )}
+                {appointmentTime && timeError && salon?.timezone && (
+                  <p className="text-orange-600 text-sm mt-1">
+                    {convertTimeFromUserToShopTimezone(appointmentTime, getUserTimezone(), salon.timezone)} in shop timezone
+                  </p>
+                )}
                 <p className="text-xs text-muted-foreground mt-1">
-                  Times are automatically converted to the shop's timezone
+                  Times are automatically converted to the shop's timezone ({getTimezoneDisplayName(salon?.timezone || '')})
                 </p>
               </div>
             </div>

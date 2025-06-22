@@ -55,7 +55,7 @@ export const getTimezoneDisplayName = (timezone: string): string => {
 };
 
 /**
- * Convert time from shop timezone to user timezone
+ * Convert time from shop timezone to user timezone (RELIABLE METHOD)
  */
 export const convertTimeToUserTimezone = (
   time: string, // Format: "HH:MM"
@@ -69,26 +69,21 @@ export const convertTimeToUserTimezone = (
     
     const [hours, minutes] = time.split(':').map(Number);
     
-    // Create a date object for today with the given time in UTC
-    const today = new Date();
-    const baseDate = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate(), hours, minutes));
+    // Get the timezone offset difference
+    const shopOffsetHours = getTimezoneOffsetInHours(shopTimezone);
+    const userOffsetHours = getTimezoneOffsetInHours(userTimezone);
+    const offsetDiffHours = userOffsetHours - shopOffsetHours;
     
-    // First, adjust the date as if the time was specified in the shop's timezone
-    // This gives us the correct UTC time that corresponds to the shop's local time
-    const shopOffsetMinutes = getTimezoneOffset(shopTimezone);
-    baseDate.setMinutes(baseDate.getMinutes() - shopOffsetMinutes);
+    // Apply the offset
+    let convertedHours = hours + offsetDiffHours;
     
-    // Now format this UTC time in the user's timezone
-    const userTime = new Intl.DateTimeFormat('en-US', {
-      timeZone: userTimezone,
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
-    }).format(baseDate);
+    // Handle day overflow/underflow
+    while (convertedHours < 0) convertedHours += 24;
+    while (convertedHours >= 24) convertedHours -= 24;
     
-    return userTime;
+    return `${convertedHours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
   } catch (error) {
-    console.warn('Failed to convert time, returning original:', error);
+    console.warn('Failed to convert time to user timezone, returning original:', error);
     return time;
   }
 };
@@ -174,24 +169,54 @@ export const isTimeWithinBusinessHours = (
       appointmentTime : // No conversion needed if timezones are the same
       convertTimeFromUserToShopTimezone(appointmentTime, userTimezone, shopTimezone);
     
-    // Parse business hours
-    const timeRangeRegex = /(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})/;
+    // Parse business hours - handle both 12-hour and 24-hour formats
+    // Examples: "09:00 AM - 05:00 PM" or "9:00 - 17:00"
+    const timeRangeRegex = /(\d{1,2}:\d{2})\s*(AM|PM)?\s*-\s*(\d{1,2}:\d{2})\s*(AM|PM)?/i;
     const match = businessHours.match(timeRangeRegex);
     
     if (!match) {
+      console.warn('Could not parse business hours:', businessHours);
       return true; // If can't parse, allow booking
     }
     
-    const [, startTime, endTime] = match;
+    const [, startTime, startPeriod, endTime, endPeriod] = match;
+    
+    // Convert 12-hour format to 24-hour if needed
+    const convert12to24 = (time: string, period?: string): string => {
+      if (!period) return time; // Already 24-hour format
+      
+      const [hours, minutes] = time.split(':').map(Number);
+      let hour24 = hours;
+      
+      if (period.toLowerCase() === 'pm' && hours !== 12) {
+        hour24 += 12;
+      } else if (period.toLowerCase() === 'am' && hours === 12) {
+        hour24 = 0;
+      }
+      
+      return `${hour24.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+    };
+    
+    const startTime24 = convert12to24(startTime, startPeriod);
+    const endTime24 = convert12to24(endTime, endPeriod);
+    
+    // Parse times into minutes
     const [appointmentHours, appointmentMinutes] = shopTime.split(':').map(Number);
-    const [startHours, startMinutes] = startTime.split(':').map(Number);
-    const [endHours, endMinutes] = endTime.split(':').map(Number);
+    const [startHours, startMinutes] = startTime24.split(':').map(Number);
+    const [endHours, endMinutes] = endTime24.split(':').map(Number);
     
     const appointmentMinutesTotal = appointmentHours * 60 + appointmentMinutes;
     const startMinutesTotal = startHours * 60 + startMinutes;
     const endMinutesTotal = endHours * 60 + endMinutes;
     
-    return appointmentMinutesTotal >= startMinutesTotal && appointmentMinutesTotal <= endMinutesTotal;
+    // Handle overnight hours (e.g., 22:00 - 06:00)
+    if (endMinutesTotal < startMinutesTotal) {
+      // Business hours cross midnight
+      return appointmentMinutesTotal >= startMinutesTotal || appointmentMinutesTotal <= endMinutesTotal;
+    } else {
+      // Normal business hours within the same day
+      return appointmentMinutesTotal >= startMinutesTotal && appointmentMinutesTotal <= endMinutesTotal;
+    }
   } catch (error) {
     console.warn('Failed to check business hours, allowing booking:', error);
     return true;
@@ -199,7 +224,7 @@ export const isTimeWithinBusinessHours = (
 };
 
 /**
- * Convert time from user timezone to shop timezone
+ * Convert time from user timezone to shop timezone (RELIABLE METHOD)
  */
 export const convertTimeFromUserToShopTimezone = (
   time: string, // Format: "HH:MM"
@@ -213,74 +238,128 @@ export const convertTimeFromUserToShopTimezone = (
     
     const [hours, minutes] = time.split(':').map(Number);
     
-    // Create a date object for today with the given time in UTC
+    // Create a date for today at the specified time
     const today = new Date();
-    const baseDate = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate(), hours, minutes));
+    const inputDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), hours, minutes);
     
-    // First, adjust the date as if the time was specified in the user's timezone
-    // This gives us the correct UTC time that corresponds to the user's local time
-    const userOffsetMinutes = getTimezoneOffset(userTimezone);
-    baseDate.setMinutes(baseDate.getMinutes() - userOffsetMinutes);
+    // Create a date string that represents this time in the user's timezone
+    const userDateTimeString = inputDate.toISOString().slice(0, 10) + 'T' + 
+                              hours.toString().padStart(2, '0') + ':' + 
+                              minutes.toString().padStart(2, '0') + ':00';
     
-    // Now format this UTC time in the shop's timezone
-    const shopTime = new Intl.DateTimeFormat('en-US', {
-      timeZone: shopTimezone,
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
-    }).format(baseDate);
+    // Parse this as a proper datetime
+    const baseDateTime = new Date(userDateTimeString);
     
-    return shopTime;
+    // Get the timezone offset difference
+    const userOffsetHours = getTimezoneOffsetInHours(userTimezone);
+    const shopOffsetHours = getTimezoneOffsetInHours(shopTimezone);
+    const offsetDiffHours = shopOffsetHours - userOffsetHours;
+    
+    // Apply the offset
+    const convertedDateTime = new Date(baseDateTime.getTime() + (offsetDiffHours * 60 * 60 * 1000));
+    
+    // Extract the time portion
+    const convertedHours = convertedDateTime.getHours();
+    const convertedMinutes = convertedDateTime.getMinutes();
+    
+    return `${convertedHours.toString().padStart(2, '0')}:${convertedMinutes.toString().padStart(2, '0')}`;
   } catch (error) {
-    console.warn('Failed to convert time to shop timezone, returning original:', error);
-    return time;
+    console.warn('Failed to convert time to shop timezone, using simple offset calculation:', error);
+    
+    // Fallback: Use simple offset calculation
+    const [hours, minutes] = time.split(':').map(Number);
+    const userOffsetHours = getTimezoneOffsetInHours(userTimezone);
+    const shopOffsetHours = getTimezoneOffsetInHours(shopTimezone);
+    const hoursDiff = shopOffsetHours - userOffsetHours;
+    
+    let convertedHours = hours + hoursDiff;
+    
+    // Handle day overflow/underflow
+    while (convertedHours < 0) convertedHours += 24;
+    while (convertedHours >= 24) convertedHours -= 24;
+    
+    return `${convertedHours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
   }
 };
 
 /**
- * Get timezone offset in minutes from UTC
- * Positive values indicate timezones ahead of UTC (east)
- * Negative values indicate timezones behind UTC (west)
+ * Get timezone offset in hours from UTC (BULLETPROOF METHOD)
+ * Uses multiple fallback strategies for maximum reliability
  */
-export const getTimezoneOffset = (timezone: string): number => {
+export const getTimezoneOffsetInHours = (timezone: string): number => {
   if (!timezone) {
-    console.warn('No timezone provided to getTimezoneOffset');
+    console.warn('No timezone provided to getTimezoneOffsetInHours');
     return 0;
   }
 
   try {
-    // Use a simpler and more reliable approach to get timezone offset
+    // Method 1: Use Intl.DateTimeFormat to get the offset
     const now = new Date();
     
-    // Get the local time string in the target timezone
-    const tzString = now.toLocaleString('en-US', { timeZone: timezone });
+    // Create formatter for the target timezone
+    const formatter = new Intl.DateTimeFormat('en', {
+      timeZone: timezone,
+      timeZoneName: 'longOffset'
+    });
     
-    // Create a date object from that string in local time
-    const tzDate = new Date(tzString);
+    const parts = formatter.formatToParts(now);
+    const offsetPart = parts.find(part => part.type === 'timeZoneName');
     
-    // Get the ISO string which is always in UTC
-    const tzDateISO = new Date(tzDate.getTime() - tzDate.getTimezoneOffset() * 60000).toISOString();
+    if (offsetPart && offsetPart.value) {
+      // Parse something like "GMT-8" or "GMT+5"
+      const match = offsetPart.value.match(/GMT([+-])(\d{1,2}):?(\d{0,2})?/);
+      if (match) {
+        const sign = match[1] === '+' ? 1 : -1;
+        const hours = parseInt(match[2], 10);
+        const minutes = parseInt(match[3] || '0', 10);
+        return sign * (hours + minutes / 60);
+      }
+    }
     
-    // Create a date object from the ISO string (which will be in local time)
-    const utcDate = new Date(tzDateISO);
+    // Method 2: Fallback - compare date strings
+    const utcTime = now.toLocaleString('sv-SE', { timeZone: 'UTC' });
+    const localTime = now.toLocaleString('sv-SE', { timeZone: timezone });
     
-    // Calculate the difference between UTC and the target timezone
-    // Positive means ahead of UTC, negative means behind UTC
-    return (utcDate.getTime() - now.getTime()) / 60000;
+    const utcDate = new Date(utcTime + 'Z');
+    const localDate = new Date(localTime + 'Z');
+    
+    const diffMs = localDate.getTime() - utcDate.getTime();
+    const diffHours = diffMs / (1000 * 60 * 60);
+    
+    return Math.round(diffHours);
   } catch (error) {
-    console.error('Failed to get timezone offset for', timezone, error);
+    console.warn('Failed to calculate timezone offset, using hardcoded values:', error);
     
-    // Fallback method using predefined offsets for common US timezones
-    if (timezone === 'America/New_York') return -300; // EST, -5 hours
-    if (timezone === 'America/Chicago') return -360; // CST, -6 hours
-    if (timezone === 'America/Denver') return -420; // MST, -7 hours
-    if (timezone === 'America/Phoenix') return -420; // MST, -7 hours
-    if (timezone === 'America/Los_Angeles') return -480; // PST, -8 hours
-    if (timezone === 'America/Anchorage') return -540; // AKST, -9 hours
-    if (timezone === 'Pacific/Honolulu') return -600; // HST, -10 hours
+    // Method 3: Hardcoded fallback (most reliable for known timezones)
+    const now = new Date();
+    const month = now.getMonth(); // 0-11
+    const isDST = month >= 2 && month <= 10; // Rough DST period
     
-    return 0; // Default fallback
+    const offsets: { [key: string]: { standard: number; dst: number } } = {
+      'America/New_York': { standard: -5, dst: -4 },        // EST/EDT
+      'America/Chicago': { standard: -6, dst: -5 },         // CST/CDT
+      'America/Denver': { standard: -7, dst: -6 },          // MST/MDT
+      'America/Phoenix': { standard: -7, dst: -7 },         // MST (no DST)
+      'America/Los_Angeles': { standard: -8, dst: -7 },     // PST/PDT
+      'America/Anchorage': { standard: -9, dst: -8 },       // AKST/AKDT
+      'Pacific/Honolulu': { standard: -10, dst: -10 },      // HST (no DST)
+    };
+    
+    const tzOffset = offsets[timezone];
+    if (tzOffset) {
+      return isDST ? tzOffset.dst : tzOffset.standard;
+    }
+    
+    return 0;
   }
+};
+
+/**
+ * Get timezone offset in minutes from UTC (compatibility function)
+ * @deprecated Use getTimezoneOffsetInHours instead
+ */
+export const getTimezoneOffset = (timezone: string): number => {
+  return getTimezoneOffsetInHours(timezone) * 60;
 };
 
 /**
@@ -291,9 +370,9 @@ export const getTimezoneOffsetDifference = (
   timezone2: string
 ): number => {
   try {
-    const offset1 = getTimezoneOffset(timezone1);
-    const offset2 = getTimezoneOffset(timezone2);
-    return (offset1 - offset2) / 60;
+    const offset1 = getTimezoneOffsetInHours(timezone1);
+    const offset2 = getTimezoneOffsetInHours(timezone2);
+    return offset1 - offset2;
   } catch (error) {
     console.warn('Failed to calculate timezone offset difference:', error);
     return 0;
