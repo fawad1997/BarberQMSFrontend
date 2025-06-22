@@ -32,13 +32,6 @@ class AuthenticationError extends Error {
   }
 }
 
-// Add interface for username availability response
-interface UsernameAvailabilityResponse {
-  username: string;
-  available: boolean;
-  message: string;
-}
-
 export const getShops = async (unused: boolean = false): Promise<Shop[]> => {
   const session = await getSession();
   
@@ -48,7 +41,14 @@ export const getShops = async (unused: boolean = false): Promise<Shop[]> => {
   }
 
   try {
-    const apiUrl = getApiEndpoint("/business-owners/businesses");
+    console.log("Fetching shops from API...");
+    const apiUrl = getApiEndpoint("/shop-owners/shops");
+    console.log("Using API URL:", apiUrl);
+    
+    // Log token details for debugging (only first/last few chars for security)
+    const tokenStart = session.user.accessToken.substring(0, 10);
+    const tokenEnd = session.user.accessToken.length > 10 ? session.user.accessToken.substring(session.user.accessToken.length - 5) : '';
+    console.log(`Using token: ${tokenStart}...${tokenEnd}, length: ${session.user.accessToken.length}`);
     
     const response = await fetch(apiUrl, {
       headers: {
@@ -61,6 +61,8 @@ export const getShops = async (unused: boolean = false): Promise<Shop[]> => {
       credentials: 'include'
     });
 
+    console.log("Response status:", response.status);
+    console.log("Response headers:", Object.fromEntries(response.headers.entries()));
     
     if (response.status === 401) {
       await handleUnauthorizedResponse();
@@ -72,6 +74,7 @@ export const getShops = async (unused: boolean = false): Promise<Shop[]> => {
 
     // Check content type before parsing
     const contentType = response.headers.get("content-type");
+    console.log("Response content type:", contentType);
     
     if (!contentType || !contentType.includes("application/json")) {
       // If not JSON, get the text to see what was returned
@@ -84,15 +87,16 @@ export const getShops = async (unused: boolean = false): Promise<Shop[]> => {
       try {
         const errorData = await responseClone.json();
         console.error("Error response data:", errorData);
-        throw new ApiError(errorData.message || `Failed to fetch businesses. Status code: ${response.status}`, response.status);
+        throw new ApiError(errorData.message || `Failed to fetch shops. Status code: ${response.status}`, response.status);
       } catch (parseError) {
         const textResponse = await responseClone.text();
         console.error("Raw error response:", textResponse);
-        throw new ApiError(`Failed to fetch businesses: ${textResponse || 'Unknown error'}`, response.status);
+        throw new ApiError(`Failed to fetch shops: ${textResponse || 'Unknown error'}`, response.status);
       }
     }
 
     const result = await response.json();
+    console.log("Shop data fetched successfully");
     return result;
   } catch (error) {
     console.error("Error in getShops:", error);
@@ -108,9 +112,8 @@ export const getShops = async (unused: boolean = false): Promise<Shop[]> => {
     // Handle network errors or other unexpected errors
     if (error instanceof TypeError && error.message === 'Failed to fetch') {
       console.error("Network error - Backend server might be down or unreachable");
-      const apiUrl = getApiEndpoint("");
       throw new NetworkError(
-        `Unable to connect to the server. Please check if the backend server is running at ${apiUrl}`, 
+        "Unable to connect to the server. Please check if the backend server is running at http://localhost:8000", 
         error
       );
     }
@@ -133,18 +136,26 @@ const handleError = (error: any) => {
 export const getDashboardData = async (accessToken?: string): Promise<DashboardData> => {
   // More robust token validation
   if (!accessToken) {
+    console.log("No access token provided, redirecting to login");
     redirect('/login?error=NoToken');
     return {} as DashboardData;
   }
 
   if (typeof accessToken !== 'string' || accessToken.trim() === '') {
+    console.log("Invalid token format, redirecting to login");
     redirect('/login?error=InvalidToken');
     return {} as DashboardData;
   }
 
   try {
-    // Use the available businesses endpoint since /dashboard doesn't exist
-    const apiUrl = getApiEndpoint("business-owners/businesses/");
+    console.log("Fetching dashboard data...");
+    const apiUrl = getApiEndpoint("shop-owners/dashboard");
+    console.log("Using API URL for dashboard:", apiUrl);
+    
+    // Log token details for debugging (only first/last few chars for security)
+    const tokenStart = accessToken.substring(0, 10);
+    const tokenEnd = accessToken.length > 10 ? accessToken.substring(accessToken.length - 5) : '';
+    console.log(`Using token: ${tokenStart}...${tokenEnd}, length: ${accessToken.length}`);
     
     const response = await fetch(apiUrl, {
       headers: {
@@ -155,11 +166,15 @@ export const getDashboardData = async (accessToken?: string): Promise<DashboardD
       cache: 'no-store',
     });
 
+    console.log("Dashboard response status:", response.status);
+    console.log("Response headers:", Object.fromEntries(response.headers.entries()));
+
     // Clone the response for error handling
     const responseClone = response.clone();
 
     // Immediately handle auth errors
     if (response.status === 401 || response.status === 403) {
+      console.log(`Authentication failed with status ${response.status} - redirecting to login`);
       redirect('/login?error=SessionExpired');
       return {} as DashboardData;
     }
@@ -179,37 +194,16 @@ export const getDashboardData = async (accessToken?: string): Promise<DashboardD
         errorMessage = textResponse || 'Unknown error';
       }
       
-      throw new ApiError(`Failed to fetch business data: ${errorMessage}`, response.status);
+      throw new ApiError(`Failed to fetch dashboard data: ${errorMessage}`, response.status);
     }
 
     // For successful responses, ensure we get valid JSON
     try {
-      const businesses = await response.json();
-      
-      // Transform businesses data into dashboard format
-      // Since we don't have real metrics yet, provide placeholder data
-      const dashboardData: DashboardData = {
-        shops: businesses.map((business: any) => ({
-          shop_id: business.id,
-          shop_name: business.name,
-          total_customers_today: 0, // Placeholder - will be updated when metrics endpoint is available
-          customers_in_queue: 0, // Placeholder
-          customers_served: 0, // Placeholder
-          cancellations: 0, // Placeholder
-          average_wait_time: business.average_wait_time || 0,
-          barber_management: [] // Placeholder - will be populated when employee metrics are available
-        })),
-        daily_insights: {
-          total_customer_visits_today: 0, // Placeholder
-          average_wait_time: businesses.length > 0 ? 
-            businesses.reduce((sum: number, b: any) => sum + (b.average_wait_time || 0), 0) / businesses.length : 0
-        },
-        historical_trends: [] // Placeholder - will be populated when analytics endpoint is available
-      };
-      
-      return dashboardData;
+      const data = await response.json();
+      console.log("Successfully parsed dashboard data");
+      return data;
     } catch (parseError) {
-      console.error("Error parsing business data JSON:", parseError);
+      console.error("Error parsing dashboard JSON:", parseError);
       throw new ApiError("Invalid response format from server", response.status);
     }
   } catch (error: any) {
@@ -239,51 +233,5 @@ export const getDashboardData = async (accessToken?: string): Promise<DashboardD
       "Failed to connect to the server. Please check your internet connection and try again.",
       error
     );
-  }
-};
-
-export const checkUsernameAvailability = async (username: string): Promise<UsernameAvailabilityResponse> => {
-  const session = await getSession();
-  
-  if (!session?.user?.accessToken) {
-    await handleUnauthorizedResponse();
-    throw new AuthenticationError("No access token found. Please login again.");
-  }
-
-  try {
-    const apiUrl = getApiEndpoint(`/business-owners/check-username/${encodeURIComponent(username)}`);
-    
-    const response = await fetch(apiUrl, {
-      headers: {
-        'Authorization': `Bearer ${session.user.accessToken}`,
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-      },
-      mode: 'cors',
-      cache: 'no-store',
-      credentials: 'include'
-    });
-    
-    if (response.status === 401) {
-      await handleUnauthorizedResponse();
-      throw new AuthenticationError("Session expired");
-    }
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Username check failed:", response.status, errorText);
-      throw new ApiError(`Failed to check username availability: ${response.statusText}`, response.status);
-    }
-
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error("Username availability check error:", error);
-    
-    if (error instanceof AuthenticationError || error instanceof ApiError) {
-      throw error;
-    }
-    
-    throw new NetworkError("Failed to check username availability");
   }
 };

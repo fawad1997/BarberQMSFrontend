@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { getApiEndpoint } from "@/lib/utils/api-config";
 import { handleUnauthorizedResponse } from "@/lib/utils/auth-utils";
+import { convertFormattedHoursToUserTimezone } from "@/lib/utils/timezone";
 
 // Types
 interface QueueItem {
@@ -424,9 +425,9 @@ export default function BarberQueuePage() {
                 <div>
                   <h3 className={`font-medium ${shopInfo.is_open ? 'text-green-500' : 'text-red-500'}`}>
                     {shopInfo.name} - {shopInfo.is_open ? 'Currently Open' : 'Currently Closed'}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">
-                    Business Hours: {shopInfo.formatted_hours}
+                  </h3>                  <p className="text-sm text-muted-foreground">
+                    Business Hours: {convertFormattedHoursToUserTimezone(shopInfo.formatted_hours, shopInfo.  )} 
+                    <span className="text-xs opacity-75 block">(Your time)</span>
                   </p>
                 </div>
               </div>
