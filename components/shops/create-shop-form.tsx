@@ -173,10 +173,11 @@ export default function CreateShopForm() {
       throw error;
     }
   }
-
   async function onSubmit(values: z.infer<typeof shopFormSchema>) {
     try {
       setIsLoading(true);
+
+      console.log("🔍 Frontend: Form values received:", JSON.stringify(values, null, 2));
 
       const session = await getSession();
       if (!session?.user?.accessToken) {
@@ -196,8 +197,9 @@ export default function CreateShopForm() {
         has_advertisement: values.has_advertisement,
         opening_time: values.opening_time,
         closing_time: values.closing_time,
-        timezone: values.timezone,
-      };
+        timezone: values.timezone,      };
+
+      console.log("🔍 Frontend: Sending business payload:", JSON.stringify(shopPayload, null, 2));
 
       const shopResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/`, {
         method: "POST",
