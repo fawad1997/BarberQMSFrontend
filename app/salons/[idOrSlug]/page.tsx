@@ -25,6 +25,11 @@ interface SalonDetails {
   estimated_wait_time: number;
   is_open: boolean;
   timezone: string;
+  employees?: Array<{
+    id: number;
+    full_name: string;
+    status: string;
+  }>;
   barbers?: Array<{
     id: number;
     full_name: string;
@@ -203,7 +208,7 @@ export default function SalonPage({ params }: { params: { idOrSlug: string } }) 
                       <span>Est. wait time: {salon.estimated_wait_time} minutes</span>
                     </div>                    <div className="flex items-center justify-center gap-2 text-muted-foreground">
                       <Users className="h-4 w-4" />
-                      <span>{salon.barbers?.length || 0} barbers available</span>
+                      <span>{(salon.employees || salon.barbers)?.length || 0} barbers available</span>
                     </div>
                   </div>
 
@@ -211,10 +216,12 @@ export default function SalonPage({ params }: { params: { idOrSlug: string } }) 
                     onClick={handleCheckIn}
                     className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                     size="lg"
-                    disabled={!salon.is_open}
+                    disabled={!salon.is_open || ((salon.employees || salon.barbers)?.length || 0) === 0}
                   >
                     <UserCheck className="mr-2 h-5 w-5" />
-                    {salon.is_open ? 'Check In Now' : 'Currently Closed'}
+                    {!salon.is_open ? 'Currently Closed' : 
+                     ((salon.employees || salon.barbers)?.length || 0) === 0 ? 'No Barbers Available' : 
+                     'Check In Now'}
                   </Button>
                 </div>
               </div>
@@ -282,19 +289,31 @@ export default function SalonPage({ params }: { params: { idOrSlug: string } }) 
                 
                 <div className="space-y-3">
                   <div>
-                    <h5 className="font-medium mb-2">Our Barbers ({salon.barbers?.length || 0})</h5>
-                    <div className="flex flex-wrap gap-2">
-                      {salon.barbers?.slice(0, 3).map((barber) => (
-                        <Badge key={barber.id} variant="outline">
-                          {barber.full_name}
-                        </Badge>
-                      )) || []}
-                      {(salon.barbers?.length || 0) > 3 && (
-                        <Badge variant="secondary">
-                          +{(salon.barbers?.length || 0) - 3} more
-                        </Badge>
-                      )}
-                    </div>
+                    {(() => {
+                      const barbers = salon.employees || salon.barbers || [];
+                      return (
+                        <>
+                          <h5 className="font-medium mb-2">Our Barbers ({barbers.length})</h5>
+                          <div className="flex flex-wrap gap-2">
+                            {barbers.slice(0, 3).map((barber) => (
+                              <Badge key={barber.id} variant="outline">
+                                {barber.full_name}
+                              </Badge>
+                            ))}
+                            {barbers.length > 3 && (
+                              <Badge variant="secondary">
+                                +{barbers.length - 3} more
+                              </Badge>
+                            )}
+                            {barbers.length === 0 && (
+                              <Badge variant="secondary">
+                                No barbers available
+                              </Badge>
+                            )}
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
                     <div>
                     <h5 className="font-medium mb-2">Services ({salon.services?.length || 0})</h5>

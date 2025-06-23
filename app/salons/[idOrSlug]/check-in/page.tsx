@@ -427,11 +427,12 @@ export default function CheckInPage({ params }: { params: { idOrSlug: string } }
                             </Card>
                           ))}
                         </div>
-                      ) : (                        <Alert variant="destructive">
+                      ) : (
+                        <Alert variant="destructive">
                           <AlertCircle className="h-4 w-4" />
                           <AlertTitle>No Barbers Available</AlertTitle>
                           <AlertDescription>
-                            {salon.barbers?.length === 0 ? (
+                            {(salon.employees || salon.barbers)?.length === 0 ? (
                               "This salon doesn't have any barbers registered yet. Please try another salon."
                             ) : (
                               "No barbers are currently available for this service. Please select a different service or try again later."
@@ -491,7 +492,8 @@ export default function CheckInPage({ params }: { params: { idOrSlug: string } }
                   (!salon.is_open) ||
                   !!errors.fullName || 
                   !!errors.phoneNumber ||
-                  (isAdvancedCheckIn && !selectedBarber)
+                  (isAdvancedCheckIn && !selectedBarber) ||
+                  ((salon.employees || salon.barbers)?.length || 0) === 0
                 }
                 onClick={handleCheckIn}
               >
@@ -525,4 +527,4 @@ export default function CheckInPage({ params }: { params: { idOrSlug: string } }
       </Card>
     </motion.div>
   );
-} 
+}
