@@ -31,7 +31,7 @@ export default function SalonList({ salons, isLoading }: SalonListProps) {
             <div className="text-right">
               <p className="text-xs text-muted-foreground flex items-center gap-1">
                 <Clock className="h-3 w-3" />
-                {salon.opening_time.slice(0, 5)} - {salon.closing_time.slice(0, 5)}
+                {salon.opening_time?.slice(0, 5) || "9:00"} - {salon.closing_time?.slice(0, 5) || "17:00"}
               </p>
             </div>
           </div>

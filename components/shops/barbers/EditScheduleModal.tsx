@@ -39,7 +39,7 @@ export function EditScheduleModal({ isOpen, onClose, schedule, accessToken, onSu
   const onSubmit = async (data: EditScheduleFormData) => {
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${schedule.shop_id}/barbers/${schedule.barber_id}/schedules/${schedule.id}/`,
+        `${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${schedule.business_id}/employees/${schedule.employee_id}/schedules/${schedule.id}/`,
         {
           method: 'PUT',
           headers: {

@@ -27,6 +27,7 @@ import { format, parse } from 'date-fns';
 import { getSession } from 'next-auth/react';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { getShops } from '@/lib/services/shopService';
+import { toast } from "sonner";
 
 interface WorkSchedule {
   id: number;
@@ -36,7 +37,7 @@ interface WorkSchedule {
   end_time: string;
   is_active: boolean;
   breaks: ScheduleBreak[];
-  barber_id: number;
+  employee_id: number; // Changed from barber_id
   day_of_week: number[];
   effective_start_date: string;
   effective_end_date: string;
@@ -52,8 +53,8 @@ interface ScheduleBreak {
 
 interface EmployeeSchedule {
   id: number;
-  barber_id: number;
-  barber_name: string;
+  employee_id: number; // Changed from barber_id
+  employee_name: string; // Changed from barber_name
   schedule_id: number;
   effective_start_date: string;
   effective_end_date: string;
@@ -61,8 +62,8 @@ interface EmployeeSchedule {
 
 interface ScheduleOverride {
   id: number;
-  barber_id: number;
-  barber_name: string;
+  employee_id: number; // Changed from barber_id
+  employee_name: string; // Changed from barber_name
   date: string;
   start_time: string;
   end_time: string;
@@ -81,7 +82,7 @@ const DAYS_OF_WEEK = [
 ];
 
 interface WorkScheduleManagerProps {
-  shopId: number;
+  shopId: number; // Note: This represents a business ID in the new schema
 }
 
 interface ScheduleForm {
@@ -92,6 +93,37 @@ interface ScheduleForm {
   effective_start_date: string;
   effective_end_date: string;
   breaks: { break_start: string; break_end: string }[];
+}
+
+// Add DeleteConfirmationDialog component (now using Material-UI components)
+function DeleteConfirmationDialog({
+  open,
+  onClose,
+  onConfirm,
+  itemName,
+  dialogTitle,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  itemName: string;
+  dialogTitle: string;
+}) {
+  return (
+    <Dialog open={open} onClose={onClose}>
+      <DialogTitle>{dialogTitle}</DialogTitle>
+      <DialogContent>
+        <Typography>
+          Are you sure you want to delete &quot;{itemName}&quot;? This action cannot
+          be undone.
+        </Typography>
+      </DialogContent>
+      <DialogActions>
+        <Button variant="outlined" onClick={onClose}>Cancel</Button>
+        <Button variant="contained" color="error" onClick={onConfirm}>Delete</Button>
+      </DialogActions>
+    </Dialog>
+  );
 }
 
 const WorkScheduleManager: React.FC<WorkScheduleManagerProps> = ({ shopId }) => {
@@ -124,21 +156,21 @@ const WorkScheduleManager: React.FC<WorkScheduleManagerProps> = ({ shopId }) => 
   });
 
   const [assignmentForm, setAssignmentForm] = useState({
-    barber_id: '',
+    employee_id: '', // Changed from barber_id
     effective_start_date: null as Date | null,
     effective_end_date: null as Date | null,
   });
 
   const [overrideForm, setOverrideForm] = useState({
-    barber_id: '',
-    shop_id: shopId,
+    employee_id: '', // Changed from barber_id
+    business_id: shopId, // Changed from shop_id
     start_date: null as Date | null,
     end_date: null as Date | null,
     repeat_frequency: '' as string | null,
   });
 
-  // Add state for barbers
-  const [barbers, setBarbers] = useState<{ id: number; name?: string; full_name?: string }[]>([]);
+  // Add state for employees (formerly barbers)
+  const [employees, setEmployees] = useState<{ id: number; name?: string; full_name?: string }[]>([]);
 
   // Add state for selected employee and their schedules
   const [selectedEmployee, setSelectedEmployee] = useState<number | null>(null);
@@ -148,22 +180,31 @@ const WorkScheduleManager: React.FC<WorkScheduleManagerProps> = ({ shopId }) => 
   const [overrides, setOverrides] = useState<any[]>([]);
 
   const [overrideFilters, setOverrideFilters] = useState({
-    barber_id: '',
+    employee_id: '', // Changed from barber_id
     start_date: null as Date | null,
     end_date: null as Date | null,
   });
 
   const [selectedOverride, setSelectedOverride] = useState<any | null>(null);
   const [editOverrideForm, setEditOverrideForm] = useState({
-    barber_id: '',
-    shop_id: shopId,
+    employee_id: '', // Changed from barber_id
+    business_id: shopId, // Changed from shop_id
     start_date: null as Date | null,
     end_date: null as Date | null,
     repeat_frequency: '' as string | null,
   });
   const [openEditOverrideModal, setOpenEditOverrideModal] = useState(false);
 
-  const [allShops, setAllShops] = useState<any[]>([]);
+  const [allBusinesses, setAllBusinesses] = useState<any[]>([]);
+
+  const [showScheduleDeleteConfirmDialog, setShowScheduleDeleteConfirmDialog] = useState(false);
+  const [scheduleToDelete, setScheduleToDelete] = useState<{ id: number; name: string } | null>(null);
+  const [showBreakDeleteConfirmDialog, setShowBreakDeleteConfirmDialog] = useState(false);
+  const [breakToDelete, setBreakToDelete] = useState<{ id: number; name: string } | null>(null);
+  const [showOverrideDeleteConfirmDialog, setShowOverrideDeleteConfirmDialog] = useState(false);
+  const [overrideToDelete, setOverrideToDelete] = useState<{ id: number; name: string } | null>(null);
+  const [showEmployeeScheduleRemoveConfirmDialog, setShowEmployeeScheduleRemoveConfirmDialog] = useState(false);
+  const [employeeScheduleToRemove, setEmployeeScheduleToRemove] = useState<{ employeeId: number; scheduleId: number; employeeName: string; scheduleName: string } | null>(null);
 
   const columns: GridColDef[] = [
     { field: 'name', headerName: 'Name', flex: 1 },
@@ -178,7 +219,7 @@ const WorkScheduleManager: React.FC<WorkScheduleManagerProps> = ({ shopId }) => 
           <IconButton onClick={() => handleEditSchedule(params.row)}>
             <EditIcon />
           </IconButton>
-          <IconButton onClick={() => handleDeleteSchedule(params.row.id)}>
+          <IconButton onClick={() => handleDeleteSchedule(params.row.id, params.row.name)}>
             <DeleteIcon />
           </IconButton>
           <IconButton
@@ -210,7 +251,7 @@ const WorkScheduleManager: React.FC<WorkScheduleManagerProps> = ({ shopId }) => 
           <IconButton onClick={() => handleEditBreak(params.row)}>
             <EditIcon />
           </IconButton>
-          <IconButton onClick={() => handleDeleteBreak(params.row.id)}>
+          <IconButton onClick={() => handleDeleteBreak(params.row.id, params.row.name)}>
             <DeleteIcon />
           </IconButton>
         </Box>
@@ -219,8 +260,8 @@ const WorkScheduleManager: React.FC<WorkScheduleManagerProps> = ({ shopId }) => 
   ];
 
   const employeeScheduleColumns = [
-    { field: 'employee_id', headerName: 'Employee ID', width: 150 },
-    { field: 'work_schedule_id', headerName: 'Work Schedule ID', width: 200 },
+    { field: 'employee_name', headerName: 'Employee Name', width: 200 },
+    { field: 'work_schedule_name', headerName: 'Work Schedule Name', width: 200 },
     {
       field: 'actions',
       headerName: 'Actions',
@@ -229,7 +270,7 @@ const WorkScheduleManager: React.FC<WorkScheduleManagerProps> = ({ shopId }) => 
         <Button
           color="error"
           size="small"
-          onClick={() => handleRemoveEmployeeSchedule(params.row.employee_id, params.row.work_schedule_id)}
+          onClick={() => handleRemoveEmployeeSchedule(params.row.employee_id, params.row.work_schedule_id, params.row.employee_name, params.row.work_schedule_name)}
         >
           Remove
         </Button>
@@ -464,11 +505,17 @@ const WorkScheduleManager: React.FC<WorkScheduleManagerProps> = ({ shopId }) => 
     setOpenBreakModal(true);
   };
 
-  const handleDeleteSchedule = async (id: number) => {
+  const handleDeleteSchedule = async (id: number, name: string) => {
+    setScheduleToDelete({ id, name });
+    setShowScheduleDeleteConfirmDialog(true);
+  };
+
+  const confirmDeleteSchedule = async () => {
+    if (!scheduleToDelete) return;
     try {
       const session = await getSession();
       const accessToken = session?.user?.accessToken;
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/schedules/work-schedules/${id}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/schedules/work-schedules/${scheduleToDelete.id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -476,20 +523,32 @@ const WorkScheduleManager: React.FC<WorkScheduleManagerProps> = ({ shopId }) => 
       });
       if (response.ok) {
         fetchSchedules();
+        toast.success('Schedule deleted successfully');
       } else {
         const error = await response.json();
         console.error('Error deleting schedule:', error);
+        toast.error('Failed to delete schedule');
       }
     } catch (error) {
       console.error('Error deleting schedule:', error);
+      toast.error('Failed to delete schedule');
+    } finally {
+      setShowScheduleDeleteConfirmDialog(false);
+      setScheduleToDelete(null);
     }
   };
 
-  const handleDeleteBreak = async (id: number) => {
+  const handleDeleteBreak = async (id: number, name: string) => {
+    setBreakToDelete({ id, name });
+    setShowBreakDeleteConfirmDialog(true);
+  };
+
+  const confirmDeleteBreak = async () => {
+    if (!breakToDelete) return;
     try {
       const session = await getSession();
       const accessToken = session?.user?.accessToken;
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/schedules/breaks/${id}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/schedules/breaks/${breakToDelete.id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -497,12 +556,18 @@ const WorkScheduleManager: React.FC<WorkScheduleManagerProps> = ({ shopId }) => 
       });
       if (response.ok) {
         fetchSchedules();
+        toast.success('Break deleted successfully');
       } else {
         const error = await response.json();
         console.error('Error deleting break:', error);
+        toast.error('Failed to delete break');
       }
     } catch (error) {
       console.error('Error deleting break:', error);
+      toast.error('Failed to delete break');
+    } finally {
+      setShowBreakDeleteConfirmDialog(false);
+      setBreakToDelete(null);
     }
   };
 
@@ -616,7 +681,14 @@ const WorkScheduleManager: React.FC<WorkScheduleManagerProps> = ({ shopId }) => 
     }
   };
 
-  const handleRemoveEmployeeSchedule = async (employeeId: number, scheduleId: number) => {
+  const handleRemoveEmployeeSchedule = async (employeeId: number, scheduleId: number, employeeName: string, scheduleName: string) => {
+    setEmployeeScheduleToRemove({ employeeId, scheduleId, employeeName, scheduleName });
+    setShowEmployeeScheduleRemoveConfirmDialog(true);
+  };
+
+  const confirmRemoveEmployeeSchedule = async () => {
+    if (!employeeScheduleToRemove) return;
+    const { employeeId, scheduleId } = employeeScheduleToRemove;
     try {
       const session = await getSession();
       const accessToken = session?.user?.accessToken;
@@ -631,12 +703,18 @@ const WorkScheduleManager: React.FC<WorkScheduleManagerProps> = ({ shopId }) => 
       );
       if (response.ok) {
         fetchEmployeeSchedules(employeeId); // Refresh the table
+        toast.success('Employee schedule removed successfully');
       } else {
         const error = await response.json();
         console.error('Error removing employee schedule:', error);
+        toast.error('Failed to remove employee schedule');
       }
     } catch (error) {
       console.error('Error removing employee schedule:', error);
+      toast.error('Failed to remove employee schedule');
+    } finally {
+      setShowEmployeeScheduleRemoveConfirmDialog(false);
+      setEmployeeScheduleToRemove(null);
     }
   };
 
@@ -686,12 +764,18 @@ const WorkScheduleManager: React.FC<WorkScheduleManagerProps> = ({ shopId }) => 
     }
   };
 
-  const handleDeleteOverride = async (overrideId: number) => {
+  const handleDeleteOverride = async (id: number, name: string) => {
+    setOverrideToDelete({ id, name });
+    setShowOverrideDeleteConfirmDialog(true);
+  };
+
+  const confirmDeleteOverride = async () => {
+    if (!overrideToDelete) return;
     try {
       const session = await getSession();
       const accessToken = session?.user?.accessToken;
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/schedules/overrides/${overrideId}`,
+        `${process.env.NEXT_PUBLIC_API_URL}/schedules/overrides/${overrideToDelete.id}`,
         {
           method: 'DELETE',
           headers: {
@@ -701,12 +785,18 @@ const WorkScheduleManager: React.FC<WorkScheduleManagerProps> = ({ shopId }) => 
       );
       if (response.ok) {
         fetchOverrides(); // Refresh the table
+        toast.success('Schedule override deleted successfully');
       } else {
         const error = await response.json();
         console.error('Error deleting override:', error);
+        toast.error('Failed to delete schedule override');
       }
     } catch (error) {
       console.error('Error deleting override:', error);
+      toast.error('Failed to delete schedule override');
+    } finally {
+      setShowOverrideDeleteConfirmDialog(false);
+      setOverrideToDelete(null);
     }
   };
 
@@ -855,24 +945,7 @@ const WorkScheduleManager: React.FC<WorkScheduleManagerProps> = ({ shopId }) => 
                   s.employee_id,
                 work_schedule_name: schedules.find(ws => ws.id === s.work_schedule_id)?.name || s.work_schedule_id,
               }))}
-              columns={[
-                { field: 'employee_name', headerName: 'Employee Name', width: 200 },
-                { field: 'work_schedule_name', headerName: 'Work Schedule Name', width: 200 },
-                {
-                  field: 'actions',
-                  headerName: 'Actions',
-                  width: 120,
-                  renderCell: (params: any) => (
-                    <Button
-                      color="error"
-                      size="small"
-                      onClick={() => handleRemoveEmployeeSchedule(params.row.employee_id, params.row.work_schedule_id)}
-                    >
-                      Remove
-                    </Button>
-                  ),
-                },
-              ]}
+              columns={employeeScheduleColumns}
               autoHeight
               pageSizeOptions={[5]}
               disableRowSelectionOnClick
@@ -961,7 +1034,7 @@ const WorkScheduleManager: React.FC<WorkScheduleManagerProps> = ({ shopId }) => 
                     </IconButton>
                   </Tooltip>
                   <Tooltip title="Delete">
-                    <IconButton size="small" onClick={() => handleDeleteOverride(params.row.id)}>
+                    <IconButton size="small" onClick={() => handleDeleteOverride(params.row.id, params.row.employee_name)}>
                       <DeleteIcon />
                     </IconButton>
                   </Tooltip>
@@ -1317,6 +1390,44 @@ const WorkScheduleManager: React.FC<WorkScheduleManagerProps> = ({ shopId }) => 
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Add DeleteConfirmationDialog components */}
+      {scheduleToDelete && (
+        <DeleteConfirmationDialog
+          open={showScheduleDeleteConfirmDialog}
+          onClose={() => setShowScheduleDeleteConfirmDialog(false)}
+          onConfirm={confirmDeleteSchedule}
+          itemName={scheduleToDelete.name}
+          dialogTitle="Delete Schedule"
+        />
+      )}
+      {breakToDelete && (
+        <DeleteConfirmationDialog
+          open={showBreakDeleteConfirmDialog}
+          onClose={() => setShowBreakDeleteConfirmDialog(false)}
+          onConfirm={confirmDeleteBreak}
+          itemName={breakToDelete.name}
+          dialogTitle="Delete Break"
+        />
+      )}
+      {overrideToDelete && (
+        <DeleteConfirmationDialog
+          open={showOverrideDeleteConfirmDialog}
+          onClose={() => setShowOverrideDeleteConfirmDialog(false)}
+          onConfirm={confirmDeleteOverride}
+          itemName={overrideToDelete.name}
+          dialogTitle="Delete Schedule Override"
+        />
+      )}
+      {employeeScheduleToRemove && (
+        <DeleteConfirmationDialog
+          open={showEmployeeScheduleRemoveConfirmDialog}
+          onClose={() => setShowEmployeeScheduleRemoveConfirmDialog(false)}
+          onConfirm={confirmRemoveEmployeeSchedule}
+          itemName={`${employeeScheduleToRemove.employeeName} - ${employeeScheduleToRemove.scheduleName}`}
+          dialogTitle="Remove Employee Schedule"
+        />
+      )}
     </Box>
   );
 };

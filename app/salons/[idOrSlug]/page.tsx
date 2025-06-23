@@ -3,12 +3,14 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Clock, MapPin, Phone, Mail, Calendar, UserCheck, Star, Users } from "lucide-react";
+import { Clock, MapPin, Phone, Mail, Calendar, UserCheck, Star, Users, Globe } from "lucide-react";
+import { getUserTimezone, getTimezoneDisplayName, convertFormattedHoursToUserTimezone } from "@/lib/utils/timezone";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getSalonDetails } from "@/lib/services/salonService";
 import { ensureSalonUrlUsesUsername } from "@/lib/utils/navigation";
+import { US_TIMEZONES } from "@/types/shop";
 
 interface SalonDetails {
   id: number;
@@ -22,6 +24,7 @@ interface SalonDetails {
   formatted_hours: string;
   estimated_wait_time: number;
   is_open: boolean;
+  timezone: string;
   barbers?: Array<{
     id: number;
     full_name: string;
@@ -31,7 +34,8 @@ interface SalonDetails {
     id: number;
     name: string;
     duration: number;
-    price: number;  }>;
+    price: number;
+  }>;
   slug: string;
   username: string;
 }
@@ -136,6 +140,16 @@ export default function SalonPage({ params }: { params: { idOrSlug: string } }) 
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
+                transition={{ delay: 0.35 }}
+                className="flex items-center justify-center gap-1 text-sm text-muted-foreground"
+              >
+                <Globe className="h-3 w-3" />
+                <span>{getTimezoneDisplayName(salon.timezone)}</span>
+              </motion.div>
+              
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
                 transition={{ delay: 0.4 }}
                 className="flex items-center justify-center gap-2 text-muted-foreground"
               >
@@ -156,7 +170,9 @@ export default function SalonPage({ params }: { params: { idOrSlug: string } }) 
                   <Clock className="h-4 w-4 mr-1" />
                   {salon.is_open ? 'Open Now' : 'Closed'}
                 </Badge>
-                <span className="text-sm text-muted-foreground">{salon.formatted_hours}</span>
+                <span className="text-sm text-muted-foreground">
+                  {convertFormattedHoursToUserTimezone(salon.formatted_hours, salon.timezone)}
+                </span>
               </motion.div>
             </div>
           </Card>
@@ -260,7 +276,9 @@ export default function SalonPage({ params }: { params: { idOrSlug: string } }) 
                   <div className="flex items-center gap-3">
                     <Clock className="h-5 w-5 text-primary" />
                     <span>{salon.formatted_hours}</span>
-                  </div>                </div>
+                  </div>
+
+                </div>
                 
                 <div className="space-y-3">
                   <div>

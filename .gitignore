@@ -41,3 +41,4 @@ next-env.d.ts
 .env
 
 droplet-setup-guide.md
+dbchanges.md

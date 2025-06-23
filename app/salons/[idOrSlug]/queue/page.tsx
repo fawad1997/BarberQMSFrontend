@@ -27,7 +27,6 @@ interface SalonDetails {
   is_open: boolean;
   estimated_wait_time: number;
   slug: string;
-  username: string;
 }
 
 export default function QueuePage({ params }: { params: { idOrSlug: string } }) {

@@ -14,8 +14,8 @@ export async function GET(request: NextRequest) {
       });
     }
     
-    // Get barber profile which includes their shop_id
-    const profileResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/barbers/profile`, {
+    // Get employee profile which includes their business_id
+    const profileResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/employees/profile`, {
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${token.accessToken}`
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     
     if (!profileResponse.ok) {
       const errorData = await profileResponse.json();
-      return new NextResponse(JSON.stringify({ error: errorData.detail || "Failed to get barber profile" }), {
+      return new NextResponse(JSON.stringify({ error: errorData.detail || "Failed to get employee profile" }), {
         status: profileResponse.status,
         headers: { "Content-Type": "application/json" }
       });
@@ -32,14 +32,14 @@ export async function GET(request: NextRequest) {
     
     const profile = await profileResponse.json();
     
-    if (!profile.shop_id) {
-      return new NextResponse(JSON.stringify({ error: "No shop found for this barber" }), {
+    if (!profile.business_id) {
+      return new NextResponse(JSON.stringify({ error: "No business found for this employee" }), {
         status: 404,
         headers: { "Content-Type": "application/json" }
       });
     }
-      // Get queue data for the barber's shop
-    const queueResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/queue/${profile.shop_id}`, {
+      // Get queue data for the employee's business
+    const queueResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/queue/${profile.business_id}`, {
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${token.accessToken}`

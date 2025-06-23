@@ -14,8 +14,8 @@ export async function GET(request: NextRequest) {
       });
     }
     
-    // Get barber profile from the backend API
-    const profileResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/barbers/profile`, {
+    // Get employee profile from the backend API
+    const profileResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/employees/profile`, {
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${token.accessToken}`
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     
     if (!profileResponse.ok) {
       const errorData = await profileResponse.json();
-      return new NextResponse(JSON.stringify({ error: errorData.detail || "Failed to get barber profile" }), {
+      return new NextResponse(JSON.stringify({ error: errorData.detail || "Failed to get employee profile" }), {
         status: profileResponse.status,
         headers: { "Content-Type": "application/json" }
       });

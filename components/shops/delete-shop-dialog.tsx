@@ -42,7 +42,7 @@ export function DeleteShopDialog({
       }
 
       const response = await fetch(
-        getApiEndpoint(`shop-owners/shops/${shopId}`),
+        getApiEndpoint(`business-owners/businesses/${shopId}`),
         {
           method: "DELETE",
           headers: {

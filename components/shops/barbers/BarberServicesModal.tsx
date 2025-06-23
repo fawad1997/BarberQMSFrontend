@@ -14,26 +14,34 @@ interface Service {
   name: string
   duration: number
   price: number
-  shop_id: number
+  business_id: number // Changed from shop_id
 }
 
-interface BarberServicesModalProps {
-  shopId: number
-  barberId: number
-  barberName: string
+interface EmployeeServicesModalProps { // Renamed from BarberServicesModalProps
+  businessId: number // Changed from shopId
+  employeeId: number // Changed from barberId
+  employeeName: string // Changed from barberName
   isOpen: boolean
   onClose: () => void
   accessToken: string
 }
 
-export function BarberServicesModal({
-  shopId,
-  barberId,
-  barberName,
+// Keep old interface for backward compatibility
+interface BarberServicesModalProps extends EmployeeServicesModalProps {}
+
+// Export with old name for backward compatibility
+export function BarberServicesModal(props: BarberServicesModalProps) {
+  return EmployeeServicesModal(props);
+}
+
+export function EmployeeServicesModal({
+  businessId,
+  employeeId,
+  employeeName,
   isOpen,
   onClose,
   accessToken,
-}: BarberServicesModalProps) {
+}: EmployeeServicesModalProps) {
   const [allServices, setAllServices] = useState<Service[]>([])
   const [selectedServices, setSelectedServices] = useState<Service[]>([])
   const [loading, setLoading] = useState(false)
@@ -42,9 +50,9 @@ export function BarberServicesModal({
     const fetchServices = async () => {
       setLoading(true)
       try {
-        // Fetch all shop services
+        // Fetch all business services
         const allServicesResponse = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/services/`,
+          `${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${businessId}/services/`,
           {
             headers: {
               Authorization: `Bearer ${accessToken}`,
@@ -65,9 +73,9 @@ export function BarberServicesModal({
 
         setAllServices(servicesArray)
 
-        // Fetch barber's current services
-        const barberServicesResponse = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/barbers/${barberId}/services`,
+        // Fetch employee's current services
+        const employeeServicesResponse = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${businessId}/employees/${employeeId}/services`,
           {
             headers: {
               Authorization: `Bearer ${accessToken}`,
@@ -75,19 +83,19 @@ export function BarberServicesModal({
           }
         )
 
-        if (!barberServicesResponse.ok) {
-          throw new Error('Failed to fetch barber services')
+        if (!employeeServicesResponse.ok) {
+          throw new Error('Failed to fetch employee services')
         }
 
-        const barberServicesData = await barberServicesResponse.json()
-        console.log("barberServicesData", barberServicesData)
+        const employeeServicesData = await employeeServicesResponse.json()
+        console.log("employeeServicesData", employeeServicesData)
 
-        // Ensure barberServicesData is an array
-        const barberServicesArray = Array.isArray(barberServicesData)
-          ? barberServicesData
-          : barberServicesData.services || []
+        // Ensure employeeServicesData is an array
+        const employeeServicesArray = Array.isArray(employeeServicesData)
+          ? employeeServicesData
+          : employeeServicesData.services || []
 
-        setSelectedServices(barberServicesArray)
+        setSelectedServices(employeeServicesArray)
       } catch (error) {
         console.error('Error fetching services:', error)
         toast.error('Failed to fetch services')
@@ -99,7 +107,7 @@ export function BarberServicesModal({
     if (isOpen) {
       fetchServices()
     }
-  }, [isOpen, shopId, barberId, accessToken])
+  }, [isOpen, businessId, employeeId, accessToken])
 
   const toggleService = async (service: Service) => {
     try {
@@ -108,7 +116,7 @@ export function BarberServicesModal({
       if (isSelected) {
         // Remove service
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/barbers/${barberId}/services/${service.id}`,
+                      `${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${businessId}/employees/${employeeId}/services/${service.id}`,
           {
             method: 'DELETE',
             headers: {
@@ -124,11 +132,11 @@ export function BarberServicesModal({
         }
   
         setSelectedServices(prev => prev.filter(s => s.id !== service.id))
-        toast.success(`Removed ${service.name} from ${barberName}'s services`)
+        toast.success(`Removed ${service.name} from ${employeeName}'s services`)
       } else {
         // Add service
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}/barbers/${barberId}/services`,
+                      `${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${businessId}/employees/${employeeId}/services`,
           {
             method: 'POST',
             headers: {
@@ -146,7 +154,7 @@ export function BarberServicesModal({
         }
   
         setSelectedServices(prev => [...prev, service])
-        toast.success(`Added ${service.name} to ${barberName}'s services`)
+        toast.success(`Added ${service.name} to ${employeeName}'s services`)
       }
     } catch (error) {
       console.error('Error toggling service:', error)
@@ -163,7 +171,7 @@ export function BarberServicesModal({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
-          <DialogTitle>Manage Services for {barberName}</DialogTitle>
+          <DialogTitle>Manage Services for {employeeName}</DialogTitle>
         </DialogHeader>
         {loading ? (
           <p>Loading services...</p>

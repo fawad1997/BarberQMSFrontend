@@ -167,7 +167,7 @@ export function EditShop({ isOpen, onClose, shopId, initialData, onEditComplete 
         return;
       }
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/shop-owners/shops/${shopId}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${shopId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
