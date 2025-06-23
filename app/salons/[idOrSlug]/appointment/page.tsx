@@ -52,6 +52,7 @@ interface SalonDetails {
   is_open: boolean;
   timezone: string;
   barbers: Barber[];
+  employees?: Barber[];
   services: Service[];
   slug: string;
   username: string;
@@ -280,9 +281,10 @@ export default function AppointmentPage({ params }: { params: { idOrSlug: string
   // Add this helper function to filter barbers based on selected service
   const getBarbersByService = (serviceId: number | null) => {
     if (!salon) return [];
-    if (!serviceId) return salon.barbers;
+    const barbers = salon.employees || salon.barbers || [];
+    if (!serviceId) return barbers;
     
-    return salon.barbers.filter(barber => 
+    return barbers.filter(barber => 
       barber.services.some(service => service.id === serviceId)
     );
   };
@@ -509,11 +511,11 @@ export default function AppointmentPage({ params }: { params: { idOrSlug: string
                           <AlertCircle className="h-4 w-4" />
                           <AlertTitle>No Barbers Available</AlertTitle>
                           <AlertDescription>
-                            {salon.barbers?.length === 0 ? (
-                              "This salon doesn't have any barbers registered yet. Please try another salon."
-                            ) : (
-                              "No barbers are scheduled to work at the selected time. Please try a different time, date, or service."
-                            )}
+                            {((salon.employees || salon.barbers)?.length || 0) === 0 ? (
+                          "This salon doesn't have any barbers registered yet. Please try another salon."
+                        ) : (
+                          "No barbers are scheduled to work at the selected time. Please try a different time, date, or service."
+                        )}
                           </AlertDescription>
                         </Alert>
                       )}
