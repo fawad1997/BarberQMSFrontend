@@ -53,7 +53,7 @@ const shopFormSchema = z.object({
   zip_code: z.string().min(1, "ZIP code is required"),
   phone_number: z.string().min(1, "Phone number is required"),
   email: z.string().email("Invalid email address"),
-  average_wait_time: z.number().min(0),
+  average_wait_time: z.coerce.number().min(0),
   has_advertisement: z.boolean().default(false),
   advertisement_start_date: z
     .string()

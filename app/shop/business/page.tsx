@@ -17,7 +17,6 @@ import { getSession } from "next-auth/react";
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
-import WorkScheduleManager from '@/components/shops/schedules/WorkScheduleManager';
 import debounce from 'lodash/debounce';
 
 interface OperatingHour {
@@ -1545,14 +1544,6 @@ export default function BusinessManagementPage() {
               </form>
             </DialogContent>
           </Dialog>
-
-          {/* Work Schedule Manager Section */}
-          <Box p={3} border={1} borderColor="divider" borderRadius={2} sx={{ bgcolor: 'background.paper', boxShadow: 1, mt: 2 }}>
-            <Typography variant="h6" fontWeight={600} mb={2} sx={{ fontSize: { xs: 18, md: 22 } }}>
-              Work Schedules for {selectedBusiness.name}
-            </Typography>
-            <WorkScheduleManager shopId={selectedBusiness.id} />
-          </Box>
         </>
       )}
       <BusinessDialog
