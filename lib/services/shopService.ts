@@ -131,21 +131,16 @@ const handleError = (error: any) => {
 };
 
 export const getDashboardData = async (accessToken?: string): Promise<DashboardData> => {
-  // More robust token validation
   if (!accessToken) {
     redirect('/login?error=NoToken');
     return {} as DashboardData;
   }
-
   if (typeof accessToken !== 'string' || accessToken.trim() === '') {
     redirect('/login?error=InvalidToken');
     return {} as DashboardData;
   }
-
   try {
-    // Use the available businesses endpoint since /dashboard doesn't exist
-    const apiUrl = getApiEndpoint("business-owners/businesses/");
-    
+    const apiUrl = getApiEndpoint("business-owners/dashboard");
     const response = await fetch(apiUrl, {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
@@ -154,64 +149,40 @@ export const getDashboardData = async (accessToken?: string): Promise<DashboardD
       },
       cache: 'no-store',
     });
-
-    // Clone the response for error handling
-    const responseClone = response.clone();
-
-    // Immediately handle auth errors
     if (response.status === 401 || response.status === 403) {
       redirect('/login?error=SessionExpired');
       return {} as DashboardData;
     }
-
-    // If non-OK status, handle generically
     if (!response.ok) {
-      console.error(`Non-OK response: ${response.status}`);
       let errorMessage = 'Unknown error';
-      
       try {
-        const errorData = await responseClone.json();
-        console.error("Error response data:", errorData);
+        const errorData = await response.clone().json();
         errorMessage = errorData.message || errorData.detail || 'Unknown error';
       } catch (parseError) {
-        const textResponse = await responseClone.text();
-        console.error("Raw error response:", textResponse);
+        const textResponse = await response.clone().text();
         errorMessage = textResponse || 'Unknown error';
       }
-      
-      throw new ApiError(`Failed to fetch business data: ${errorMessage}`, response.status);
+      throw new ApiError(`Failed to fetch dashboard data: ${errorMessage}`, response.status);
     }
-
-    // For successful responses, ensure we get valid JSON
-    try {
-      const businesses = await response.json();
-      
-      // Transform businesses data into dashboard format
-      // Since we don't have real metrics yet, provide placeholder data
-      const dashboardData: DashboardData = {
-        shops: businesses.map((business: any) => ({
-          shop_id: business.id,
-          shop_name: business.name,
-          total_customers_today: 0, // Placeholder - will be updated when metrics endpoint is available
-          customers_in_queue: 0, // Placeholder
-          customers_served: 0, // Placeholder
-          cancellations: 0, // Placeholder
-          average_wait_time: business.average_wait_time || 0,
-          barber_management: [] // Placeholder - will be populated when employee metrics are available
+    const data = await response.json();
+    return {
+      shops: data.businesses.map((business: any) => ({
+        shop_id: business.business_id,
+        shop_name: business.business_name,
+        total_customers_today: business.total_customers_today,
+        customers_in_queue: business.customers_in_queue,
+        customers_served: business.customers_served,
+        cancellations: business.cancellations,
+        average_wait_time: business.average_wait_time,
+        barber_management: (business.employee_management || []).map((emp: any) => ({
+          barber_id: emp.employee_id,
+          full_name: emp.full_name,
+          customers_served: emp.customers_served,
         })),
-        daily_insights: {
-          total_customer_visits_today: 0, // Placeholder
-          average_wait_time: businesses.length > 0 ? 
-            businesses.reduce((sum: number, b: any) => sum + (b.average_wait_time || 0), 0) / businesses.length : 0
-        },
-        historical_trends: [] // Placeholder - will be populated when analytics endpoint is available
-      };
-      
-      return dashboardData;
-    } catch (parseError) {
-      console.error("Error parsing business data JSON:", parseError);
-      throw new ApiError("Invalid response format from server", response.status);
-    }
+      })),
+      daily_insights: data.daily_insights,
+      historical_trends: data.historical_trends,
+    };
   } catch (error: any) {
     console.error("Dashboard fetch error:", error);
     

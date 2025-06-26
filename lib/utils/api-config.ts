@@ -1,6 +1,6 @@
 // Default API URLs
 const DEV_API_URL = 'http://localhost:8000';
-const PROD_API_URL = 'https://walk-inonline.com';
+const PROD_API_URL = 'https://walkinonline.com';
 
 // Determine environment
 const isProd = process.env.NODE_ENV === 'production';
@@ -96,4 +96,4 @@ export const getApiEndpoint = (endpoint: string) => {
   
   // Return the full URL
   return fullUrl;
-}; 
+};
