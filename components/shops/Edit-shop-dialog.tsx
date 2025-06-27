@@ -22,6 +22,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { Shop } from "@/types/shop";
+import { BusinessOperatingHours } from "@/types/business";
 import { checkUsernameAvailability } from "@/lib/services/shopService";
 import { updateSalonUrlAfterUsernameChange, updateShopUrlAfterUsernameChange } from "@/lib/utils/navigation";
 
@@ -85,7 +86,26 @@ export function EditShop({ isOpen, onClose, shopId, initialData, onEditComplete 
   const [checkingUsername, setCheckingUsername] = useState(false);
   const [originalUsername, setOriginalUsername] = useState(initialData.username || "");
 
+  // Helper function to extract opening/closing times from operating_hours
+  const extractTimesFromOperatingHours = (operatingHours: BusinessOperatingHours[] | undefined) => {
+    if (!operatingHours || operatingHours.length === 0) {
+      return { opening_time: "09:00", closing_time: "17:00" };
+    }
+    
+    // Find the first non-closed day to get default times
+    const openDay = operatingHours.find(hour => !hour.is_closed);
+    if (openDay) {
+      return {
+        opening_time: openDay.opening_time || "09:00",
+        closing_time: openDay.closing_time || "17:00"
+      };
+    }
+    
+    return { opening_time: "09:00", closing_time: "17:00" };
+  };
+
   // Convert Shop object to form-compatible object
+  const { opening_time, closing_time } = extractTimesFromOperatingHours(initialData.operating_hours);
   const formInitialData = {
     name: initialData.name,
     username: initialData.username || "",
@@ -95,8 +115,8 @@ export function EditShop({ isOpen, onClose, shopId, initialData, onEditComplete 
     zip_code: initialData.zip_code,
     phone_number: initialData.phone_number,
     email: initialData.email,
-    opening_time: initialData.opening_time,
-    closing_time: initialData.closing_time,
+    opening_time: opening_time,
+    closing_time: closing_time,
     average_wait_time: initialData.average_wait_time.toString(),
     has_advertisement: initialData.has_advertisement
   };
@@ -138,6 +158,7 @@ export function EditShop({ isOpen, onClose, shopId, initialData, onEditComplete 
   }, [watchedUsername, debouncedUsernameCheck, originalUsername]);
   // Reset the form when shop data changes
   useEffect(() => {
+    const { opening_time, closing_time } = extractTimesFromOperatingHours(initialData.operating_hours);
     const newFormData = {
       name: initialData.name,
       username: initialData.username || "",
@@ -147,8 +168,8 @@ export function EditShop({ isOpen, onClose, shopId, initialData, onEditComplete 
       zip_code: initialData.zip_code,
       phone_number: initialData.phone_number,
       email: initialData.email,
-      opening_time: initialData.opening_time,
-      closing_time: initialData.closing_time,
+      opening_time: opening_time,
+      closing_time: closing_time,
       average_wait_time: initialData.average_wait_time.toString(),
       has_advertisement: initialData.has_advertisement
     };
@@ -167,6 +188,8 @@ export function EditShop({ isOpen, onClose, shopId, initialData, onEditComplete 
         return;
       }
 
+      // Update business details (excluding opening/closing times)
+      const { opening_time, closing_time, ...businessData } = values;
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${shopId}`, {
         method: "PUT",
         headers: {
@@ -174,7 +197,7 @@ export function EditShop({ isOpen, onClose, shopId, initialData, onEditComplete 
           Authorization: `Bearer ${session.user.accessToken}`,
         },
         body: JSON.stringify({
-          ...values,
+          ...businessData,
           average_wait_time: parseInt(values.average_wait_time)
         }),
       });
@@ -182,6 +205,39 @@ export function EditShop({ isOpen, onClose, shopId, initialData, onEditComplete 
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
         throw new Error(errorData?.detail || "Failed to update shop details.");
+      }
+
+      // Update operating hours for all days (Monday to Saturday)
+      const operatingHoursPromises = [];
+      for (let day = 1; day <= 6; day++) { // 1=Monday, 6=Saturday
+        const operatingHoursData = {
+          day_of_week: day,
+          opening_time: opening_time,
+          closing_time: closing_time,
+          is_closed: false
+        };
+
+        const hoursPromise = fetch(`${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${shopId}/operating-hours`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.user.accessToken}`,
+          },
+          body: JSON.stringify(operatingHoursData),
+        });
+        
+        operatingHoursPromises.push(hoursPromise);
+      }
+
+      // Wait for all operating hours updates to complete
+      const hoursResponses = await Promise.all(operatingHoursPromises);
+      
+      // Check if any operating hours update failed
+      for (const hoursResponse of hoursResponses) {
+        if (!hoursResponse.ok) {
+          const errorData = await hoursResponse.json().catch(() => null);
+          throw new Error(errorData?.detail || "Failed to update operating hours.");
+        }
       }      const updatedShopData = await response.json();
       toast.success("Shop details updated successfully!");
 
