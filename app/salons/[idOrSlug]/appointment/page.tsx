@@ -267,6 +267,25 @@ export default function AppointmentPage({ params }: { params: { idOrSlug: string
         localStorage.setItem('lastAppointmentId', data.id?.toString() || '');
         localStorage.setItem('appointmentShopId', salon.id.toString());
         
+        // Store detailed appointment data for confirmation page
+        const selectedServiceObj = salon.services.find(s => s.id === selectedService);
+        const selectedBarberObj = (salon.employees || salon.barbers || []).find(b => b.id === selectedBarber);
+        const userTimezone = getUserTimezone();
+        
+        const appointmentDetails = {
+          appointment_date: appointmentDate,
+          appointment_time: appointmentTime,
+          service_name: selectedServiceObj?.name,
+          service_duration: selectedServiceObj?.duration,
+          service_price: selectedServiceObj?.price,
+          barber_name: selectedBarberObj?.full_name || 'Any Available Barber',
+          customer_name: fullName,
+          customer_phone: phoneNumber,
+          number_of_people: numberOfPeople,
+          user_timezone: userTimezone
+        };
+        localStorage.setItem('appointmentData', JSON.stringify(appointmentDetails));
+        
         // Redirect to confirmation or status page using the slug for the URL
         window.location.href = `/salons/${salon.username}/appointment-confirmation`;
       }
