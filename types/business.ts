@@ -17,6 +17,10 @@ export interface Business {
   is_open_24_hours: boolean;
   formatted_hours: string;
   owner_id: number;
+  opening_time?: string;
+  closing_time?: string;
+  has_advertisement?: boolean;
+  operating_hours?: BusinessOperatingHours[];
 }
 
 export interface BusinessAdvertisement {

@@ -94,25 +94,29 @@ export default function CreateShopForm() {
 
   // Debounced username availability check
   const debouncedUsernameCheck = useCallback(
-    debounce(async (username: string) => {
-      if (!username || username.length < 3) {
-        setUsernameAvailable(null);
-        return;
-      }
+    (username: string) => {
+      const timeoutId = setTimeout(async () => {
+        if (!username || username.length < 3) {
+          setUsernameAvailable(null);
+          return;
+        }
 
-      setCheckingUsername(true);
-      try {
-        const result = await checkUsernameAvailability(username);
-        setUsernameAvailable(result.available);
-      } catch (error) {
-        console.error("Username check error:", error);
-        setUsernameAvailable(null);
-        // Don't show error toast for availability check failures
-      } finally {
-        setCheckingUsername(false);
-      }
-    }, 500),
-    []
+        setCheckingUsername(true);
+        try {
+          const result = await checkUsernameAvailability(username);
+          setUsernameAvailable(result.available);
+        } catch (error) {
+          console.error("Username check error:", error);
+          setUsernameAvailable(null);
+          // Don't show error toast for availability check failures
+        } finally {
+          setCheckingUsername(false);
+        }
+      }, 500);
+      
+      return () => clearTimeout(timeoutId);
+    },
+    [setUsernameAvailable, setCheckingUsername]
   );
 
   // Watch username field changes
@@ -183,7 +187,28 @@ export default function CreateShopForm() {
       if (!session?.user?.accessToken) {
         toast.error("No access token found. Please login again.");
         return;
-      }      // Create shop first
+      }      // Convert simple opening/closing times to operating hours format
+      const operating_hours = [];
+      if (values.opening_time && values.closing_time) {
+        // Create operating hours for Monday to Saturday (1-6)
+        for (let day = 1; day <= 6; day++) {
+          operating_hours.push({
+            day_of_week: day,
+            opening_time: values.opening_time,
+            closing_time: values.closing_time,
+            is_closed: false
+          });
+        }
+        // Sunday (0) - closed
+        operating_hours.push({
+          day_of_week: 0,
+          opening_time: null,
+          closing_time: null,
+          is_closed: true
+        });
+      }
+
+      // Create shop first
       const shopPayload = {
         name: values.name,
         username: values.username,
@@ -197,7 +222,9 @@ export default function CreateShopForm() {
         has_advertisement: values.has_advertisement,
         opening_time: values.opening_time,
         closing_time: values.closing_time,
-        timezone: values.timezone,      };
+        timezone: values.timezone,
+        operating_hours: operating_hours
+      };
 
       console.log("🔍 Frontend: Sending business payload:", JSON.stringify(shopPayload, null, 2));
 

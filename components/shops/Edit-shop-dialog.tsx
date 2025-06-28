@@ -85,6 +85,27 @@ export function EditShop({ isOpen, onClose, shopId, initialData, onEditComplete 
   const [checkingUsername, setCheckingUsername] = useState(false);
   const [originalUsername, setOriginalUsername] = useState(initialData.username || "");
 
+  // Extract opening/closing times from operating_hours or fallback to direct fields
+  const getOpeningClosingTimes = () => {
+    if (initialData.operating_hours && initialData.operating_hours.length > 0) {
+      // Find the first non-closed day to get opening/closing times
+      const openDay = initialData.operating_hours.find(hour => !hour.is_closed);
+      if (openDay) {
+        return {
+          opening_time: openDay.opening_time || "",
+          closing_time: openDay.closing_time || ""
+        };
+      }
+    }
+    // Fallback to direct fields
+    return {
+      opening_time: initialData.opening_time || "",
+      closing_time: initialData.closing_time || ""
+    };
+  };
+
+  const { opening_time, closing_time } = getOpeningClosingTimes();
+
   // Convert Shop object to form-compatible object
   const formInitialData = {
     name: initialData.name,
@@ -95,8 +116,8 @@ export function EditShop({ isOpen, onClose, shopId, initialData, onEditComplete 
     zip_code: initialData.zip_code,
     phone_number: initialData.phone_number,
     email: initialData.email,
-    opening_time: initialData.opening_time,
-    closing_time: initialData.closing_time,
+    opening_time,
+    closing_time,
     average_wait_time: initialData.average_wait_time.toString(),
     has_advertisement: initialData.has_advertisement
   };
@@ -107,24 +128,28 @@ export function EditShop({ isOpen, onClose, shopId, initialData, onEditComplete 
 
   // Debounced username availability check
   const debouncedUsernameCheck = useCallback(
-    debounce(async (username: string) => {
-      if (!username || username.length < 3 || username === originalUsername) {
-        setUsernameAvailable(null);
-        return;
-      }
+    (username: string) => {
+      const timeoutId = setTimeout(async () => {
+        if (!username || username.length < 3 || username === originalUsername) {
+          setUsernameAvailable(null);
+          return;
+        }
 
-      setCheckingUsername(true);
-      try {
-        const result = await checkUsernameAvailability(username);
-        setUsernameAvailable(result.available);
-      } catch (error) {
-        console.error("Username check error:", error);
-        setUsernameAvailable(null);
-      } finally {
-        setCheckingUsername(false);
-      }
-    }, 500),
-    [originalUsername]
+        setCheckingUsername(true);
+        try {
+          const result = await checkUsernameAvailability(username);
+          setUsernameAvailable(result.available);
+        } catch (error) {
+          console.error("Username check error:", error);
+          setUsernameAvailable(null);
+        } finally {
+          setCheckingUsername(false);
+        }
+      }, 500);
+      
+      return () => clearTimeout(timeoutId);
+    },
+    [originalUsername, setUsernameAvailable, setCheckingUsername]
   );
 
   // Watch username field changes
@@ -138,6 +163,24 @@ export function EditShop({ isOpen, onClose, shopId, initialData, onEditComplete 
   }, [watchedUsername, debouncedUsernameCheck, originalUsername]);
   // Reset the form when shop data changes
   useEffect(() => {
+    const getOpeningClosingTimes = () => {
+      if (initialData.operating_hours && initialData.operating_hours.length > 0) {
+        const openDay = initialData.operating_hours.find(hour => !hour.is_closed);
+        if (openDay) {
+          return {
+            opening_time: openDay.opening_time || "",
+            closing_time: openDay.closing_time || ""
+          };
+        }
+      }
+      return {
+        opening_time: initialData.opening_time || "",
+        closing_time: initialData.closing_time || ""
+      };
+    };
+
+    const { opening_time, closing_time } = getOpeningClosingTimes();
+
     const newFormData = {
       name: initialData.name,
       username: initialData.username || "",
@@ -147,8 +190,8 @@ export function EditShop({ isOpen, onClose, shopId, initialData, onEditComplete 
       zip_code: initialData.zip_code,
       phone_number: initialData.phone_number,
       email: initialData.email,
-      opening_time: initialData.opening_time,
-      closing_time: initialData.closing_time,
+      opening_time,
+      closing_time,
       average_wait_time: initialData.average_wait_time.toString(),
       has_advertisement: initialData.has_advertisement
     };
@@ -167,6 +210,27 @@ export function EditShop({ isOpen, onClose, shopId, initialData, onEditComplete 
         return;
       }
 
+      // Convert simple opening/closing times to operating hours format
+      const operating_hours = [];
+      if (values.opening_time && values.closing_time) {
+        // Create operating hours for Monday to Saturday (1-6)
+        for (let day = 1; day <= 6; day++) {
+          operating_hours.push({
+            day_of_week: day,
+            opening_time: values.opening_time,
+            closing_time: values.closing_time,
+            is_closed: false
+          });
+        }
+        // Sunday (0) - closed
+        operating_hours.push({
+          day_of_week: 0,
+          opening_time: null,
+          closing_time: null,
+          is_closed: true
+        });
+      }
+
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/business-owners/businesses/${shopId}`, {
         method: "PUT",
         headers: {
@@ -175,7 +239,8 @@ export function EditShop({ isOpen, onClose, shopId, initialData, onEditComplete 
         },
         body: JSON.stringify({
           ...values,
-          average_wait_time: parseInt(values.average_wait_time)
+          average_wait_time: parseInt(values.average_wait_time),
+          operating_hours: operating_hours
         }),
       });
 
