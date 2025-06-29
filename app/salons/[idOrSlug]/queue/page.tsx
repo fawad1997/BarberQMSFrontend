@@ -3,10 +3,23 @@
 import { useEffect, useState } from "react";
 import { getSalonDetails } from "@/lib/services/salonService";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Clock, User } from "lucide-react";
 import { motion } from "framer-motion";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from 'lucide-react';
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface QueueItem {
   id: number;
@@ -30,9 +43,13 @@ interface SalonDetails {
 }
 
 export default function QueuePage({ params }: { params: { idOrSlug: string } }) {
+  const router = useRouter();
   const [salon, setSalon] = useState<SalonDetails | null>(null);
   const [queueItems, setQueueItems] = useState<QueueItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isLeaveDialogOpen, setIsLeaveDialogOpen] = useState(false);
+  const [isLeaving, setIsLeaving] = useState(false);
+  const [userInQueue, setUserInQueue] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -46,6 +63,18 @@ export default function QueuePage({ params }: { params: { idOrSlug: string } }) 
         if (!response.ok) throw new Error('Failed to fetch queue data');
         const queueData = await response.json();
         setQueueItems(queueData);
+        
+        // Check if current user is in the queue
+        const checkInPhone = localStorage.getItem('checkInPhone');
+        const checkInShopId = localStorage.getItem('checkInShopId');
+        if (checkInPhone && checkInShopId && checkInShopId === salonData.id.toString()) {
+          const userInQueueCheck = queueData.some((item: QueueItem) => 
+            item.full_name && checkInPhone // You might need to adjust this logic based on how you identify users
+          );
+          setUserInQueue(!!checkInPhone && !!checkInShopId);
+        } else {
+          setUserInQueue(false);
+        }
       } catch (error) {
         console.error('Error fetching data:', error);
       } finally {
@@ -59,6 +88,42 @@ export default function QueuePage({ params }: { params: { idOrSlug: string } }) 
     const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
   }, [params.idOrSlug]);
+
+  const handleLeaveQueue = async () => {
+    const checkInPhone = localStorage.getItem('checkInPhone');
+    const checkInShopId = localStorage.getItem('checkInShopId');
+
+    if (checkInPhone && checkInShopId && salon) {
+      setIsLeaving(true);
+      try {
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/queue/leave?phone=${checkInPhone}&business_id=${checkInShopId}`,
+          { method: "DELETE" }
+        );
+        const data = await response.json();
+
+        if (response.ok) {
+          toast.success(data.message || "Successfully left the queue");
+          localStorage.removeItem('checkInPhone');
+          localStorage.removeItem('checkInShopId');
+          setUserInQueue(false);
+          // Refresh the queue data
+          const queueResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/queue/${salon.id}`);
+          if (queueResponse.ok) {
+            const queueData = await queueResponse.json();
+            setQueueItems(queueData);
+          }
+        } else {
+          throw new Error(data.message || 'Failed to leave the queue');
+        }
+      } catch (err) {
+        toast.error('Error: ' + (err instanceof Error ? err.message : 'Failed to leave the queue'));
+      } finally {
+        setIsLeaving(false);
+        setIsLeaveDialogOpen(false);
+      }
+    }
+  };
 
   if (loading) {
     return (
@@ -166,8 +231,44 @@ export default function QueuePage({ params }: { params: { idOrSlug: string } }) 
               </Alert>
             )}
           </div>
+
+          {/* Leave Queue Button - Only show if user is in queue */}
+          {userInQueue && (
+            <div className="pt-4 border-t">
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => setIsLeaveDialogOpen(true)}
+                disabled={isLeaving}
+              >
+                {isLeaving ? "Leaving Queue..." : "Leave Queue"}
+              </Button>
+            </div>
+          )}
         </div>
       </Card>
+
+      {/* Leave Queue Confirmation Dialog */}
+      <AlertDialog open={isLeaveDialogOpen} onOpenChange={setIsLeaveDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Leave Queue</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to leave the queue? You will lose your current position.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isLeaving}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleLeaveQueue}
+              disabled={isLeaving}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {isLeaving ? "Leaving..." : "Leave Queue"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </motion.div>
   );
-} 
+}
